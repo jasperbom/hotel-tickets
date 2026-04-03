@@ -1,0 +1,18 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+*.db
+*.db-shm
+*.db-wal
+
+# Node
+node_modules/
+addon/frontend/dist/
+
+# OS
+.DS_Store
+
+# Env
+.env

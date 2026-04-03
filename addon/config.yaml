@@ -1,0 +1,35 @@
+name: "Hotel Ticket System"
+version: "1.0.0"
+slug: "hotel_tickets"
+description: "Ticket en taakbeheer voor hotels – technische dienst, huishouding en receptie"
+url: "https://github.com/your-org/hotel-tickets"
+arch:
+  - aarch64
+  - amd64
+  - armv7
+startup: application
+boot: auto
+ingress: true
+ingress_port: 8080
+panel_icon: mdi:ticket-outline
+panel_title: Tickets
+homeassistant_api: true
+auth_api: true
+options:
+  smtp_host: ""
+  smtp_port: 587
+  smtp_user: ""
+  smtp_password: ""
+  smtp_from: ""
+  smtp_enabled: false
+  log_level: "info"
+schema:
+  smtp_host: str
+  smtp_port: int
+  smtp_user: str
+  smtp_password: str
+  smtp_from: str
+  smtp_enabled: bool
+  log_level: list(debug|info|warning|error)
+map:
+  - data:rw
