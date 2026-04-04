@@ -136,6 +136,45 @@ Ga naar **Instellingen → Personen → [medewerker]** en kopieer de user ID ond
 
 ---
 
+## Lovelace card
+
+Na installatie van de custom component is de **Hotel Ticket Card** beschikbaar.
+De kaart toont een formulier waarmee medewerkers direct vanuit een HA dashboard een ticket kunnen aanmaken.
+
+### Stap 1 — Card toevoegen als Lovelace resource
+
+1. Ga naar **Instellingen → Dashboards → drie puntjes (⋮) → Resources**
+2. Klik op **+ Resource toevoegen**
+3. Vul in:
+   - URL: `/hotel_tickets/hotel-ticket-card.js`
+   - Resourcetype: **JavaScript module**
+4. Klik op **Bijwerken** en herlaad de pagina
+
+> De URL wordt automatisch beschikbaar gesteld zodra de custom component geladen is. Er is geen handmatige bestandskopie nodig.
+
+### Stap 2 — Card toevoegen aan dashboard
+
+Ga naar je dashboard → **Bewerken → + Kaart toevoegen → Handmatig** en plak:
+
+```yaml
+type: custom:hotel-ticket-card
+title: Ticket aanmaken
+default_category: technical
+default_priority: medium
+```
+
+**Beschikbare opties:**
+
+| Optie | Omschrijving | Standaard |
+|---|---|---|
+| `title` | Titel bovenaan de kaart | `"Ticket aanmaken"` |
+| `default_category` | Voorgeselecteerde categorie (`technical` / `housekeeping` / `reception`) | `technical` |
+| `default_priority` | Voorgeselecteerde prioriteit (`low` / `medium` / `high` / `urgent`) | `medium` |
+
+De kaart laadt automatisch je HA zones/gebieden als locatiekeuzelijst.
+
+---
+
 ## Gebruik in automaties
 
 Na installatie van de custom component kun je tickets aanmaken vanuit HA automaties:
