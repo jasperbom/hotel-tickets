@@ -1,4 +1,4 @@
-ARG BUILD_FROM
+ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
 FROM $BUILD_FROM
 
 # Install Python and Node.js build deps
@@ -15,12 +15,13 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Install Python dependencies
+# --break-system-packages is required on Alpine Linux (PEP 668)
 COPY backend/requirements.txt ./requirements.txt
-RUN pip3 install --no-cache-dir -r requirements.txt
+RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
 # Build frontend
 COPY frontend/package*.json ./frontend/
-RUN cd frontend && npm ci
+RUN cd frontend && npm ci --prefer-offline
 
 COPY frontend/ ./frontend/
 RUN cd frontend && npm run build
