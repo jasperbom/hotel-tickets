@@ -18,18 +18,33 @@ def _headers() -> dict:
 
 
 async def get_areas() -> list[dict]:
-    """Haal alle HA areas op (kamers, verdiepingen, zones)."""
+    """Haal alle HA areas op via de WebSocket-compatible REST endpoint."""
     async with aiohttp.ClientSession() as session:
+        # De /api/config/area_registry endpoint geeft alle areas in één call
+        async with session.get(
+            f"{HA_API}/config/area_registry",
+            headers=_headers(),
+        ) as resp:
+            if resp.status == 200:
+                data = await resp.json()
+                return [
+                    {"id": area["area_id"], "name": area["name"]}
+                    for area in data
+                ]
+
+        # Fallback: template API als area_registry niet beschikbaar is
         async with session.post(
             f"{HA_API}/template",
             headers=_headers(),
-            json={"template": "{{ areas() | tojson }}"},
+            json={"template": "{{ areas() | map(attribute='id') | list | tojson }}"},
         ) as resp:
             if resp.status != 200:
                 return []
-            raw = await resp.text()
             import json
-            area_ids = json.loads(raw)
+            try:
+                area_ids = json.loads(await resp.text())
+            except Exception:
+                return []
 
         areas = []
         for area_id in area_ids:
