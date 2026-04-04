@@ -147,6 +147,8 @@ async def update_user(
     # Mag eigen profiel bewerken, admins mogen iedereen bewerken
     if ha_user_id != user.ha_user_id and not user.is_admin:
         raise HTTPException(status_code=403, detail="Geen toegang")
+    if body.role is not None and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen rollen wijzigen")
     target = await db.get(UserRole, ha_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="Gebruiker niet gevonden")

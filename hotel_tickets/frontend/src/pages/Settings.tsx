@@ -93,6 +93,7 @@ const DEPT_LABELS: Record<Category, string> = {
 };
 
 export default function Settings() {
+  const [me, setMe] = useState<UserRole | null>(null);
   const [users, setUsers] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -100,8 +101,13 @@ export default function Settings() {
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "technician" as Role, email: "", ha_notify_service: "" });
 
+  const isAdmin = me?.role === "admin" || me?.role === "supervisor";
+
   useEffect(() => {
-    userApi.list().then((r) => setUsers(r.data)).finally(() => setLoading(false));
+    Promise.all([userApi.me(), userApi.list()]).then(([meRes, usersRes]) => {
+      setMe(meRes.data);
+      setUsers(usersRes.data);
+    }).finally(() => setLoading(false));
   }, []);
 
   async function saveEdit(userId: string) {
@@ -136,7 +142,7 @@ export default function Settings() {
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-semibold">Medewerkers & rollen</h2>
-          <button onClick={() => setShowNew(true)} className="btn-primary text-sm">+ Toevoegen</button>
+          {isAdmin && <button onClick={() => setShowNew(true)} className="btn-primary text-sm">+ Toevoegen</button>}
         </div>
 
         {showNew && (
@@ -185,13 +191,17 @@ export default function Settings() {
                         onChange={(e) => setEditForm({ ...editForm, display_name: e.target.value })}
                         placeholder="Naam"
                         className="border border-gray-300 rounded px-2 py-1 text-sm" />
-                      <select value={editForm.role || user.role}
-                        onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Role })}
-                        className="border border-gray-300 rounded px-2 py-1 text-sm bg-white">
-                        {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
-                          <option key={r} value={r}>{ROLE_LABELS[r]}</option>
-                        ))}
-                      </select>
+                      {isAdmin ? (
+                        <select value={editForm.role || user.role}
+                          onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Role })}
+                          className="border border-gray-300 rounded px-2 py-1 text-sm bg-white">
+                          {(Object.keys(ROLE_LABELS) as Role[]).map((r) => (
+                            <option key={r} value={r}>{ROLE_LABELS[r]}</option>
+                          ))}
+                        </select>
+                      ) : (
+                        <span className="border border-gray-200 rounded px-2 py-1 text-sm bg-gray-50 text-gray-500">{ROLE_LABELS[user.role]}</span>
+                      )}
                       <input value={editForm.email || ""}
                         onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                         placeholder="E-mail"
@@ -221,8 +231,10 @@ export default function Settings() {
                     <div className="flex gap-2 text-sm">
                       <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }}
                         className="text-blue-600 hover:text-blue-700">Bewerken</button>
-                      <button onClick={() => deleteUser(user.ha_user_id)}
-                        className="text-red-600 hover:text-red-700">Verwijderen</button>
+                      {isAdmin && (
+                        <button onClick={() => deleteUser(user.ha_user_id)}
+                          className="text-red-600 hover:text-red-700">Verwijderen</button>
+                      )}
                     </div>
                   </div>
                 )}
