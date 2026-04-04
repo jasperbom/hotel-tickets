@@ -46,11 +46,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "assigned_to": call.data.get("assigned_to"),
             }.items() if v is not None}
 
-            url = f"http://supervisor/addons/{ADDON_SLUG}/api/api/tickets/"
+            # Supervisor proxy: http://supervisor/addons/{slug}/api{pad}
+            # voegt intern /api/ toe, dus /tickets/ wordt /api/tickets/ in de addon
+            url = f"http://supervisor/addons/{ADDON_SLUG}/api/tickets/"
 
             _LOGGER.info("[hotel_tickets] create_ticket aangeroepen — data: %s", data)
             _LOGGER.info("[hotel_tickets] POST naar: %s", url)
-            _LOGGER.info("[hotel_tickets] Token aanwezig: %s", bool(supervisor_token))
+            _LOGGER.info("[hotel_tickets] SUPERVISOR_TOKEN lengte: %d", len(supervisor_token))
 
             try:
                 session = async_get_clientsession(hass)
