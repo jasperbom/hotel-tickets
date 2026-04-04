@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { recurringApi, type RecurringTemplate, type Category, type Priority } from "../api/client";
-import RecurrenceEditor from "../components/RecurrenceEditor";
+import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
 import AreaSelector from "../components/AreaSelector";
 import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 
@@ -174,7 +174,7 @@ export default function RecurringTasks() {
                 <div className="flex gap-1.5 mt-1">
                   <CategoryBadge category={t.category} />
                   <PriorityBadge priority={t.priority} />
-                  <code className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">{t.cron_expression}</code>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression)}</span>
                 </div>
               </div>
               <div className="flex gap-2 shrink-0">
