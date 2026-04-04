@@ -48,11 +48,11 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             try:
                 session = async_get_clientsession(hass)
                 async with session.post(url, headers=headers, json=data) as resp:
+                    body = await resp.text()
                     if resp.status in (200, 201):
-                        result = await resp.json()
-                        _LOGGER.info("Ticket aangemaakt: %s (id=%s)", data.get("title"), result.get("id"))
+                        _LOGGER.info("Ticket aangemaakt: %s", data.get("title"))
                     else:
-                        _LOGGER.error("Ticket aanmaken mislukt: HTTP %s", resp.status)
+                        _LOGGER.error("Ticket aanmaken mislukt: HTTP %s — %s", resp.status, body[:200])
             except Exception as exc:
                 _LOGGER.error("Ticket aanmaken fout: %s", exc)
 

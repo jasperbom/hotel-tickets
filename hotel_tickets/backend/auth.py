@@ -19,6 +19,7 @@ from .database import get_db
 from .models import UserRole, Role
 
 DEV_MODE = os.environ.get("DEV_MODE", "false").lower() == "true"
+SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
 
 
 class CurrentUser:
@@ -49,6 +50,19 @@ async def get_current_user(
     Haal de ingelogde gebruiker op via de HA ingress headers.
     Maakt automatisch een profiel aan bij eerste gebruik.
     """
+    # Supervisor token → systeem-aanroep vanuit de custom component / automaties
+    auth_header = request.headers.get("Authorization", "")
+    if SUPERVISOR_TOKEN and auth_header == f"Bearer {SUPERVISOR_TOKEN}":
+        return CurrentUser(
+            ha_user_id="system",
+            display_name="Home Assistant",
+            role=Role.admin,
+            department=None,
+            email=None,
+            ha_notify_service=None,
+            is_admin=True,
+        )
+
     # HA Supervisor zet deze headers voor elke ingress request
     ha_user_id   = request.headers.get("X-Remote-User-ID", "").strip()
     display_name = (
