@@ -1,7 +1,15 @@
 import axios from "axios";
 
+// HA ingress serveert de app op een dynamisch subpad (bijv. /api/hassio_ingress/TOKEN/).
+// Door de baseURL van het huidige paginapad af te leiden werken API-calls
+// zowel lokaal als via de HA ingress proxy.
+const pagePath = window.location.pathname.endsWith("/")
+  ? window.location.pathname
+  : window.location.pathname + "/";
+const API_BASE = pagePath + "api";
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
 });
 

@@ -15,4 +15,6 @@ export default defineConfig({
     outDir: "dist",
     emptyOutDir: true,
   },
+  // Relatieve paden zodat assets werken via HA ingress subpath
+  base: "./",
 });
