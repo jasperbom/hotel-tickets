@@ -1,4 +1,4 @@
-ARG BUILD_FROM=ghcr.io/home-assistant/amd64-base:latest
+ARG BUILD_FROM
 FROM $BUILD_FROM
 
 # Install Python and Node.js build deps
@@ -15,7 +15,6 @@ RUN apk add --no-cache \
 WORKDIR /app
 
 # Install Python dependencies
-# --break-system-packages is required on Alpine Linux (PEP 668)
 COPY backend/requirements.txt ./requirements.txt
 RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 
@@ -29,8 +28,11 @@ RUN cd frontend && npm run build
 # Copy backend
 COPY backend/ ./backend/
 
-# Copy run script — s6-overlay voert dit uit na initialisatie
-COPY run.sh /run.sh
-RUN chmod a+x /run.sh
+# Register als s6-overlay v3 longrun service
+RUN mkdir -p /etc/s6-overlay/s6-rc.d/hotel_tickets \
+    && mkdir -p /etc/s6-overlay/user/contents.d
 
-CMD ["/run.sh"]
+COPY run.sh /etc/s6-overlay/s6-rc.d/hotel_tickets/run
+RUN chmod a+x /etc/s6-overlay/s6-rc.d/hotel_tickets/run \
+    && echo "longrun" > /etc/s6-overlay/s6-rc.d/hotel_tickets/type \
+    && touch /etc/s6-overlay/user/contents.d/hotel_tickets
