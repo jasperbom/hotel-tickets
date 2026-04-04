@@ -18,44 +18,29 @@ def _headers() -> dict:
 
 
 async def get_areas() -> list[dict]:
-    """Haal alle HA areas op via de WebSocket-compatible REST endpoint."""
+    """Haal alle HA areas op via de template API."""
+    import json as _json
+    # Één template-call die een lijst van {id, name} objecten teruggeeft.
+    # areas() geeft area IDs als strings; area_name() geeft de weergavenaam.
+    template = (
+        "{%- set ns = namespace(r=[]) -%}"
+        "{%- for a in areas() -%}"
+        "{%- set ns.r = ns.r + [{'id': a, 'name': area_name(a)}] -%}"
+        "{%- endfor -%}"
+        "{{ ns.r | tojson }}"
+    )
     async with aiohttp.ClientSession() as session:
-        # De /api/config/area_registry endpoint geeft alle areas in één call
-        async with session.get(
-            f"{HA_API}/config/area_registry",
-            headers=_headers(),
-        ) as resp:
-            if resp.status == 200:
-                data = await resp.json()
-                return [
-                    {"id": area["area_id"], "name": area["name"]}
-                    for area in data
-                ]
-
-        # Fallback: template API als area_registry niet beschikbaar is
         async with session.post(
             f"{HA_API}/template",
             headers=_headers(),
-            json={"template": "{{ areas() | map(attribute='id') | list | tojson }}"},
+            json={"template": template},
         ) as resp:
-            if resp.status != 200:
-                return []
-            import json
-            try:
-                area_ids = json.loads(await resp.text())
-            except Exception:
-                return []
-
-        areas = []
-        for area_id in area_ids:
-            async with session.post(
-                f"{HA_API}/template",
-                headers=_headers(),
-                json={"template": f"{{{{ area_name('{area_id}') }}}}"},
-            ) as r:
-                name = (await r.text()).strip()
-            areas.append({"id": area_id, "name": name})
-        return areas
+            if resp.status == 200:
+                try:
+                    return _json.loads(await resp.text())
+                except Exception:
+                    pass
+    return []
 
 
 async def get_users() -> list[dict]:
