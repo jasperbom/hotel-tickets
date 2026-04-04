@@ -46,9 +46,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "assigned_to": call.data.get("assigned_to"),
             }.items() if v is not None}
 
-            # Supervisor proxy: http://supervisor/addons/{slug}/api{path}
-            # voegt intern /api/ toe, dus /tickets/ wordt /api/tickets/ in de addon
-            url = f"http://supervisor/addons/{ADDON_SLUG}/api/tickets/"
+            # Supervisor proxy strips /addons/{slug}/api en stuurt de rest door.
+            # FastAPI serveert op /api/tickets/, dus de URL moet /api/api/tickets/ zijn:
+            # http://supervisor/addons/{slug}/api  +  /api/tickets/  →  addon ontvangt /api/tickets/
+            url = f"http://supervisor/addons/{ADDON_SLUG}/api/api/tickets/"
 
             _LOGGER.info("[hotel_tickets] create_ticket aangeroepen — data: %s", data)
             _LOGGER.info("[hotel_tickets] POST naar: %s", url)
