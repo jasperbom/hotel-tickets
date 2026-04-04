@@ -15,7 +15,7 @@ from typing import Annotated
 import aiohttp
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 
 from .database import get_db
 from .models import UserRole, Role
@@ -109,10 +109,17 @@ async def get_current_user(
         result = await db.execute(select(UserRole).where(UserRole.ha_user_id == ha_user_id))
         user_role = result.scalar_one_or_none()
         if not user_role:
+            # Eerste gebruiker zonder admins wordt automatisch admin
+            admin_count = await db.scalar(
+                select(func.count()).where(UserRole.role == Role.admin)
+            )
+            initial_role = Role.admin if admin_count == 0 else Role.technician
+            if initial_role == Role.admin:
+                logger.info("[auth] Eerste gebruiker %s krijgt automatisch admin-rol", ha_user_id)
             user_role = UserRole(
                 ha_user_id=ha_user_id,
                 display_name=display_name,
-                role=Role.technician,
+                role=initial_role,
             )
             db.add(user_role)
             await db.flush()
