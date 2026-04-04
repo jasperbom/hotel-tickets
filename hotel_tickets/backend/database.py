@@ -26,3 +26,20 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        await _run_migrations(conn)
+
+
+async def _run_migrations(conn):
+    """
+    Voeg ontbrekende kolommen toe aan bestaande tabellen.
+    SQLite ondersteunt geen IF NOT EXISTS bij ALTER TABLE,
+    dus we vangen de fout af als de kolom al bestaat.
+    """
+    migrations = [
+        "ALTER TABLE tickets ADD COLUMN notify_when_free BOOLEAN NOT NULL DEFAULT 0",
+    ]
+    for sql in migrations:
+        try:
+            await conn.exec_driver_sql(sql)
+        except Exception:
+            pass  # Kolom bestaat al — geen actie nodig
