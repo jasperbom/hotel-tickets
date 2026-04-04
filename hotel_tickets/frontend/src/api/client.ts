@@ -22,6 +22,18 @@ api.interceptors.request.use((config) => {
 
 export default api;
 
+/**
+ * Parseer een datetime-string van de API als UTC.
+ * De backend stuurt naive UTC strings zonder "Z"-suffix; door "Z" toe te voegen
+ * weet JavaScript dat het UTC is en converteert het correct naar de lokale tijdzone.
+ */
+export function parseUTC(s: string): Date {
+  if (!s.endsWith("Z") && !s.match(/[+-]\d{2}:\d{2}$/)) {
+    return new Date(s + "Z");
+  }
+  return new Date(s);
+}
+
 // --- Types ---
 
 export type Category = "technical" | "housekeeping" | "reception";

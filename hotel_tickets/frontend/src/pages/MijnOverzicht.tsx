@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import api, { ticketApi, locationApi, type Ticket, type Category, type Role } from "../api/client";
+import api, { ticketApi, locationApi, parseUTC, type Ticket, type Category, type Role } from "../api/client";
 import { PriorityBadge, CategoryBadge, StatusBadge } from "../components/StatusBadge";
 
 interface Overview {
@@ -254,7 +254,7 @@ function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locat
           <CategoryBadge category={ticket.category} />
         </div>
         <p className="text-xs text-gray-400">
-          {format(new Date(ticket.created_at), "d MMM", { locale: nl })}
+          {format(parseUTC(ticket.created_at), "d MMM", { locale: nl })}
         </p>
       </div>
     </Link>

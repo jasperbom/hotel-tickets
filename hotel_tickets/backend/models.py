@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum as PyEnum
 from sqlalchemy import String, Text, DateTime, Boolean, Integer, ForeignKey, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -50,8 +50,8 @@ class Ticket(Base):
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id
     assigned_to: Mapped[str | None] = mapped_column(String(255))  # HA user_id
     recurring_template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("recurring_templates.id"))
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
     closed_at: Mapped[datetime | None] = mapped_column(DateTime)
     closed_by: Mapped[str | None] = mapped_column(String(255))  # HA user_id
     notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
@@ -67,7 +67,7 @@ class TicketComment(Base):
     ticket_id: Mapped[str] = mapped_column(String(36), ForeignKey("tickets.id"), nullable=False)
     author_id: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id
     body: Mapped[str] = mapped_column(Text, nullable=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     ticket: Mapped[Ticket] = relationship("Ticket", back_populates="comments")
 
@@ -85,7 +85,7 @@ class RecurringTemplate(Base):
     cron_expression: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     advance_days: Mapped[int] = mapped_column(Integer, default=0)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     tickets: Mapped[list[Ticket]] = relationship("Ticket", back_populates="recurring_template")
 
@@ -101,4 +101,4 @@ class UserRole(Base):
     notify_push: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_email: Mapped[bool] = mapped_column(Boolean, default=False)
     ha_notify_service: Mapped[str | None] = mapped_column(String(255))  # bijv. "notify.mobile_app_iphone"
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))

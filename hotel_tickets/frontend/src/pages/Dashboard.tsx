@@ -4,7 +4,7 @@ import {
   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis,
   Tooltip, ResponsiveContainer, Legend,
 } from "recharts";
-import { reportApi, ticketApi, type ReportSummary, type Ticket } from "../api/client";
+import { reportApi, ticketApi, parseUTC, type ReportSummary, type Ticket } from "../api/client";
 import { StatusBadge, CategoryBadge } from "../components/StatusBadge";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -130,7 +130,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <span className="text-xs text-gray-400 shrink-0">
-                {format(new Date(ticket.created_at), "d MMM", { locale: nl })}
+                {format(parseUTC(ticket.created_at), "d MMM", { locale: nl })}
               </span>
             </Link>
           ))}

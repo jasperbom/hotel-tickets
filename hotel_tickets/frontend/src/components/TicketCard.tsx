@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import type { Ticket } from "../api/client";
+import { parseUTC, type Ticket } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "./StatusBadge";
 
 interface Props {
@@ -49,7 +49,7 @@ export default function TicketCard({ ticket, users = {}, locations = {} }: Props
                 : "Niet toegewezen"}
             </span>
             <span>
-              {format(new Date(ticket.created_at), "d MMM HH:mm", { locale: nl })}
+              {format(parseUTC(ticket.created_at), "d MMM HH:mm", { locale: nl })}
             </span>
           </div>
         </div>

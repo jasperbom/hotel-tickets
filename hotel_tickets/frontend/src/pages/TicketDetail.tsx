@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, type Ticket, type Comment, type UserRole, type Status, type KeycardStatus } from "../api/client";
+import { ticketApi, userApi, locationApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type KeycardStatus } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "../components/StatusBadge";
 
 const STATUS_OPTIONS: { value: Status; label: string }[] = [
@@ -170,7 +170,7 @@ export default function TicketDetail() {
             {usersMap[ticket.created_by] || (ticket.created_by === "system" ? "Home Assistant" : ticket.created_by)}
           </span>
           <span className="text-gray-400">·</span>
-          <span className="text-gray-400">{format(new Date(ticket.created_at), "d MMM yyyy HH:mm", { locale: nl })}</span>
+          <span className="text-gray-400">{format(parseUTC(ticket.created_at), "d MMM yyyy HH:mm", { locale: nl })}</span>
         </div>
 
         {ticket.closed_by && ticket.closed_at && (
@@ -181,7 +181,7 @@ export default function TicketDetail() {
               {usersMap[ticket.closed_by] || ticket.closed_by}
             </span>
             <span className="text-gray-400">·</span>
-            <span className="text-gray-400">{format(new Date(ticket.closed_at), "d MMM yyyy HH:mm", { locale: nl })}</span>
+            <span className="text-gray-400">{format(parseUTC(ticket.closed_at!), "d MMM yyyy HH:mm", { locale: nl })}</span>
           </div>
         )}
       </div>
@@ -256,7 +256,7 @@ export default function TicketDetail() {
             <div key={c.id} className="bg-gray-50 rounded-lg p-3">
               <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
                 <span>{usersMap[c.author_id] || c.author_id}</span>
-                <span>{format(new Date(c.created_at), "d MMM HH:mm", { locale: nl })}</span>
+                <span>{format(parseUTC(c.created_at), "d MMM HH:mm", { locale: nl })}</span>
               </div>
               <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.body}</p>
             </div>

@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -173,13 +173,13 @@ async def update_ticket(
         setattr(ticket, field, value)
 
     if body.status == Status.closed and not ticket.closed_at:
-        ticket.closed_at = datetime.utcnow()
+        ticket.closed_at = datetime.now(timezone.utc)
         ticket.closed_by = user.ha_user_id
     elif body.status and body.status != Status.closed:
         ticket.closed_at = None
         ticket.closed_by = None
 
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(timezone.utc)
 
     # Notificeer bij nieuwe toewijzing
     if body.assigned_to and body.assigned_to != old_assigned:
@@ -201,7 +201,7 @@ async def claim_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Dep
         raise HTTPException(status_code=409, detail="Ticket al toegewezen")
     ticket.assigned_to = user.ha_user_id
     ticket.status = Status.in_progress
-    ticket.updated_at = datetime.utcnow()
+    ticket.updated_at = datetime.now(timezone.utc)
     return ticket
 
 
