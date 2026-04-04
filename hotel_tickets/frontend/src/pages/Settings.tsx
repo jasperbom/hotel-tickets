@@ -1,5 +1,82 @@
 import { useEffect, useState } from "react";
-import { userApi, type UserRole, type Role, type Category } from "../api/client";
+import { userApi, integrationApi, type UserRole, type Role, type Category, type IntegrationStatus } from "../api/client";
+
+function IntegrationWidget() {
+  const [status, setStatus] = useState<IntegrationStatus | null>(null);
+  const [installing, setInstalling] = useState(false);
+  const [message, setMessage] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  useEffect(() => {
+    integrationApi.status().then((r) => setStatus(r.data)).catch(() => {});
+  }, []);
+
+  async function install() {
+    setInstalling(true);
+    setMessage(null);
+    try {
+      const r = await integrationApi.install();
+      setMessage({ type: "ok", text: r.data.message });
+      const s = await integrationApi.status();
+      setStatus(s.data);
+    } catch {
+      setMessage({ type: "err", text: "Installatie mislukt. Controleer de addon-logs." });
+    } finally {
+      setInstalling(false);
+    }
+  }
+
+  if (!status) return null;
+
+  const isUpToDate = status.installed && !status.update_available;
+
+  return (
+    <div className="card space-y-3">
+      <div className="flex items-center justify-between">
+        <h2 className="font-semibold">HA Integratie</h2>
+        <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
+          isUpToDate ? "bg-green-100 text-green-700" :
+          status.installed ? "bg-amber-100 text-amber-700" :
+          "bg-red-100 text-red-700"
+        }`}>
+          {isUpToDate ? "Geïnstalleerd" : status.installed ? "Update beschikbaar" : "Niet geïnstalleerd"}
+        </span>
+      </div>
+
+      <div className="text-sm text-gray-600 space-y-1">
+        {status.installed && (
+          <p>Geïnstalleerde versie: <span className="font-mono font-medium">{status.installed_version}</span></p>
+        )}
+        <p>Addon versie: <span className="font-mono font-medium">{status.bundled_version}</span></p>
+        {!status.installed && (
+          <p className="text-gray-500">
+            De integratie voegt de <code>hotel_tickets.create_ticket</code> service en sensoren toe aan Home Assistant.
+          </p>
+        )}
+      </div>
+
+      {message && (
+        <div className={`text-sm rounded-lg px-3 py-2 ${
+          message.type === "ok" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-700"
+        }`}>
+          {message.type === "ok" && "✓ "}{message.text}
+          {message.type === "ok" && (
+            <p className="mt-1 font-medium">Herstart Home Assistant via Instellingen → Systeem → Herstarten.</p>
+          )}
+        </div>
+      )}
+
+      {(!isUpToDate) && (
+        <button
+          onClick={install}
+          disabled={installing}
+          className="btn-primary w-full"
+        >
+          {installing ? "Bezig met installeren..." : status.installed ? "Bijwerken naar " + status.bundled_version : "Integratie installeren"}
+        </button>
+      )}
+    </div>
+  );
+}
 
 const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
@@ -53,6 +130,8 @@ export default function Settings() {
   return (
     <div className="space-y-6 max-w-2xl">
       <h1 className="text-2xl font-bold text-gray-900">Instellingen</h1>
+
+      <IntegrationWidget />
 
       <div className="card space-y-4">
         <div className="flex items-center justify-between">

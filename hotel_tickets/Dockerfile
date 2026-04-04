@@ -28,6 +28,9 @@ RUN cd frontend && npm run build
 # Copy backend
 COPY backend/ ./backend/
 
+# Bundel de HA integratie-bestanden zodat de addon ze kan installeren
+COPY integration/ ./integration/
+
 # Copy rootfs (bevat s6-overlay service definitie)
 COPY rootfs /
 RUN chmod a+x /etc/services.d/hotel_tickets/run

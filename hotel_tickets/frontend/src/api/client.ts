@@ -140,6 +140,18 @@ export const recurringApi = {
   remove: (id: string) => api.delete(`/recurring/${id}`),
 };
 
+export interface IntegrationStatus {
+  installed: boolean;
+  installed_version: string | null;
+  bundled_version: string;
+  update_available: boolean;
+}
+
+export const integrationApi = {
+  status: () => api.get<IntegrationStatus>("/integration/status"),
+  install: () => api.post<{ ok: boolean; version: string; message: string }>("/integration/install"),
+};
+
 export const reportApi = {
   summary: (params?: Record<string, string>) => api.get<ReportSummary>("/reports/summary", { params }),
   timeline: (params?: Record<string, string>) => api.get<TimelinePoint[]>("/reports/timeline", { params }),
