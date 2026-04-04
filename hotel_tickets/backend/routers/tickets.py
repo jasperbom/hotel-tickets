@@ -53,6 +53,7 @@ class TicketOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    closed_by: str | None
     notify_when_free: bool
 
     model_config = {"from_attributes": True}
@@ -168,8 +169,10 @@ async def update_ticket(
 
     if body.status == Status.closed and not ticket.closed_at:
         ticket.closed_at = datetime.utcnow()
+        ticket.closed_by = user.ha_user_id
     elif body.status and body.status != Status.closed:
         ticket.closed_at = None
+        ticket.closed_by = None
 
     ticket.updated_at = datetime.utcnow()
 

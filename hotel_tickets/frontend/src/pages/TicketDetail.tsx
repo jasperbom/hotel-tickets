@@ -161,6 +161,31 @@ export default function TicketDetail() {
         </div>
       )}
 
+      {/* Aangemaakt / gesloten door */}
+      <div className="card space-y-2 text-sm">
+        <div className="flex items-center gap-2 text-gray-600">
+          <span className="text-base">✏️</span>
+          <span>Aangemaakt door</span>
+          <span className="font-semibold text-gray-900">
+            {usersMap[ticket.created_by] || (ticket.created_by === "system" ? "Home Assistant" : ticket.created_by)}
+          </span>
+          <span className="text-gray-400">·</span>
+          <span className="text-gray-400">{format(new Date(ticket.created_at), "d MMM yyyy HH:mm", { locale: nl })}</span>
+        </div>
+
+        {ticket.closed_by && ticket.closed_at && (
+          <div className="flex items-center gap-2 text-gray-600">
+            <span className="text-base">✅</span>
+            <span>Gesloten door</span>
+            <span className="font-semibold text-gray-900">
+              {usersMap[ticket.closed_by] || ticket.closed_by}
+            </span>
+            <span className="text-gray-400">·</span>
+            <span className="text-gray-400">{format(new Date(ticket.closed_at), "d MMM yyyy HH:mm", { locale: nl })}</span>
+          </div>
+        )}
+      </div>
+
       {/* Details */}
       <div className="card space-y-4">
         {ticket.description && (
@@ -168,19 +193,6 @@ export default function TicketDetail() {
         )}
 
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-gray-500">Status</p>
-            <select
-              value={ticket.status}
-              onChange={(e) => updateField({ status: e.target.value as Status })}
-              className="mt-1 border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white w-full"
-            >
-              {STATUS_OPTIONS.map((s) => (
-                <option key={s.value} value={s.value}>{s.label}</option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <p className="text-gray-500">Toegewezen aan</p>
             <select
@@ -196,27 +208,44 @@ export default function TicketDetail() {
           </div>
 
           <div>
-            <p className="text-gray-500">Aangemaakt op</p>
-            <p className="mt-1 font-medium">
-              {format(new Date(ticket.created_at), "d MMM yyyy HH:mm", { locale: nl })}
-            </p>
+            <p className="text-gray-500">Status</p>
+            <select
+              value={ticket.status}
+              onChange={(e) => updateField({ status: e.target.value as Status })}
+              className="mt-1 border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white w-full"
+            >
+              {STATUS_OPTIONS.map((s) => (
+                <option key={s.value} value={s.value}>{s.label}</option>
+              ))}
+            </select>
           </div>
-
-          {ticket.closed_at && (
-            <div>
-              <p className="text-gray-500">Gesloten op</p>
-              <p className="mt-1 font-medium">
-                {format(new Date(ticket.closed_at), "d MMM yyyy HH:mm", { locale: nl })}
-              </p>
-            </div>
-          )}
         </div>
 
-        {ticket.status === "open" && !ticket.assigned_to && (
-          <button onClick={claimTicket} className="btn-secondary w-full">
-            Ticket overnemen
-          </button>
-        )}
+        <div className="flex flex-col gap-2 pt-1">
+          {ticket.status === "open" && !ticket.assigned_to && (
+            <button onClick={claimTicket} className="btn-secondary w-full">
+              Ticket overnemen
+            </button>
+          )}
+
+          {ticket.status !== "closed" && (
+            <button
+              onClick={() => updateField({ status: "closed" })}
+              className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold text-base transition-colors flex items-center justify-center gap-2"
+            >
+              <span>✓</span> Ticket sluiten
+            </button>
+          )}
+
+          {ticket.status === "closed" && (
+            <button
+              onClick={() => updateField({ status: "open" })}
+              className="w-full py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium transition-colors"
+            >
+              Ticket heropenen
+            </button>
+          )}
+        </div>
       </div>
 
       {/* Commentaar */}

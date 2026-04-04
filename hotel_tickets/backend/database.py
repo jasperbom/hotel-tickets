@@ -37,6 +37,7 @@ async def _run_migrations(conn):
     """
     migrations = [
         "ALTER TABLE tickets ADD COLUMN notify_when_free BOOLEAN NOT NULL DEFAULT 0",
+        "ALTER TABLE tickets ADD COLUMN closed_by VARCHAR(255)",
     ]
     for sql in migrations:
         try:
