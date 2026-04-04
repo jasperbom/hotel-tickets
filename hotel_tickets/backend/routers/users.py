@@ -148,7 +148,10 @@ async def update_user(
     if ha_user_id != user.ha_user_id and not user.is_admin:
         raise HTTPException(status_code=403, detail="Geen toegang")
     if body.role is not None and not user.is_admin:
-        raise HTTPException(status_code=403, detail="Alleen admins kunnen rollen wijzigen")
+        # Uitzondering: als er helemaal geen admins zijn mag iedereen zichzelf promoveren
+        admin_count = await db.scalar(select(func.count()).where(UserRole.role == Role.admin))
+        if admin_count > 0:
+            raise HTTPException(status_code=403, detail="Alleen admins kunnen rollen wijzigen")
     target = await db.get(UserRole, ha_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="Gebruiker niet gevonden")
