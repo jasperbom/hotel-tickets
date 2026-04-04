@@ -5,6 +5,7 @@ from pathlib import Path
 
 from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.config_entries import ConfigEntry
+from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 DOMAIN = "hotel_tickets"
@@ -69,8 +70,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                         _LOGGER.info("[hotel_tickets] Ticket succesvol aangemaakt: %s", data.get("title"))
                     else:
                         _LOGGER.error("[hotel_tickets] Ticket aanmaken MISLUKT — HTTP %s: %s", resp.status, body[:300])
+                        raise HomeAssistantError(f"Ticket aanmaken mislukt (HTTP {resp.status}): {body[:200]}")
+            except HomeAssistantError:
+                raise
             except Exception as exc:
                 _LOGGER.error("[hotel_tickets] Verbindingsfout bij ticket aanmaken: %s", exc, exc_info=True)
+                raise HomeAssistantError(f"Verbindingsfout: {exc}") from exc
 
         hass.services.async_register(DOMAIN, "create_ticket", handle_create_ticket)
         _LOGGER.info("[hotel_tickets] create_ticket service geregistreerd")
