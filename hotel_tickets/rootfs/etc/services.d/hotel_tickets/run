@@ -3,7 +3,15 @@
 
 export LOG_LEVEL=$(bashio::config 'log_level')
 export SMTP_ENABLED=$(bashio::config 'smtp_enabled')
-export DB_PATH="/data/hotel_tickets.db"
+# Database in /config/ zodat het niet verloren gaat bij herinstallatie
+mkdir -p /config/hotel_tickets
+export DB_PATH="/config/hotel_tickets/hotel_tickets.db"
+
+# Migreer van oude locatie als nieuwe nog leeg is
+if [ ! -f "$DB_PATH" ] && [ -f "/data/hotel_tickets.db" ]; then
+    cp /data/hotel_tickets.db "$DB_PATH"
+    bashio::log.info "Database gemigreerd van /data/ naar /config/hotel_tickets/"
+fi
 
 # Optionele SMTP velden met lege string als fallback
 if bashio::config.has_value 'smtp_host'; then
