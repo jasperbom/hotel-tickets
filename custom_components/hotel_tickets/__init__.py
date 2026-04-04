@@ -18,50 +18,53 @@ CARD_FILE = Path(__file__).parent / "hotel-ticket-card.js"
 
 async def _get_addon_ip(session, supervisor_token: str) -> str | None:
     """
-    Haal het IP op via de individuele addon-endpoint (bevat ip_address).
-    Probeer meerdere slug-formaten en log alles op WARNING zodat het zichtbaar is.
+    Zoek de hotel-addon in de Supervisor listing, haal daarna het IP op.
+    Logt elke addon als aparte regel zodat niets wordt afgekapt.
     """
     headers = {"Authorization": f"Bearer {supervisor_token}"}
 
-    # Stap 1: probeer de individuele info-endpoints met beide slug-formaten
-    for slug in ("local_hotel_tickets", "hotel_tickets"):
-        for path in (f"/addons/{slug}", f"/addons/{slug}/info"):
-            try:
-                async with session.get(
-                    f"http://supervisor{path}",
-                    headers=headers,
-                ) as r:
-                    body = await r.text()
-                    _LOGGER.warning(
-                        "[hotel_tickets] GET %s → HTTP %s | body: %s",
-                        path, r.status, body[:600],
-                    )
-                    if r.status == 200:
-                        import json
-                        info = json.loads(body)
-                        ip = (
-                            info.get("data", {}).get("ip_address")
-                            or info.get("ip_address")
-                        )
-                        _LOGGER.warning("[hotel_tickets] ip_address in response: %r", ip)
-                        if ip:
-                            return ip
-            except Exception as exc:
-                _LOGGER.warning("[hotel_tickets] GET %s fout: %s", path, exc)
-
-    # Stap 2: haal alle addons op en log de volledige lijst
+    # Stap 1: lijst alle addons op en zoek de hotel addon
+    hotel_slug = None
     try:
-        async with session.get(
-            "http://supervisor/addons",
-            headers=headers,
-        ) as r:
-            body = await r.text()
-            _LOGGER.warning(
-                "[hotel_tickets] GET /addons → HTTP %s | body (eerste 1200): %s",
-                r.status, body[:1200],
-            )
+        async with session.get("http://supervisor/addons", headers=headers) as r:
+            _LOGGER.warning("[hotel_tickets] GET /addons → HTTP %s", r.status)
+            if r.status == 200:
+                payload = await r.json()
+                addons = payload.get("data", {}).get("addons", [])
+                _LOGGER.warning("[hotel_tickets] Totaal %d addons:", len(addons))
+                for addon in addons:
+                    slug  = addon.get("slug", "")
+                    name  = addon.get("name", "")
+                    state = addon.get("state", "")
+                    _LOGGER.warning("[hotel_tickets]   slug=%r  name=%r  state=%r", slug, name, state)
+                    if "hotel" in slug.lower() or "hotel" in name.lower():
+                        hotel_slug = slug
+                        _LOGGER.warning("[hotel_tickets] ✓ Hotel addon gevonden: slug=%r", hotel_slug)
+            else:
+                body = await r.text()
+                _LOGGER.warning("[hotel_tickets] GET /addons mislukt HTTP %s: %s", r.status, body[:300])
     except Exception as exc:
         _LOGGER.warning("[hotel_tickets] GET /addons fout: %s", exc)
+
+    if not hotel_slug:
+        _LOGGER.warning("[hotel_tickets] Addon niet gevonden — zie slugs hierboven")
+        return None
+
+    # Stap 2: haal IP op via de individuele addon-endpoint
+    for path in (f"/addons/{hotel_slug}", f"/addons/{hotel_slug}/info"):
+        try:
+            async with session.get(f"http://supervisor{path}", headers=headers) as r:
+                body = await r.text()
+                _LOGGER.warning("[hotel_tickets] GET %s → HTTP %s: %s", path, r.status, body[:600])
+                if r.status == 200:
+                    import json as _json
+                    info = _json.loads(body)
+                    ip = info.get("data", {}).get("ip_address") or info.get("ip_address")
+                    _LOGGER.warning("[hotel_tickets] ip_address: %r", ip)
+                    if ip:
+                        return ip
+        except Exception as exc:
+            _LOGGER.warning("[hotel_tickets] GET %s fout: %s", path, exc)
 
     return None
 
@@ -75,7 +78,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if CARD_FILE.exists():
         try:
             hass.http.register_static_path(CARD_URL, str(CARD_FILE), cache_headers=False)
-            _LOGGER.warning("Hotel Ticket card beschikbaar op %s", CARD_URL)
         except Exception:
             pass
 
@@ -85,7 +87,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         "JA (lengte %d)" % len(supervisor_token) if supervisor_token else "NEE",
     )
 
-    # Haal addon IP op — altijd, ook als service al geregistreerd is
+    # Altijd het addon IP ophalen, ook als de service al geregistreerd is
     addon_ip = None
     if supervisor_token:
         session = async_get_clientsession(hass)
@@ -100,7 +102,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ip = hass.data[DOMAIN].get("addon_ip")
             if not ip:
                 raise HomeAssistantError(
-                    "Addon IP onbekend — zie HA logs voor details en herstart HA"
+                    "Addon IP onbekend — zie HA logs voor alle addon-slugs en herstart HA"
                 )
 
             data = {k: v for k, v in {
@@ -113,7 +115,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }.items() if v is not None}
 
             url = f"http://{ip}:{ADDON_PORT}/api/tickets/"
-            _LOGGER.warning("[hotel_tickets] POST naar: %s — data: %s", url, data)
+            _LOGGER.warning("[hotel_tickets] POST naar: %s | data: %s", url, data)
 
             try:
                 session = async_get_clientsession(hass)
