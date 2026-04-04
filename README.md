@@ -44,35 +44,30 @@ Bedoeld voor de technische dienst, huishouding en receptie.
 
 ---
 
-### Stap 2 — Custom component installeren
+### Stap 2 — Custom component via HACS installeren (aanbevolen)
 
-De custom component zorgt voor de `hotel_tickets.create_ticket` service en de sensor entiteiten.
+De custom component voegt de `hotel_tickets.create_ticket` service, sensor entiteiten en de Lovelace card toe.
 
-> **Let op:** Deze repository is een addon repository. HACS beheert geen addons — gebruik onderstaande handmatige installatie.
+#### Integratie (custom component)
 
-1. Ga in HA naar **Terminal & SSH addon** (of gebruik Samba/File editor)
-2. Maak de map aan als die nog niet bestaat:
-   ```bash
-   mkdir -p /config/custom_components/hotel_tickets
-   ```
-3. Download de bestanden rechtstreeks:
-   ```bash
-   cd /config/custom_components/hotel_tickets
-   wget https://raw.githubusercontent.com/jasperbom/hotel-tickets/main/custom_component/hotel_tickets/__init__.py
-   wget https://raw.githubusercontent.com/jasperbom/hotel-tickets/main/custom_component/hotel_tickets/manifest.json
-   wget https://raw.githubusercontent.com/jasperbom/hotel-tickets/main/custom_component/hotel_tickets/services.yaml
-   ```
+1. Ga in HACS naar **Integraties → ⋮ → Aangepaste repositories**
+2. Voeg toe:
+   - **URL:** `https://github.com/jasperbom/hotel-tickets`
+   - **Categorie:** Integratie
+3. Zoek op **Hotel Ticket System** en klik op **Downloaden**
 4. Herstart Home Assistant
 
-De mapstructuur moet er zo uitzien:
-```
-config/
-└── custom_components/
-    └── hotel_tickets/
-        ├── __init__.py
-        ├── manifest.json
-        └── services.yaml
-```
+#### Lovelace card
+
+1. Ga in HACS naar **Frontend → ⋮ → Aangepaste repositories**
+2. Voeg toe:
+   - **URL:** `https://github.com/jasperbom/hotel-tickets`
+   - **Categorie:** Lovelace
+3. Zoek op **Hotel Ticket System** en klik op **Downloaden**
+4. De card is nu beschikbaar als `hotel-ticket-card`
+
+> **Handmatige installatie (zonder HACS):**  
+> Download `__init__.py`, `manifest.json` en `services.yaml` uit de map `custom_components/hotel_tickets/` en plaats ze in `/config/custom_components/hotel_tickets/`. Herstart HA.
 
 ---
 
