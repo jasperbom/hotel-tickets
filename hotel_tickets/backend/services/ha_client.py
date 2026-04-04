@@ -71,6 +71,18 @@ async def get_users() -> list[dict]:
     return persons
 
 
+async def get_sensor_state(entity_id: str) -> dict | None:
+    """Haal de staat van een HA entiteit op. Geeft None als de entiteit niet bestaat."""
+    async with aiohttp.ClientSession() as session:
+        async with session.get(
+            f"{HA_API}/states/{entity_id}",
+            headers=_headers(),
+        ) as resp:
+            if resp.status == 200:
+                return await resp.json()
+    return None
+
+
 async def call_service(domain: str, service: str, data: dict[str, Any] | None = None) -> bool:
     """Roep een HA service aan."""
     async with aiohttp.ClientSession() as session:

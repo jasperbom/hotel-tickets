@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, type Ticket, type Comment, type UserRole, type Status, type Priority } from "../api/client";
+import { ticketApi, userApi, locationApi, type Ticket, type Comment, type UserRole, type Status, type KeycardStatus } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "../components/StatusBadge";
 
 const STATUS_OPTIONS: { value: Status; label: string }[] = [
@@ -17,6 +17,8 @@ export default function TicketDetail() {
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [users, setUsers] = useState<UserRole[]>([]);
+  const [locations, setLocations] = useState<Record<string, string>>({});
+  const [keycard, setKeycard] = useState<KeycardStatus | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -24,14 +26,23 @@ export default function TicketDetail() {
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [t, c, u] = await Promise.all([
+    const [t, c, u, locs] = await Promise.all([
       ticketApi.get(id),
       ticketApi.getComments(id),
       userApi.list(),
+      locationApi.list(),
     ]);
     setTicket(t.data);
     setComments(c.data);
     setUsers(u.data);
+    setLocations(Object.fromEntries(locs.data.map((l) => [l.id, l.name])));
+
+    // Keycard sensor ophalen als er een locatie is
+    if (t.data.location_id) {
+      locationApi.keycard(t.data.location_id)
+        .then((r) => setKeycard(r.data))
+        .catch(() => {});
+    }
   }, [id]);
 
   useEffect(() => { load(); }, [load]);
@@ -73,11 +84,13 @@ export default function TicketDetail() {
     );
   }
 
+  const locationName = ticket.location_id ? locations[ticket.location_id] : null;
+
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       {/* Header */}
       <div className="flex items-start gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700 mt-1">←</button>
+        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700 mt-1 text-lg">←</button>
         <div className="flex-1">
           <h1 className="text-xl font-bold text-gray-900">{ticket.title}</h1>
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -87,6 +100,34 @@ export default function TicketDetail() {
           </div>
         </div>
       </div>
+
+      {/* Kamer-banner */}
+      {locationName && (
+        <div className="rounded-xl overflow-hidden border border-blue-200">
+          <div className="flex items-center justify-between bg-blue-600 text-white px-5 py-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🚪</span>
+              <span className="text-xl font-bold tracking-wide">{locationName}</span>
+            </div>
+            {/* Keycard status */}
+            {keycard?.found && (
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-semibold ${
+                keycard.occupied
+                  ? "bg-orange-400 text-white"
+                  : "bg-green-400 text-white"
+              }`}>
+                <span>{keycard.occupied ? "🔑" : "🔓"}</span>
+                <span>{keycard.occupied ? "Bezet" : "Vrij"}</span>
+              </div>
+            )}
+          </div>
+          {keycard?.found === false && (
+            <div className="bg-blue-50 px-5 py-1.5 text-xs text-blue-400">
+              Geen keycard-sensor gevonden ({keycard.entity_id})
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Details */}
       <div className="card space-y-4">

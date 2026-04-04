@@ -82,6 +82,14 @@ export interface Location {
   name: string;
 }
 
+export interface KeycardStatus {
+  entity_id: string;
+  found: boolean;
+  occupied: boolean | null;
+  state?: string;
+  friendly_name?: string;
+}
+
 export interface ReportSummary {
   status_counts: Record<Status, number>;
   category_counts: Record<Category, number>;
@@ -120,6 +128,7 @@ export const userApi = {
 
 export const locationApi = {
   list: () => api.get<Location[]>("/locations/"),
+  keycard: (areaId: string) => api.get<KeycardStatus>(`/locations/${areaId}/keycard`),
 };
 
 export const recurringApi = {
