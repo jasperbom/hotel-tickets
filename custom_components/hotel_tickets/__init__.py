@@ -18,27 +18,37 @@ CARD_FILE = Path(__file__).parent / "hotel-ticket-card.js"
 
 async def _get_addon_ip(session, supervisor_token: str) -> str | None:
     """
-    Haal het IP-adres van de addon op via de Supervisor info-endpoint.
-    Probeer zowel 'local_hotel_tickets' (lokale addon) als 'hotel_tickets'.
+    Haal het IP van de addon op door alle addons te listen en te zoeken op slug/naam.
+    Logt elke gevonden addon zodat we kunnen debuggen welk slug de Supervisor gebruikt.
     """
-    for slug in ("local_hotel_tickets", "hotel_tickets"):
-        try:
-            async with session.get(
-                f"http://supervisor/addons/{slug}/info",
-                headers={"Authorization": f"Bearer {supervisor_token}"},
-            ) as r:
-                if r.status == 200:
-                    info = await r.json()
-                    ip = info.get("data", {}).get("ip_address")
-                    _LOGGER.info(
-                        "[hotel_tickets] Addon IP gevonden (slug=%s): %s", slug, ip
-                    )
-                    return ip
-                _LOGGER.debug(
-                    "[hotel_tickets] Addon info slug=%s → HTTP %s", slug, r.status
-                )
-        except Exception as exc:
-            _LOGGER.debug("[hotel_tickets] Addon info fout (slug=%s): %s", slug, exc)
+    try:
+        async with session.get(
+            "http://supervisor/addons",
+            headers={"Authorization": f"Bearer {supervisor_token}"},
+        ) as r:
+            _LOGGER.info("[hotel_tickets] GET /addons → HTTP %s", r.status)
+            if r.status != 200:
+                body = await r.text()
+                _LOGGER.warning("[hotel_tickets] Addons listing mislukt: %s", body[:300])
+                return None
+
+            payload = await r.json()
+            addons = payload.get("data", {}).get("addons", [])
+            _LOGGER.info("[hotel_tickets] Totaal addons gevonden: %d", len(addons))
+
+            for addon in addons:
+                slug = addon.get("slug", "")
+                name = addon.get("name", "")
+                ip   = addon.get("ip_address", "")
+                _LOGGER.info("[hotel_tickets] Addon: slug=%r name=%r ip=%r", slug, name, ip)
+
+                if "hotel" in slug.lower() or "hotel" in name.lower():
+                    _LOGGER.info("[hotel_tickets] ✓ Hotel addon gevonden — slug=%r ip=%r", slug, ip)
+                    return ip or None
+
+    except Exception as exc:
+        _LOGGER.warning("[hotel_tickets] Addon listing fout: %s", exc)
+
     return None
 
 
@@ -63,16 +73,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "JA (lengte %d)" % len(supervisor_token) if supervisor_token else "NEE — aanroepen zullen falen",
         )
 
-        # Haal addon IP op zodat we geen DNS nodig hebben.
-        # HA's aiohttp sessie gebruikt een mDNS resolver die Docker hostnames niet oplost.
         addon_ip = None
         if supervisor_token:
             session = async_get_clientsession(hass)
             addon_ip = await _get_addon_ip(session, supervisor_token)
             if not addon_ip:
                 _LOGGER.warning(
-                    "[hotel_tickets] Addon IP niet gevonden — ticket aanmaken zal mislukken. "
-                    "Zorg dat de addon draait en herstart HA."
+                    "[hotel_tickets] Addon IP niet gevonden. Zie logs hierboven voor beschikbare addons."
                 )
 
         hass.data[DOMAIN]["addon_ip"] = addon_ip
@@ -81,7 +88,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ip = hass.data[DOMAIN].get("addon_ip")
             if not ip:
                 raise HomeAssistantError(
-                    "Addon IP onbekend — zorg dat de addon draait en herstart HA"
+                    "Addon IP onbekend — zie HA logs voor beschikbare addons en herstart HA"
                 )
 
             data = {k: v for k, v in {
