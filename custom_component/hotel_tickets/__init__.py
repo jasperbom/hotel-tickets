@@ -43,7 +43,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "assigned_to": call.data.get("assigned_to"),
             }.items() if v is not None}
 
-            url = f"http://supervisor/addons/{ADDON_SLUG}/api/tickets/"
+            url = f"http://supervisor/addons/{ADDON_SLUG}/api/api/tickets/"
             headers = {"Authorization": f"Bearer {supervisor_token}"}
             try:
                 session = async_get_clientsession(hass)
