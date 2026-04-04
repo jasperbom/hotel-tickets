@@ -11,61 +11,31 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 DOMAIN = "hotel_tickets"
 _LOGGER = logging.getLogger(__name__)
 
+# Supervisor slug voor deze addon (repo-hash prefix + slug uit config.yaml).
+ADDON_SLUG = "62246620-hotel-tickets"
 ADDON_PORT = 8080
+
 CARD_URL = "/hotel_tickets/hotel-ticket-card.js"
 CARD_FILE = Path(__file__).parent / "hotel-ticket-card.js"
 
 
 async def _get_addon_ip(session, supervisor_token: str) -> str | None:
-    """
-    Zoek de hotel-addon in de Supervisor listing, haal daarna het IP op.
-    Logt elke addon als aparte regel zodat niets wordt afgekapt.
-    """
+    """Haal het IP-adres van de addon op via de Supervisor."""
     headers = {"Authorization": f"Bearer {supervisor_token}"}
-
-    # Stap 1: lijst alle addons op en zoek de hotel addon
-    hotel_slug = None
-    try:
-        async with session.get("http://supervisor/addons", headers=headers) as r:
-            _LOGGER.warning("[hotel_tickets] GET /addons → HTTP %s", r.status)
-            if r.status == 200:
-                payload = await r.json()
-                addons = payload.get("data", {}).get("addons", [])
-                _LOGGER.warning("[hotel_tickets] Totaal %d addons:", len(addons))
-                for addon in addons:
-                    slug  = addon.get("slug", "")
-                    name  = addon.get("name", "")
-                    state = addon.get("state", "")
-                    _LOGGER.warning("[hotel_tickets]   slug=%r  name=%r  state=%r", slug, name, state)
-                    if "hotel" in slug.lower() or "hotel" in name.lower():
-                        hotel_slug = slug
-                        _LOGGER.warning("[hotel_tickets] ✓ Hotel addon gevonden: slug=%r", hotel_slug)
-            else:
-                body = await r.text()
-                _LOGGER.warning("[hotel_tickets] GET /addons mislukt HTTP %s: %s", r.status, body[:300])
-    except Exception as exc:
-        _LOGGER.warning("[hotel_tickets] GET /addons fout: %s", exc)
-
-    if not hotel_slug:
-        _LOGGER.warning("[hotel_tickets] Addon niet gevonden — zie slugs hierboven")
-        return None
-
-    # Stap 2: haal IP op via de individuele addon-endpoint
-    for path in (f"/addons/{hotel_slug}", f"/addons/{hotel_slug}/info"):
+    for path in (f"/addons/{ADDON_SLUG}", f"/addons/{ADDON_SLUG}/info"):
         try:
             async with session.get(f"http://supervisor{path}", headers=headers) as r:
-                body = await r.text()
-                _LOGGER.warning("[hotel_tickets] GET %s → HTTP %s: %s", path, r.status, body[:600])
                 if r.status == 200:
                     import json as _json
-                    info = _json.loads(body)
+                    info = _json.loads(await r.text())
                     ip = info.get("data", {}).get("ip_address") or info.get("ip_address")
-                    _LOGGER.warning("[hotel_tickets] ip_address: %r", ip)
                     if ip:
+                        _LOGGER.info("[hotel_tickets] Addon IP: %s (via %s)", ip, path)
                         return ip
+                else:
+                    _LOGGER.warning("[hotel_tickets] GET %s → HTTP %s", path, r.status)
         except Exception as exc:
             _LOGGER.warning("[hotel_tickets] GET %s fout: %s", path, exc)
-
     return None
 
 
@@ -78,21 +48,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if CARD_FILE.exists():
         try:
             hass.http.register_static_path(CARD_URL, str(CARD_FILE), cache_headers=False)
+            _LOGGER.info("Hotel Ticket card beschikbaar op %s", CARD_URL)
         except Exception:
             pass
 
     supervisor_token = os.environ.get("SUPERVISOR_TOKEN", "")
-    _LOGGER.warning(
-        "[hotel_tickets] SUPERVISOR_TOKEN aanwezig: %s",
-        "JA (lengte %d)" % len(supervisor_token) if supervisor_token else "NEE",
-    )
 
     # Altijd het addon IP ophalen, ook als de service al geregistreerd is
     addon_ip = None
     if supervisor_token:
         session = async_get_clientsession(hass)
         addon_ip = await _get_addon_ip(session, supervisor_token)
-        _LOGGER.warning("[hotel_tickets] Addon IP resultaat: %r", addon_ip)
+        if not addon_ip:
+            _LOGGER.warning("[hotel_tickets] Addon IP niet gevonden voor slug '%s'", ADDON_SLUG)
 
     hass.data[DOMAIN]["addon_ip"] = addon_ip
 
@@ -102,7 +70,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             ip = hass.data[DOMAIN].get("addon_ip")
             if not ip:
                 raise HomeAssistantError(
-                    "Addon IP onbekend — zie HA logs voor alle addon-slugs en herstart HA"
+                    "Addon IP onbekend — zorg dat de addon draait en herstart HA"
                 )
 
             data = {k: v for k, v in {
@@ -115,7 +83,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }.items() if v is not None}
 
             url = f"http://{ip}:{ADDON_PORT}/api/tickets/"
-            _LOGGER.warning("[hotel_tickets] POST naar: %s | data: %s", url, data)
+            _LOGGER.info("[hotel_tickets] create_ticket → POST %s | data: %s", url, data)
 
             try:
                 session = async_get_clientsession(hass)
@@ -125,19 +93,20 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     json=data,
                 ) as resp:
                     body = await resp.text()
-                    _LOGGER.warning("[hotel_tickets] HTTP %s | %s", resp.status, body[:300])
+                    _LOGGER.info("[hotel_tickets] HTTP %s | %s", resp.status, body[:300])
                     if resp.status in (200, 201):
-                        _LOGGER.warning("[hotel_tickets] Ticket aangemaakt: %s", data.get("title"))
+                        _LOGGER.info("[hotel_tickets] Ticket aangemaakt: %s", data.get("title"))
                     else:
+                        _LOGGER.error("[hotel_tickets] Ticket aanmaken mislukt HTTP %s: %s", resp.status, body[:300])
                         raise HomeAssistantError(f"Ticket aanmaken mislukt (HTTP {resp.status}): {body[:200]}")
             except HomeAssistantError:
                 raise
             except Exception as exc:
-                _LOGGER.warning("[hotel_tickets] Verbindingsfout: %s", exc)
+                _LOGGER.error("[hotel_tickets] Verbindingsfout: %s", exc, exc_info=True)
                 raise HomeAssistantError(f"Verbindingsfout: {exc}") from exc
 
         hass.services.async_register(DOMAIN, "create_ticket", handle_create_ticket)
-        _LOGGER.warning("[hotel_tickets] create_ticket service geregistreerd")
+        _LOGGER.info("[hotel_tickets] create_ticket service geregistreerd")
 
     hass.data[DOMAIN][entry.entry_id] = {}
     return True
