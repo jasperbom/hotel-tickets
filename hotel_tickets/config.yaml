@@ -1,5 +1,5 @@
 name: "Hotel Ticket System"
-version: "1.0.6"
+version: "1.0.7"
 slug: "hotel_tickets"
 description: "Ticket en taakbeheer voor hotels – technische dienst, huishouding en receptie"
 url: "https://github.com/jasperbom/hotel-tickets"
@@ -7,6 +7,7 @@ arch:
   - aarch64
   - amd64
   - armv7
+init: false
 startup: application
 boot: auto
 ingress: true
@@ -16,20 +17,15 @@ panel_title: Tickets
 homeassistant_api: true
 auth_api: true
 options:
-  smtp_host: ""
-  smtp_port: 587
-  smtp_user: ""
-  smtp_password: ""
-  smtp_from: ""
   smtp_enabled: false
   log_level: "info"
 schema:
+  smtp_enabled: bool
   smtp_host: str?
   smtp_port: int?
   smtp_user: str?
   smtp_password: str?
   smtp_from: str?
-  smtp_enabled: bool
   log_level: list(debug|info|warning|error)
 map:
   - data:rw
