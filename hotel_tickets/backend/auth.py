@@ -104,6 +104,7 @@ async def get_current_user(
     ).strip()
 
     if ha_user_id:
+        logger.debug("[auth] Ingress gebruiker: %s", ha_user_id)
         # Profiel ophalen of aanmaken
         result = await db.execute(select(UserRole).where(UserRole.ha_user_id == ha_user_id))
         user_role = result.scalar_one_or_none()
@@ -129,13 +130,16 @@ async def get_current_user(
 
     # 2. Eigen SUPERVISOR_TOKEN (snel pad, geen netwerkoproep)
     if SUPERVISOR_TOKEN and bearer_token == SUPERVISOR_TOKEN:
+        logger.info("[auth] Eigen SUPERVISOR_TOKEN herkend — systeem gebruiker")
         return _system_user()
 
     # 3. Onbekend Bearer token → verifieer met Supervisor
     #    (HA core heeft een andere SUPERVISOR_TOKEN dan de addon)
     if bearer_token and bearer_token != "dev-token":
-        if await _verify_supervisor_token(bearer_token):
-            logger.debug("Systeem-aanroep geauthenticeerd via Supervisor ping")
+        logger.info("[auth] Onbekend token ontvangen (lengte %d) — Supervisor ping...", len(bearer_token))
+        ok = await _verify_supervisor_token(bearer_token)
+        logger.info("[auth] Supervisor ping resultaat: %s", "geldig" if ok else "ONGELDIG")
+        if ok:
             return _system_user()
 
     # 4. Dev mode fallback

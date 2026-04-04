@@ -11,6 +11,9 @@ from ..auth import RequireUser, CurrentUser
 from ..services.notifications import notify_ticket_assigned, notify_ticket_created
 from ..services.ha_entities import sync_ticket_sensors
 
+import logging
+logger = logging.getLogger(__name__)
+
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
 
@@ -120,6 +123,7 @@ async def create_ticket(
     user: RequireUser,
     db: AsyncSession = Depends(get_db),
 ):
+    logger.info("[tickets] Ticket aanmaken: title=%r category=%s door user=%s", body.title, body.category, user.ha_user_id)
     ticket = Ticket(
         title=body.title,
         description=body.description,

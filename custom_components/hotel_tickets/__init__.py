@@ -21,17 +21,20 @@ async def async_setup(hass: HomeAssistant, config: dict) -> bool:
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    # Lovelace card als statisch bestand
     if CARD_FILE.exists():
         try:
             hass.http.register_static_path(CARD_URL, str(CARD_FILE), cache_headers=False)
             _LOGGER.info("Hotel Ticket card beschikbaar op %s", CARD_URL)
         except Exception:
-            pass  # Al geregistreerd bij vorige load
+            pass
 
-    # create_ticket service (eenmalig registreren)
     if not hass.services.has_service(DOMAIN, "create_ticket"):
         supervisor_token = os.environ.get("SUPERVISOR_TOKEN", "")
+
+        _LOGGER.info(
+            "[hotel_tickets] SUPERVISOR_TOKEN aanwezig: %s",
+            "JA (lengte %d)" % len(supervisor_token) if supervisor_token else "NEE — aanroepen zullen falen",
+        )
 
         async def handle_create_ticket(call: ServiceCall) -> None:
             data = {k: v for k, v in {
@@ -44,20 +47,30 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             }.items() if v is not None}
 
             url = f"http://supervisor/addons/{ADDON_SLUG}/api/api/tickets/"
-            headers = {"Authorization": f"Bearer {supervisor_token}"}
+
+            _LOGGER.info("[hotel_tickets] create_ticket aangeroepen — data: %s", data)
+            _LOGGER.info("[hotel_tickets] POST naar: %s", url)
+            _LOGGER.info("[hotel_tickets] Token aanwezig: %s", bool(supervisor_token))
+
             try:
                 session = async_get_clientsession(hass)
-                async with session.post(url, headers=headers, json=data) as resp:
+                async with session.post(
+                    url,
+                    headers={"Authorization": f"Bearer {supervisor_token}"},
+                    json=data,
+                ) as resp:
                     body = await resp.text()
+                    _LOGGER.info("[hotel_tickets] HTTP status: %s", resp.status)
+                    _LOGGER.info("[hotel_tickets] Antwoord (eerste 300 tekens): %s", body[:300])
                     if resp.status in (200, 201):
-                        _LOGGER.info("Ticket aangemaakt: %s", data.get("title"))
+                        _LOGGER.info("[hotel_tickets] Ticket succesvol aangemaakt: %s", data.get("title"))
                     else:
-                        _LOGGER.error("Ticket aanmaken mislukt: HTTP %s — %s", resp.status, body[:200])
+                        _LOGGER.error("[hotel_tickets] Ticket aanmaken MISLUKT — HTTP %s: %s", resp.status, body[:300])
             except Exception as exc:
-                _LOGGER.error("Ticket aanmaken fout: %s", exc)
+                _LOGGER.error("[hotel_tickets] Verbindingsfout bij ticket aanmaken: %s", exc, exc_info=True)
 
         hass.services.async_register(DOMAIN, "create_ticket", handle_create_ticket)
-        _LOGGER.info("hotel_tickets.create_ticket service geregistreerd")
+        _LOGGER.info("[hotel_tickets] create_ticket service geregistreerd")
 
     hass.data[DOMAIN][entry.entry_id] = {}
     return True
