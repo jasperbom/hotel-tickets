@@ -48,33 +48,31 @@ Bedoeld voor de technische dienst, huishouding en receptie.
 
 De custom component zorgt voor de `hotel_tickets.create_ticket` service en de sensor entiteiten.
 
-**Optie A — Via HACS (aanbevolen)**
+> **Let op:** Deze repository is een addon repository. HACS beheert geen addons — gebruik onderstaande handmatige installatie.
 
-1. Installeer [HACS](https://hacs.xyz) als dat nog niet gedaan is
-2. Ga naar HACS → **Integraties** → klik op de drie puntjes → **Custom repositories**
-3. Voeg toe:
-   - Repository: `https://github.com/jasperbom/hotel-tickets`
-   - Categorie: `Integration`
-4. Zoek op **Hotel Ticket System** en installeer
-5. Herstart Home Assistant
+1. Ga in HA naar **Terminal & SSH addon** (of gebruik Samba/File editor)
+2. Maak de map aan als die nog niet bestaat:
+   ```bash
+   mkdir -p /config/custom_components/hotel_tickets
+   ```
+3. Download de bestanden rechtstreeks:
+   ```bash
+   cd /config/custom_components/hotel_tickets
+   wget https://raw.githubusercontent.com/jasperbom/hotel-tickets/main/custom_component/hotel_tickets/__init__.py
+   wget https://raw.githubusercontent.com/jasperbom/hotel-tickets/main/custom_component/hotel_tickets/manifest.json
+   wget https://raw.githubusercontent.com/jasperbom/hotel-tickets/main/custom_component/hotel_tickets/services.yaml
+   ```
+4. Herstart Home Assistant
 
-**Optie B — Handmatig**
-
-1. Download of clone deze repository
-2. Kopieer de map `custom_component/hotel_tickets/` naar:
-   ```
-   /config/custom_components/hotel_tickets/
-   ```
-   De mapstructuur moet er zo uitzien:
-   ```
-   config/
-   └── custom_components/
-       └── hotel_tickets/
-           ├── __init__.py
-           ├── manifest.json
-           └── services.yaml
-   ```
-3. Herstart Home Assistant
+De mapstructuur moet er zo uitzien:
+```
+config/
+└── custom_components/
+    └── hotel_tickets/
+        ├── __init__.py
+        ├── manifest.json
+        └── services.yaml
+```
 
 ---
 
