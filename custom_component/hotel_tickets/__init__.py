@@ -11,14 +11,35 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 DOMAIN = "hotel_tickets"
 _LOGGER = logging.getLogger(__name__)
 
-# De Supervisor API heeft geen generieke HTTP proxy naar addons.
-# HA Core en addon draaien op hetzelfde Docker hassio-netwerk,
-# dus we roepen de addon rechtstreeks aan via de Docker hostname (= slug).
-ADDON_HOST = "hotel_tickets"
 ADDON_PORT = 8080
-
 CARD_URL = "/hotel_tickets/hotel-ticket-card.js"
 CARD_FILE = Path(__file__).parent / "hotel-ticket-card.js"
+
+
+async def _get_addon_ip(session, supervisor_token: str) -> str | None:
+    """
+    Haal het IP-adres van de addon op via de Supervisor info-endpoint.
+    Probeer zowel 'local_hotel_tickets' (lokale addon) als 'hotel_tickets'.
+    """
+    for slug in ("local_hotel_tickets", "hotel_tickets"):
+        try:
+            async with session.get(
+                f"http://supervisor/addons/{slug}/info",
+                headers={"Authorization": f"Bearer {supervisor_token}"},
+            ) as r:
+                if r.status == 200:
+                    info = await r.json()
+                    ip = info.get("data", {}).get("ip_address")
+                    _LOGGER.info(
+                        "[hotel_tickets] Addon IP gevonden (slug=%s): %s", slug, ip
+                    )
+                    return ip
+                _LOGGER.debug(
+                    "[hotel_tickets] Addon info slug=%s → HTTP %s", slug, r.status
+                )
+        except Exception as exc:
+            _LOGGER.debug("[hotel_tickets] Addon info fout (slug=%s): %s", slug, exc)
+    return None
 
 
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
@@ -42,7 +63,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "JA (lengte %d)" % len(supervisor_token) if supervisor_token else "NEE — aanroepen zullen falen",
         )
 
+        # Haal addon IP op zodat we geen DNS nodig hebben.
+        # HA's aiohttp sessie gebruikt een mDNS resolver die Docker hostnames niet oplost.
+        addon_ip = None
+        if supervisor_token:
+            session = async_get_clientsession(hass)
+            addon_ip = await _get_addon_ip(session, supervisor_token)
+            if not addon_ip:
+                _LOGGER.warning(
+                    "[hotel_tickets] Addon IP niet gevonden — ticket aanmaken zal mislukken. "
+                    "Zorg dat de addon draait en herstart HA."
+                )
+
+        hass.data[DOMAIN]["addon_ip"] = addon_ip
+
         async def handle_create_ticket(call: ServiceCall) -> None:
+            ip = hass.data[DOMAIN].get("addon_ip")
+            if not ip:
+                raise HomeAssistantError(
+                    "Addon IP onbekend — zorg dat de addon draait en herstart HA"
+                )
+
             data = {k: v for k, v in {
                 "title":       call.data.get("title"),
                 "category":    call.data.get("category"),
@@ -52,9 +93,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "assigned_to": call.data.get("assigned_to"),
             }.items() if v is not None}
 
-            # Directe verbinding via Docker intern hassio-netwerk.
-            # De addon verifieert onbekende Bearer tokens via Supervisor ping.
-            url = f"http://{ADDON_HOST}:{ADDON_PORT}/api/tickets/"
+            url = f"http://{ip}:{ADDON_PORT}/api/tickets/"
 
             _LOGGER.info("[hotel_tickets] create_ticket aangeroepen — data: %s", data)
             _LOGGER.info("[hotel_tickets] POST naar: %s", url)
