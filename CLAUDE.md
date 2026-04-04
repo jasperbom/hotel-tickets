@@ -7,7 +7,7 @@ Bedoeld voor drie afdelingen: technische dienst, huishouding en receptie/concië
 
 ```
 hotel-tickets/
-├── addon/
+├── hotel_tickets/
 │   ├── config.yaml              # HA addon manifest
 │   ├── Dockerfile               # Multi-stage: Python backend + Node frontend
 │   ├── run.sh                   # Startup (bashio, env vars)
@@ -55,7 +55,7 @@ hotel-tickets/
 ```bash
 # Vereisten: Python 3.13 (via Homebrew), Node.js
 
-cd addon
+cd hotel_tickets
 
 # Backend (eerste keer: maak venv aan)
 /opt/homebrew/bin/python3.13 -m venv .venv
@@ -76,7 +76,7 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 
 ## HA addon installeren
 
-1. Kopieer de `addon/` map naar je HA addons directory (bijv. `/addons/hotel_tickets/`)
+1. Kopieer de `hotel_tickets/` map naar je HA addons directory (bijv. `/addons/hotel_tickets/`)
 2. Kopieer `custom_component/hotel_tickets/` naar `/config/custom_components/hotel_tickets/`
 3. Herstart HA → installeer de addon via Supervisor → Add-on Store (lokaal)
 4. Configureer SMTP indien gewenst in de addon opties

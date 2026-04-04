@@ -201,7 +201,7 @@ condition:
 # Vereisten: Python 3.11–3.13, Node.js 18+
 
 git clone https://github.com/jasperbom/hotel-tickets.git
-cd hotel-tickets/addon
+cd hotel-tickets/hotel_tickets
 
 # Python venv aanmaken (gebruik Python 3.13 via Homebrew op Mac)
 /opt/homebrew/bin/python3.13 -m venv .venv
@@ -225,7 +225,7 @@ In `DEV_MODE` wordt elke request met `Authorization: Bearer dev-token` geaccepte
 
 ```
 hotel-tickets/
-├── addon/                        # Home Assistant addon
+├── hotel_tickets/                # Home Assistant addon
 │   ├── config.yaml               # Addon manifest
 │   ├── Dockerfile                # Multi-stage build
 │   ├── run.sh                    # Startup script

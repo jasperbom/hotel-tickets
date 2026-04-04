@@ -16,3 +16,4 @@ addon/frontend/dist/
 
 # Env
 .env
+.vite/
