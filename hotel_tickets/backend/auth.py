@@ -9,8 +9,10 @@ In HA ingress zet de Supervisor automatisch:
 Deze headers worden door de Supervisor proxy ingesteld en
 kunnen niet worden vervalst door de client.
 """
+import logging
 import os
 from typing import Annotated
+import aiohttp
 from fastapi import Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -18,8 +20,43 @@ from sqlalchemy import select
 from .database import get_db
 from .models import UserRole, Role
 
+logger = logging.getLogger(__name__)
+
 DEV_MODE = os.environ.get("DEV_MODE", "false").lower() == "true"
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
+
+_SYSTEM_USER = None  # wordt aangemaakt bij eerste gebruik
+
+
+def _system_user() -> "CurrentUser":
+    return CurrentUser(
+        ha_user_id="system",
+        display_name="Home Assistant",
+        role=Role.admin,
+        department=None,
+        email=None,
+        ha_notify_service=None,
+        is_admin=True,
+    )
+
+
+async def _verify_supervisor_token(token: str) -> bool:
+    """
+    Verifieer of een Bearer token geldig is door de Supervisor te pingen.
+    Elk proces in HA OS (core, addons) heeft een eigen SUPERVISOR_TOKEN,
+    maar alle tokens zijn geldig voor de Supervisor API.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.get(
+                "http://supervisor/supervisor/ping",
+                headers={"Authorization": f"Bearer {token}"},
+                timeout=aiohttp.ClientTimeout(total=3),
+            ) as resp:
+                return resp.status == 200
+    except Exception as exc:
+        logger.debug("Supervisor ping mislukt: %s", exc)
+        return False
 
 
 class CurrentUser:
@@ -47,15 +84,65 @@ async def get_current_user(
     db: AsyncSession = Depends(get_db),
 ) -> CurrentUser:
     """
-    Haal de ingelogde gebruiker op via de HA ingress headers.
-    Maakt automatisch een profiel aan bij eerste gebruik.
+    Haal de ingelogde gebruiker op.
+
+    Prioriteit:
+    1. X-Remote-User-ID header (HA ingress → frontend gebruiker)
+    2. Bearer token = eigen SUPERVISOR_TOKEN (intern / dev)
+    3. Bearer token geverifieerd via Supervisor ping (HA core / andere addons)
+    4. DEV_MODE fallback
     """
-    # Supervisor token → systeem-aanroep vanuit de custom component / automaties
     auth_header = request.headers.get("Authorization", "")
-    if SUPERVISOR_TOKEN and auth_header == f"Bearer {SUPERVISOR_TOKEN}":
+    bearer_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
+
+    # 1. Ingress header — standaard pad voor alle frontend-gebruikers
+    ha_user_id = request.headers.get("X-Remote-User-ID", "").strip()
+    display_name = (
+        request.headers.get("X-Remote-User-Display-Name")
+        or request.headers.get("X-Remote-User-Name")
+        or "HA Gebruiker"
+    ).strip()
+
+    if ha_user_id:
+        # Profiel ophalen of aanmaken
+        result = await db.execute(select(UserRole).where(UserRole.ha_user_id == ha_user_id))
+        user_role = result.scalar_one_or_none()
+        if not user_role:
+            user_role = UserRole(
+                ha_user_id=ha_user_id,
+                display_name=display_name,
+                role=Role.technician,
+            )
+            db.add(user_role)
+            await db.flush()
+        elif user_role.display_name != display_name:
+            user_role.display_name = display_name
         return CurrentUser(
-            ha_user_id="system",
-            display_name="Home Assistant",
+            ha_user_id=user_role.ha_user_id,
+            display_name=user_role.display_name,
+            role=user_role.role,
+            department=user_role.department,
+            email=user_role.email,
+            ha_notify_service=user_role.ha_notify_service,
+            is_admin=user_role.role in (Role.admin, Role.supervisor),
+        )
+
+    # 2. Eigen SUPERVISOR_TOKEN (snel pad, geen netwerkoproep)
+    if SUPERVISOR_TOKEN and bearer_token == SUPERVISOR_TOKEN:
+        return _system_user()
+
+    # 3. Onbekend Bearer token → verifieer met Supervisor
+    #    (HA core heeft een andere SUPERVISOR_TOKEN dan de addon)
+    if bearer_token and bearer_token != "dev-token":
+        if await _verify_supervisor_token(bearer_token):
+            logger.debug("Systeem-aanroep geauthenticeerd via Supervisor ping")
+            return _system_user()
+
+    # 4. Dev mode fallback
+    if DEV_MODE:
+        return CurrentUser(
+            ha_user_id="dev-user",
+            display_name="Dev User",
             role=Role.admin,
             department=None,
             email=None,
@@ -63,50 +150,9 @@ async def get_current_user(
             is_admin=True,
         )
 
-    # HA Supervisor zet deze headers voor elke ingress request
-    ha_user_id   = request.headers.get("X-Remote-User-ID", "").strip()
-    display_name = (
-        request.headers.get("X-Remote-User-Display-Name")
-        or request.headers.get("X-Remote-User-Name")
-        or "HA Gebruiker"
-    ).strip()
-
-    # Dev mode: accepteer ook requests zonder HA headers
-    if DEV_MODE and not ha_user_id:
-        ha_user_id   = "dev-user"
-        display_name = "Dev User"
-
-    if not ha_user_id:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Niet ingelogd via Home Assistant",
-        )
-
-    # Zoek het gebruikersprofiel op
-    result = await db.execute(select(UserRole).where(UserRole.ha_user_id == ha_user_id))
-    user_role = result.scalar_one_or_none()
-
-    if not user_role:
-        # Eerste keer: maak profiel aan met standaard rol
-        user_role = UserRole(
-            ha_user_id=ha_user_id,
-            display_name=display_name,
-            role=Role.technician,
-        )
-        db.add(user_role)
-        await db.flush()
-    elif user_role.display_name != display_name:
-        # Naam bijwerken als die veranderd is in HA
-        user_role.display_name = display_name
-
-    return CurrentUser(
-        ha_user_id=user_role.ha_user_id,
-        display_name=user_role.display_name,
-        role=user_role.role,
-        department=user_role.department,
-        email=user_role.email,
-        ha_notify_service=user_role.ha_notify_service,
-        is_admin=user_role.role in (Role.admin, Role.supervisor),
+    raise HTTPException(
+        status_code=status.HTTP_401_UNAUTHORIZED,
+        detail="Niet ingelogd via Home Assistant",
     )
 
 
