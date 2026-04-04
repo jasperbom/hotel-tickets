@@ -32,6 +32,7 @@ class TicketUpdate(BaseModel):
     priority: Priority | None = None
     location_id: str | None = None
     assigned_to: str | None = None
+    notify_when_free: bool | None = None
 
 
 class CommentCreate(BaseModel):
@@ -52,6 +53,7 @@ class TicketOut(BaseModel):
     created_at: datetime
     updated_at: datetime
     closed_at: datetime | None
+    notify_when_free: bool
 
     model_config = {"from_attributes": True}
 

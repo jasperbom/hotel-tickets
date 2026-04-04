@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 
 from .database import init_db
-from .scheduler import get_scheduler, load_all_templates
+from .scheduler import get_scheduler, load_all_templates, start_keycard_watcher
 from .routers import tickets, users, locations, recurring, reports
 
 logging.basicConfig(
@@ -26,6 +26,7 @@ async def lifespan(app: FastAPI):
     scheduler = get_scheduler()
     scheduler.start()
     await load_all_templates()
+    start_keycard_watcher()
 
     yield
 

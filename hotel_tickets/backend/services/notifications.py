@@ -80,6 +80,16 @@ async def notify_ticket_assigned(ticket_title: str, assignee_service: str | None
         )
 
 
+async def notify_room_free(ticket_title: str, location_name: str, assignee_service: str) -> None:
+    """Push-notificatie naar de toegewezen medewerker als de kamer vrij is."""
+    await notify_push(
+        assignee_service,
+        title=f"🔓 {location_name} is nu vrij",
+        message=f"Je kunt nu aan de slag: {ticket_title}",
+        data={"tag": f"room_free_{assignee_service}"},
+    )
+
+
 async def notify_ticket_created(ticket_title: str, category: str) -> None:
     """Maak een algemene persistent notificatie bij nieuw ticket."""
     await notify_persistent(

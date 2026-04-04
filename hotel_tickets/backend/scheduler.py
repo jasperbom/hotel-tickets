@@ -87,6 +87,63 @@ async def remove_template(template_id: str) -> None:
         _scheduler.remove_job(job_id)
 
 
+async def _keycard_watcher_job() -> None:
+    """
+    Polt elk minuut de keycard-sensoren voor tickets waarbij
+    'notify_when_free' is ingeschakeld. Stuurt een push-notificatie
+    naar de toegewezen medewerker zodra de kamer vrij is.
+    """
+    from .database import AsyncSessionLocal
+    from .models import Ticket, UserRole, Status
+    from .services.ha_client import get_sensor_state
+    from .services.notifications import notify_room_free
+    from sqlalchemy import select
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(Ticket).where(
+                Ticket.notify_when_free == True,        # noqa: E712
+                Ticket.location_id.isnot(None),
+                Ticket.assigned_to.isnot(None),
+                Ticket.status != Status.closed,
+            )
+        )
+        tickets = result.scalars().all()
+
+        for ticket in tickets:
+            entity_id = f"binary_sensor.{ticket.location_id}_keycard"
+            state = await get_sensor_state(entity_id)
+            if not state or state.get("state") != "off":
+                continue  # Kamer nog bezet of sensor onbekend
+
+            # Kamer is nu vrij — medewerker ophalen voor push
+            user_result = await db.execute(
+                select(UserRole).where(UserRole.ha_user_id == ticket.assigned_to)
+            )
+            user = user_result.scalar_one_or_none()
+
+            location_name = ticket.location_id  # Fallback als naam onbekend is
+            if user and user.ha_notify_service:
+                await notify_room_free(ticket.title, location_name, user.ha_notify_service)
+                logger.info(f"Kamer-vrij notificatie verstuurd voor ticket {ticket.id} → {user.display_name}")
+
+            ticket.notify_when_free = False
+            await db.commit()
+
+
+def start_keycard_watcher() -> None:
+    """Plan de keycard watcher job — draait elke minuut."""
+    _scheduler.add_job(
+        _keycard_watcher_job,
+        trigger="interval",
+        minutes=1,
+        id="keycard_watcher",
+        replace_existing=True,
+        name="Keycard watcher",
+    )
+    logger.info("Keycard watcher gestart (elke minuut)")
+
+
 async def load_all_templates() -> None:
     """Laad alle actieve templates bij opstarten van de app."""
     from .database import AsyncSessionLocal

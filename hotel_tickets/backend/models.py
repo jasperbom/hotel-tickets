@@ -53,6 +53,7 @@ class Ticket(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime)
+    notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
 
     comments: Mapped[list["TicketComment"]] = relationship("TicketComment", back_populates="ticket", cascade="all, delete-orphan")
     recurring_template: Mapped["RecurringTemplate | None"] = relationship("RecurringTemplate", back_populates="tickets")

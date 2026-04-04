@@ -43,6 +43,7 @@ export interface Ticket {
   created_at: string;
   updated_at: string;
   closed_at: string | null;
+  notify_when_free: boolean;
 }
 
 export interface Comment {

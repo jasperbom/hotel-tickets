@@ -126,6 +126,38 @@ export default function TicketDetail() {
               Geen keycard-sensor gevonden ({keycard.entity_id})
             </div>
           )}
+
+          {/* Meld mij toggle — alleen als: toegewezen + kamer bezet + sensor gevonden */}
+          {ticket.assigned_to && keycard?.found && keycard.occupied && (
+            <button
+              onClick={() => updateField({ notify_when_free: !ticket.notify_when_free })}
+              className={`w-full flex items-center justify-between px-5 py-3 transition-colors ${
+                ticket.notify_when_free
+                  ? "bg-amber-50 border-t border-amber-200"
+                  : "bg-gray-50 border-t border-gray-200"
+              }`}
+            >
+              <div className="flex items-center gap-3">
+                <span className="text-lg">{ticket.notify_when_free ? "🔔" : "🔕"}</span>
+                <div className="text-left">
+                  <p className={`text-sm font-semibold ${ticket.notify_when_free ? "text-amber-800" : "text-gray-700"}`}>
+                    Meld mij wanneer de kamer vrij is
+                  </p>
+                  {ticket.notify_when_free && (
+                    <p className="text-xs text-amber-600">Je ontvangt een pushbericht zodra de kamer leeg is</p>
+                  )}
+                </div>
+              </div>
+              {/* Toggle schakelaar */}
+              <div className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${
+                ticket.notify_when_free ? "bg-amber-400" : "bg-gray-300"
+              }`}>
+                <span className={`absolute top-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+                  ticket.notify_when_free ? "translate-x-5" : "translate-x-0.5"
+                }`} />
+              </div>
+            </button>
+          )}
         </div>
       )}
 
