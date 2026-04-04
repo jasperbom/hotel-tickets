@@ -1,20 +1,20 @@
-#!/usr/bin/with-contenv bashio
+#!/bin/bash
+set -e
 
-export LOG_LEVEL=$(bashio::config 'log_level')
-export SMTP_HOST=$(bashio::config 'smtp_host')
-export SMTP_PORT=$(bashio::config 'smtp_port')
-export SMTP_USER=$(bashio::config 'smtp_user')
-export SMTP_PASSWORD=$(bashio::config 'smtp_password')
-export SMTP_FROM=$(bashio::config 'smtp_from')
-export SMTP_ENABLED=$(bashio::config 'smtp_enabled')
+# HA schrijft addon opties naar /data/options.json
+# jq is beschikbaar in alle HA base images
+LOG_LEVEL=$(jq --raw-output '.log_level // "info"' /data/options.json)
+SMTP_ENABLED=$(jq --raw-output '.smtp_enabled // false' /data/options.json)
+SMTP_HOST=$(jq --raw-output '.smtp_host // ""' /data/options.json)
+SMTP_PORT=$(jq --raw-output '.smtp_port // 587' /data/options.json)
+SMTP_USER=$(jq --raw-output '.smtp_user // ""' /data/options.json)
+SMTP_PASSWORD=$(jq --raw-output '.smtp_password // ""' /data/options.json)
+SMTP_FROM=$(jq --raw-output '.smtp_from // ""' /data/options.json)
 
-# HA Supervisor token is available via this env var
-export SUPERVISOR_TOKEN="${SUPERVISOR_TOKEN}"
-
-# Data directory (mapped as /data in the addon)
+export LOG_LEVEL SMTP_ENABLED SMTP_HOST SMTP_PORT SMTP_USER SMTP_PASSWORD SMTP_FROM
 export DB_PATH="/data/hotel_tickets.db"
 
-bashio::log.info "Starting Hotel Ticket System..."
+echo "[hotel_tickets] Starting on port 8080..."
 
 cd /app
 exec python3 -m uvicorn backend.main:app \
