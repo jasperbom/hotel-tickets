@@ -61,9 +61,9 @@ De custom component voegt de `hotel_tickets.create_ticket` service, sensor entit
 
 1. Ga in HACS naar **Frontend → ⋮ → Aangepaste repositories**
 2. Voeg toe:
-   - **URL:** `https://github.com/jasperbom/hotel-tickets`
+   - **URL:** `https://github.com/jasperbom/hotel-ticket-card`
    - **Categorie:** Lovelace
-3. Zoek op **Hotel Ticket System** en klik op **Downloaden**
+3. Zoek op **Hotel Ticket Card** en klik op **Downloaden**
 4. De card is nu beschikbaar als `hotel-ticket-card`
 
 > **Handmatige installatie (zonder HACS):**  
