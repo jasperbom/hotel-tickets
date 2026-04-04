@@ -148,6 +148,11 @@ class HotelTicketCard extends HTMLElement {
         <div class="form">
 
           <div class="field">
+            <label>Uw naam *</label>
+            <input id="creator_name" type="text" placeholder="Bijv. Jan de Vries" />
+          </div>
+
+          <div class="field">
             <label>Titel *</label>
             <input id="title" type="text" placeholder="Korte omschrijving van het probleem" />
           </div>
@@ -188,22 +193,25 @@ class HotelTicketCard extends HTMLElement {
 
     this.shadowRoot.querySelector("#submit").addEventListener("click", () => this._submit());
     this.shadowRoot.querySelector("#title").addEventListener("input", () => this._syncButton());
+    this.shadowRoot.querySelector("#creator_name").addEventListener("input", () => this._syncButton());
   }
 
   _syncButton() {
-    const btn = this.shadowRoot.querySelector("#submit");
-    const title = this.shadowRoot.querySelector("#title").value.trim();
-    btn.disabled = !title;
+    const btn         = this.shadowRoot.querySelector("#submit");
+    const title       = this.shadowRoot.querySelector("#title").value.trim();
+    const creatorName = this.shadowRoot.querySelector("#creator_name").value.trim();
+    btn.disabled = !title || !creatorName;
   }
 
   async _submit() {
+    const creatorName = this.shadowRoot.querySelector("#creator_name").value.trim();
     const title       = this.shadowRoot.querySelector("#title").value.trim();
     const category    = this.shadowRoot.querySelector("#category").value;
     const priority    = this.shadowRoot.querySelector("#priority").value;
     const location    = this.shadowRoot.querySelector("#location").value;
     const description = this.shadowRoot.querySelector("#description").value.trim();
 
-    if (!title) return;
+    if (!title || !creatorName) return;
 
     const btn      = this.shadowRoot.querySelector("#submit");
     const feedback = this.shadowRoot.querySelector("#feedback");
@@ -212,14 +220,14 @@ class HotelTicketCard extends HTMLElement {
     btn.textContent = "Bezig...";
     feedback.className = "feedback";
 
-    const serviceData = { title, category, priority };
+    const serviceData = { title, category, priority, creator_name: creatorName };
     if (description) serviceData.description = description;
     if (location)    serviceData.location    = location;
 
     try {
       await this._hass.callService("hotel_tickets", "create_ticket", serviceData);
 
-      // Reset formulier
+      // Reset formulier (naam bewaren voor volgend ticket)
       this.shadowRoot.querySelector("#title").value       = "";
       this.shadowRoot.querySelector("#description").value = "";
       this.shadowRoot.querySelector("#location").value    = "";

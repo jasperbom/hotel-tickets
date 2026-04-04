@@ -60,3 +60,10 @@ create_ticket:
       required: false
       selector:
         text:
+    creator_name:
+      name: Aangemaakt door (naam)
+      description: Weergavenaam van de persoon die het ticket aanmaakt (optioneel, voor gebruik via card of automatie)
+      required: false
+      example: "Jan de Vries"
+      selector:
+        text:

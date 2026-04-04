@@ -26,6 +26,7 @@ class TicketCreate(BaseModel):
     priority: Priority = Priority.medium
     location_id: str | None = None
     assigned_to: str | None = None
+    creator_name: str | None = None  # display-naam bij aanmaken via card/service
 
 
 class TicketUpdate(BaseModel):
@@ -131,7 +132,7 @@ async def create_ticket(
         priority=body.priority,
         location_id=body.location_id,
         assigned_to=body.assigned_to,
-        created_by=user.ha_user_id,
+        created_by=body.creator_name if body.creator_name else user.ha_user_id,
     )
     db.add(ticket)
     await db.flush()

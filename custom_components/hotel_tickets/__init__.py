@@ -39,12 +39,13 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         async def handle_create_ticket(call: ServiceCall) -> None:
             data = {k: v for k, v in {
-                "title":       call.data.get("title"),
-                "category":    call.data.get("category"),
-                "description": call.data.get("description"),
-                "priority":    call.data.get("priority", "medium"),
-                "location_id": call.data.get("location"),
-                "assigned_to": call.data.get("assigned_to"),
+                "title":        call.data.get("title"),
+                "category":     call.data.get("category"),
+                "description":  call.data.get("description"),
+                "priority":     call.data.get("priority", "medium"),
+                "location_id":  call.data.get("location"),
+                "assigned_to":  call.data.get("assigned_to"),
+                "creator_name": call.data.get("creator_name"),
             }.items() if v is not None}
 
             url = f"{ADDON_URL}/api/tickets/"
