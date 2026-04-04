@@ -11,7 +11,8 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 DOMAIN = "hotel_tickets"
 _LOGGER = logging.getLogger(__name__)
 
-ADDON_SLUG = "hotel_tickets"
+# Lokale addons krijgen het prefix "local_" in de Supervisor API.
+ADDON_SLUG = "local_hotel_tickets"
 CARD_URL = "/hotel_tickets/hotel-ticket-card.js"
 CARD_FILE = Path(__file__).parent / "hotel-ticket-card.js"
 
@@ -36,6 +37,19 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "[hotel_tickets] SUPERVISOR_TOKEN aanwezig: %s",
             "JA (lengte %d)" % len(supervisor_token) if supervisor_token else "NEE — aanroepen zullen falen",
         )
+
+        # Diagnosestap: haal addon info op om slug en bereikbaarheid te bevestigen.
+        if supervisor_token:
+            try:
+                session = async_get_clientsession(hass)
+                async with session.get(
+                    f"http://supervisor/addons/{ADDON_SLUG}/info",
+                    headers={"Authorization": f"Bearer {supervisor_token}"},
+                ) as r:
+                    info_body = await r.text()
+                    _LOGGER.info("[hotel_tickets] Addon info (slug=%s, HTTP %s): %s", ADDON_SLUG, r.status, info_body[:400])
+            except Exception as exc:
+                _LOGGER.warning("[hotel_tickets] Addon info ophalen mislukt: %s", exc)
 
         async def handle_create_ticket(call: ServiceCall) -> None:
             data = {k: v for k, v in {
