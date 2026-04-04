@@ -11,8 +11,12 @@ from homeassistant.helpers.aiohttp_client import async_get_clientsession
 DOMAIN = "hotel_tickets"
 _LOGGER = logging.getLogger(__name__)
 
-# Lokale addons krijgen het prefix "local_" in de Supervisor API.
-ADDON_SLUG = "local_hotel_tickets"
+# De Supervisor API heeft geen generieke HTTP proxy naar addons.
+# HA Core en addon draaien op hetzelfde Docker hassio-netwerk,
+# dus we roepen de addon rechtstreeks aan via de Docker hostname (= slug).
+ADDON_HOST = "hotel_tickets"
+ADDON_PORT = 8080
+
 CARD_URL = "/hotel_tickets/hotel-ticket-card.js"
 CARD_FILE = Path(__file__).parent / "hotel-ticket-card.js"
 
@@ -38,19 +42,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             "JA (lengte %d)" % len(supervisor_token) if supervisor_token else "NEE — aanroepen zullen falen",
         )
 
-        # Diagnosestap: haal addon info op om slug en bereikbaarheid te bevestigen.
-        if supervisor_token:
-            try:
-                session = async_get_clientsession(hass)
-                async with session.get(
-                    f"http://supervisor/addons/{ADDON_SLUG}/info",
-                    headers={"Authorization": f"Bearer {supervisor_token}"},
-                ) as r:
-                    info_body = await r.text()
-                    _LOGGER.info("[hotel_tickets] Addon info (slug=%s, HTTP %s): %s", ADDON_SLUG, r.status, info_body[:400])
-            except Exception as exc:
-                _LOGGER.warning("[hotel_tickets] Addon info ophalen mislukt: %s", exc)
-
         async def handle_create_ticket(call: ServiceCall) -> None:
             data = {k: v for k, v in {
                 "title":       call.data.get("title"),
@@ -61,14 +52,12 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                 "assigned_to": call.data.get("assigned_to"),
             }.items() if v is not None}
 
-            # Supervisor proxy strips /addons/{slug}/api en stuurt de rest door.
-            # FastAPI serveert op /api/tickets/, dus de URL moet /api/api/tickets/ zijn:
-            # http://supervisor/addons/{slug}/api  +  /api/tickets/  →  addon ontvangt /api/tickets/
-            url = f"http://supervisor/addons/{ADDON_SLUG}/api/api/tickets/"
+            # Directe verbinding via Docker intern hassio-netwerk.
+            # De addon verifieert onbekende Bearer tokens via Supervisor ping.
+            url = f"http://{ADDON_HOST}:{ADDON_PORT}/api/tickets/"
 
             _LOGGER.info("[hotel_tickets] create_ticket aangeroepen — data: %s", data)
             _LOGGER.info("[hotel_tickets] POST naar: %s", url)
-            _LOGGER.info("[hotel_tickets] SUPERVISOR_TOKEN lengte: %d", len(supervisor_token))
 
             try:
                 session = async_get_clientsession(hass)
