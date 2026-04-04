@@ -29,8 +29,7 @@ RUN cd frontend && npm run build
 # Copy backend
 COPY backend/ ./backend/
 
-# Copy run script
-COPY run.sh /run.sh
-RUN chmod a+x /run.sh
-
-CMD ["/run.sh"]
+# Register as s6 service (HA base image uses s6-overlay as PID 1)
+RUN mkdir -p /etc/services.d/hotel_tickets
+COPY run.sh /etc/services.d/hotel_tickets/run
+RUN chmod a+x /etc/services.d/hotel_tickets/run
