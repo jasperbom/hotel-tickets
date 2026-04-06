@@ -1,3 +1,4 @@
+import { useState, useEffect } from "react";
 import { Routes, Route, NavLink } from "react-router-dom";
 import MijnOverzicht from "./pages/MijnOverzicht";
 import Dashboard from "./pages/Dashboard";
@@ -7,17 +8,39 @@ import NewTicket from "./pages/NewTicket";
 import RecurringTasks from "./pages/RecurringTasks";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import { userApi, type UserRole } from "./api/client";
 
 const NAV_ITEMS = [
-  { to: "/", label: "Mijn overzicht", icon: "👤", end: true },
-  { to: "/tickets", label: "Tickets", icon: "🎫" },
-  { to: "/dashboard", label: "Dashboard", icon: "⊞" },
-  { to: "/recurring", label: "Herhalend", icon: "🔄" },
-  { to: "/reports", label: "Rapportage", icon: "📊" },
-  { to: "/settings", label: "Instellingen", icon: "⚙️" },
-];
+  { to: "/", label: "Mijn overzicht", icon: "👤", end: true, restricted: false },
+  { to: "/tickets", label: "Tickets", icon: "🎫", restricted: false },
+  { to: "/dashboard", label: "Dashboard", icon: "⊞", restricted: false },
+  { to: "/recurring", label: "Herhalend", icon: "🔄", restricted: false },
+  { to: "/reports", label: "Rapportage", icon: "📊", restricted: "adminOrSupervisor" },
+  { to: "/settings", label: "Instellingen", icon: "⚙️", restricted: "settings" },
+] as const;
 
 export default function App() {
+  const [currentUser, setCurrentUser] = useState<UserRole | null>(null);
+  const [hasAdmin, setHasAdmin] = useState(true);
+
+  useEffect(() => {
+    Promise.all([userApi.me(), userApi.list()])
+      .then(([meRes, listRes]) => {
+        setCurrentUser(meRes.data);
+        setHasAdmin(listRes.data.some((u) => u.role === "admin"));
+      })
+      .catch(() => {});
+  }, []);
+
+  const isAdminOrSupervisor =
+    currentUser?.role === "admin" || currentUser?.role === "supervisor";
+
+  const visibleItems = NAV_ITEMS.filter((item) => {
+    if (item.restricted === "adminOrSupervisor") return isAdminOrSupervisor;
+    if (item.restricted === "settings") return isAdminOrSupervisor || !hasAdmin;
+    return true;
+  });
+
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Top navigatie */}
@@ -26,11 +49,11 @@ export default function App() {
           <div className="flex items-center h-14">
             <span className="font-bold text-lg mr-2 sm:mr-3 text-white shrink-0">🎫</span>
             <span className="font-bold text-lg mr-3 text-white shrink-0 hidden sm:inline">Hotel Tickets</span>
-            {NAV_ITEMS.map((item) => (
+            {visibleItems.map((item) => (
               <NavLink
                 key={item.to}
                 to={item.to}
-                end={item.end}
+                end={"end" in item ? item.end : undefined}
                 className={({ isActive }) =>
                   `flex items-center gap-1.5 px-2 sm:px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
                     isActive
