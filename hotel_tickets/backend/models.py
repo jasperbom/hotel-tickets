@@ -90,6 +90,13 @@ class RecurringTemplate(Base):
     tickets: Mapped[list[Ticket]] = relationship("Ticket", back_populates="recurring_template")
 
 
+class SystemSetting(Base):
+    __tablename__ = "system_settings"
+
+    key: Mapped[str] = mapped_column(String(100), primary_key=True)
+    value: Mapped[str] = mapped_column(Text, nullable=False)
+
+
 class UserRole(Base):
     __tablename__ = "user_roles"
 
