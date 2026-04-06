@@ -86,6 +86,15 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
     )
     available = avail_result.scalars().all()
 
+    # Urgente tickets: alle open urgente tickets in mijn afdeling
+    urgent_filters = [Ticket.status != Status.closed, Ticket.priority == "urgent"]
+    if dept and not user.is_admin:
+        urgent_filters.append(Ticket.category == dept)
+    urgent_result = await db.execute(
+        select(Ticket).where(and_(*urgent_filters)).order_by(Ticket.created_at.desc()).limit(20)
+    )
+    urgent_tickets = urgent_result.scalars().all()
+
     # Tellingen voor mijn afdeling (of alles)
     count_filters = [Ticket.status != Status.closed]
     if dept and not user.is_admin:
@@ -170,6 +179,7 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
             "team_open": total_open or 0,
             "urgent": urgent_count or 0,
         },
+        "urgent_tickets": [_ticket_dict(t) for t in urgent_tickets],
         "my_tickets": [_ticket_dict(t) for t in my_tickets],
         "available_tickets": [_ticket_dict(t) for t in available],
         "today_recurring": today_recurring,
