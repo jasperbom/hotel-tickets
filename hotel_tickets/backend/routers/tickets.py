@@ -110,7 +110,7 @@ async def list_tickets(
     user: RequireUser,
     db: AsyncSession = Depends(get_db),
     category: Category | None = Query(None),
-    status_filter: Status | None = Query(None, alias="status"),
+    status_param: str | None = Query(None, alias="status"),
     priority: Priority | None = Query(None),
     assigned_to: str | None = Query(None),
     location_id: str | None = Query(None),
@@ -123,8 +123,13 @@ async def list_tickets(
         filters.append(vis)
     if category:
         filters.append(Ticket.category == category)
-    if status_filter:
-        filters.append(Ticket.status == status_filter)
+    if status_param:
+        status_values = [s.strip() for s in status_param.split(",") if s.strip()]
+        valid = [s for s in status_values if s in (e.value for e in Status)]
+        if len(valid) == 1:
+            filters.append(Ticket.status == valid[0])
+        elif len(valid) > 1:
+            filters.append(Ticket.status.in_(valid))
     if priority:
         filters.append(Ticket.priority == priority)
     if assigned_to:

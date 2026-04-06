@@ -1,17 +1,16 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ticketApi, locationApi, userApi, type Ticket, type Category, type Status, type Priority, type Location, type UserRole } from "../api/client";
+import { ticketApi, locationApi, userApi, type Ticket, type Category, type Status, type Priority } from "../api/client";
 import TicketCard from "../components/TicketCard";
 
-const CATEGORIES = [
-  { value: "", label: "Alle categorieën" },
+const DEPARTMENTS = [
+  { value: "", label: "Alle afdelingen" },
   { value: "technical", label: "Technisch" },
   { value: "housekeeping", label: "Huishouding" },
   { value: "reception", label: "Receptie" },
 ];
 
-const STATUSES = [
-  { value: "", label: "Alle statussen" },
+const STATUS_OPTIONS: { value: Status; label: string }[] = [
   { value: "open", label: "Open" },
   { value: "in_progress", label: "In behandeling" },
   { value: "closed", label: "Gesloten" },
@@ -31,9 +30,17 @@ export default function TicketList() {
   const [users, setUsers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  const [category, setCategory] = useState("");
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [department, setDepartment] = useState("");
+  const [selectedStatuses, setSelectedStatuses] = useState<Status[]>(["open", "in_progress"]);
   const [priority, setPriority] = useState("");
+
+  function toggleStatus(value: Status) {
+    setSelectedStatuses((prev) =>
+      prev.includes(value)
+        ? prev.length > 1 ? prev.filter((s) => s !== value) : prev // keep at least one
+        : [...prev, value]
+    );
+  }
 
   useEffect(() => {
     Promise.all([locationApi.list(), userApi.list()]).then(([locs, usrs]) => {
@@ -45,14 +52,14 @@ export default function TicketList() {
   useEffect(() => {
     setLoading(true);
     const params: Record<string, string> = {};
-    if (category) params.category = category;
-    if (statusFilter) params.status = statusFilter;
+    if (department) params.category = department;
+    if (selectedStatuses.length < 3) params.status = selectedStatuses.join(",");
     if (priority) params.priority = priority;
 
     ticketApi.list(params)
       .then((r) => setTickets(r.data))
       .finally(() => setLoading(false));
-  }, [category, statusFilter, priority]);
+  }, [department, selectedStatuses, priority]);
 
   return (
     <div className="space-y-4">
@@ -62,28 +69,46 @@ export default function TicketList() {
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2">
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
-        >
-          {CATEGORIES.map((c) => <option key={c.value} value={c.value}>{c.label}</option>)}
-        </select>
-        <select
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
-        >
-          {STATUSES.map((s) => <option key={s.value} value={s.value}>{s.label}</option>)}
-        </select>
-        <select
-          value={priority}
-          onChange={(e) => setPriority(e.target.value)}
-          className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
-        >
-          {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-        </select>
+      <div className="space-y-2">
+        {/* Status toggle pills */}
+        <div className="flex gap-2 flex-wrap">
+          {STATUS_OPTIONS.map((s) => {
+            const active = selectedStatuses.includes(s.value);
+            const colors: Record<Status, string> = {
+              open: active ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-blue-400",
+              in_progress: active ? "bg-amber-500 text-white border-amber-500" : "bg-white text-gray-600 border-gray-300 hover:border-amber-400",
+              closed: active ? "bg-gray-500 text-white border-gray-500" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400",
+            };
+            return (
+              <button
+                key={s.value}
+                onClick={() => toggleStatus(s.value)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${colors[s.value]}`}
+              >
+                {active && <span className="text-xs">✓</span>}
+                {s.label}
+              </button>
+            );
+          })}
+        </div>
+
+        {/* Afdeling + prioriteit dropdowns */}
+        <div className="flex flex-wrap gap-2">
+          <select
+            value={department}
+            onChange={(e) => setDepartment(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+          >
+            {DEPARTMENTS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+          </select>
+          <select
+            value={priority}
+            onChange={(e) => setPriority(e.target.value)}
+            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+          >
+            {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+          </select>
+        </div>
       </div>
 
       {loading ? (
