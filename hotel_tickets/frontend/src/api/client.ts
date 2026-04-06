@@ -89,6 +89,17 @@ export interface RecurringTemplate {
   cron_expression: string;
   advance_days: number;
   is_active: boolean;
+  nfc_tag_id: string | null;
+}
+
+export interface UpcomingRecurring {
+  id: string;
+  title: string;
+  category: Category;
+  priority: Priority;
+  location_id: string | null;
+  nfc_tag_id: string | null;
+  next_run: string;
 }
 
 export interface Location {

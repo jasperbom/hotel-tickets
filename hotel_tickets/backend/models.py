@@ -85,6 +85,7 @@ class RecurringTemplate(Base):
     cron_expression: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     advance_days: Mapped[int] = mapped_column(Integer, default=0)
+    nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     tickets: Mapped[list[Ticket]] = relationship("Ticket", back_populates="recurring_template")

@@ -8,7 +8,7 @@ from fastapi.responses import FileResponse
 
 from .database import init_db
 from .scheduler import get_scheduler, load_all_templates, start_keycard_watcher
-from .routers import tickets, users, locations, recurring, reports, integration, settings
+from .routers import tickets, users, locations, recurring, reports, integration, settings, nfc
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "info").upper(),
@@ -61,6 +61,7 @@ app.include_router(recurring.router, prefix="/api")
 app.include_router(reports.router, prefix="/api")
 app.include_router(integration.router, prefix="/api")
 app.include_router(settings.router, prefix="/api")
+app.include_router(nfc.router, prefix="/api")
 
 
 # Serve frontend (gebouwde React app)
