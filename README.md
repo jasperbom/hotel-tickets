@@ -170,6 +170,48 @@ De kaart laadt automatisch je HA zones/gebieden als locatiekeuzelijst.
 
 ---
 
+## NFC-tags koppelen aan terugkerende taken
+
+Met NFC-tags kun je terugkerende taken automatisch afronden door de tag te scannen met de HA Companion app. **Er zijn geen automaties of YAML-aanpassingen nodig** — de integratie regelt dit automatisch.
+
+### Hoe het werkt
+
+1. Medewerker scant een NFC-tag met de HA Companion app
+2. HA vuurt een `tag.tag_scanned` event
+3. De **Hotel Ticket System integratie** vangt dit event op (automatisch)
+4. De bijbehorende openstaande taak wordt afgesloten
+5. De medewerker ontvangt een pushmelding ter bevestiging
+
+---
+
+### Stap 1 — NFC-tag koppelen in de app
+
+1. Ga in de Tickets app naar **Herhalend**
+2. Maak een nieuw sjabloon aan of bewerk een bestaand sjabloon
+3. Vul bij **NFC-tag ID** de ID in van je HA NFC-tag
+
+**NFC-tag ID vinden:**  
+Ga in HA naar **Instellingen → Tags** en klik op de tag. De ID staat onderaan, bijv. `abc123-def456-ghi789`.
+
+> Dat is alles. Zodra de integratie geïnstalleerd is, worden alle tag scans automatisch verwerkt.
+
+---
+
+### Stap 2 — Push notificaties instellen per medewerker
+
+Om een bevestigingsmelding te ontvangen na het scannen moet de **HA notify service** van de medewerker ingevuld zijn.
+
+1. Ga in de Tickets app naar **Instellingen → Medewerkers**
+2. Bewerk de medewerker en vul bij **HA notify service** de naam in
+
+De notify-service naam vind je via **Developer Tools → Diensten** — zoek op `notify.`. Elke telefoon met de HA Companion app heeft een eigen service, bijv.:
+- `notify.mobile_app_iphone_jan`
+- `notify.mobile_app_pixel_7_marie`
+
+De integratie koppelt automatisch de medewerker aan de telefoon die de tag heeft gescand (via de HA mobile_app device koppeling).
+
+---
+
 ## Gebruik in automaties
 
 Na installatie van de custom component kun je tickets aanmaken vanuit HA automaties:
