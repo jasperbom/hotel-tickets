@@ -9,7 +9,7 @@ from sqlalchemy import select, and_
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import RecurringTemplate, Ticket, Status, UserRole
+from ..models import RecurringTemplate, Ticket, Status, Priority, UserRole, new_uuid
 from ..services.notifications import notify_push
 from ..services.ha_entities import sync_ticket_sensors
 from .settings import get_ticket_base_url
@@ -52,11 +52,33 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
     )
     ticket = ticket_result.scalar_one_or_none()
 
+    now = datetime.now(timezone.utc)
+
     if ticket:
+        # Sluit de bestaande openstaande ticket
         ticket.status = Status.closed
-        ticket.closed_at = datetime.now(timezone.utc)
+        ticket.closed_at = now
         ticket.closed_by = body.ha_user_id or "nfc"
-        await sync_ticket_sensors(db)
+    else:
+        # Geen openstaande ticket — maak er een aan en sluit hem direct
+        # zodat er altijd een registratie is van de NFC-scan
+        ticket = Ticket(
+            id=new_uuid(),
+            title=template.title,
+            description="Afgevinkt via NFC-scan",
+            category=template.category,
+            priority=template.priority,
+            location_id=template.location_id,
+            created_by=body.ha_user_id or "nfc",
+            assigned_to=body.ha_user_id,
+            recurring_template_id=template.id,
+            status=Status.closed,
+            closed_at=now,
+            closed_by=body.ha_user_id or "nfc",
+        )
+        db.add(ticket)
+
+    await sync_ticket_sensors(db)
 
     # Stuur pushmelding naar de scanner (als ha_user_id bekend is)
     if body.ha_user_id:
