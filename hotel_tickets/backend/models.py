@@ -55,6 +55,7 @@ class Ticket(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime)
     closed_by: Mapped[str | None] = mapped_column(String(255))  # HA user_id
     notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
+    subtasks: Mapped[str | None] = mapped_column(Text)  # JSON: [{label, done, done_by, done_at}]
 
     comments: Mapped[list["TicketComment"]] = relationship("TicketComment", back_populates="ticket", cascade="all, delete-orphan")
     recurring_template: Mapped["RecurringTemplate | None"] = relationship("RecurringTemplate", back_populates="tickets")
@@ -86,6 +87,9 @@ class RecurringTemplate(Base):
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     advance_days: Mapped[int] = mapped_column(Integer, default=0)
     nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
+    subtask_mode: Mapped[str] = mapped_column(String(20), default="none")  # none | subtasks | rooms
+    subtask_items: Mapped[str | None] = mapped_column(Text)  # JSON: [label, ...] or [area_id, ...]
+    notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     tickets: Mapped[list[Ticket]] = relationship("Ticket", back_populates="recurring_template")

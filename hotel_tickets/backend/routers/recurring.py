@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,6 +25,9 @@ class TemplateCreate(BaseModel):
     advance_days: int = 0
     is_active: bool = True
     nfc_tag_id: str | None = None
+    subtask_mode: str = "none"  # none | subtasks | rooms
+    subtask_items: list[str] | None = None
+    notify_when_free: bool = False
 
 
 class TemplateUpdate(BaseModel):
@@ -37,6 +41,9 @@ class TemplateUpdate(BaseModel):
     advance_days: int | None = None
     is_active: bool | None = None
     nfc_tag_id: str | None = None
+    subtask_mode: str | None = None
+    subtask_items: list[str] | None = None
+    notify_when_free: bool | None = None
 
 
 class TemplateOut(BaseModel):
@@ -51,6 +58,9 @@ class TemplateOut(BaseModel):
     advance_days: int
     is_active: bool
     nfc_tag_id: str | None
+    subtask_mode: str
+    subtask_items: list[str] | None
+    notify_when_free: bool
     next_run: str | None = None
 
     model_config = {"from_attributes": True}
@@ -81,7 +91,13 @@ def _calc_next_run(cron_expression: str) -> str | None:
 
 
 def _template_with_next_run(template: RecurringTemplate) -> dict:
-    data = {
+    subtask_items = None
+    if template.subtask_items:
+        try:
+            subtask_items = json.loads(template.subtask_items)
+        except Exception:
+            subtask_items = []
+    return {
         "id": template.id,
         "title": template.title,
         "description": template.description,
@@ -93,9 +109,11 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
         "advance_days": template.advance_days,
         "is_active": template.is_active,
         "nfc_tag_id": template.nfc_tag_id,
+        "subtask_mode": template.subtask_mode or "none",
+        "subtask_items": subtask_items,
+        "notify_when_free": template.notify_when_free,
         "next_run": _calc_next_run(template.cron_expression),
     }
-    return data
 
 
 @router.get("/", response_model=list[TemplateOut])
@@ -110,7 +128,9 @@ async def create_template(body: TemplateCreate, user: RequireUser, db: AsyncSess
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Alleen admins en supervisors kunnen sjablonen aanmaken")
     _validate_cron(body.cron_expression)
-    template = RecurringTemplate(**body.model_dump())
+    data = body.model_dump()
+    data["subtask_items"] = json.dumps(data["subtask_items"]) if data.get("subtask_items") else None
+    template = RecurringTemplate(**data)
     db.add(template)
     await db.flush()
 
@@ -144,7 +164,10 @@ async def update_template(
     if body.cron_expression:
         _validate_cron(body.cron_expression)
 
-    for field, value in body.model_dump(exclude_none=True).items():
+    updates = body.model_dump(exclude_none=True)
+    if "subtask_items" in updates:
+        updates["subtask_items"] = json.dumps(updates["subtask_items"]) if updates["subtask_items"] else None
+    for field, value in updates.items():
         setattr(template, field, value)
 
     from ..scheduler import reschedule_template
@@ -167,49 +190,88 @@ async def delete_template(template_id: str, user: RequireUser, db: AsyncSession 
     await db.delete(template)
 
 
+class CompleteRequest(BaseModel):
+    room_id: str | None = None  # voor kamers-modus: sluit alleen dit kamer-ticket
+
+
 @router.post("/{template_id}/complete")
-async def complete_template(template_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    """Rond een taak handmatig af — maakt een ticket aan en sluit het direct."""
+async def complete_template(template_id: str, body: CompleteRequest = CompleteRequest(), user: RequireUser = None, db: AsyncSession = Depends(get_db)):
+    """Rond een taak handmatig af — sluit openstaande tickets of maakt nieuwe aan."""
     template = await db.get(RecurringTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
 
     now = datetime.now(timezone.utc)
+    closed_ids = []
 
-    # Zoek openstaande ticket voor dit sjabloon
-    result = await db.execute(
-        select(Ticket).where(
-            and_(
-                Ticket.recurring_template_id == template_id,
-                Ticket.status != Status.closed,
-            )
-        ).order_by(Ticket.created_at.desc()).limit(1)
-    )
-    ticket = result.scalar_one_or_none()
+    filters = [
+        Ticket.recurring_template_id == template_id,
+        Ticket.status != Status.closed,
+    ]
+    if body.room_id:
+        filters.append(Ticket.location_id == body.room_id)
 
-    if ticket:
-        ticket.status = Status.closed
-        ticket.closed_at = now
-        ticket.closed_by = user.ha_user_id
+    result = await db.execute(select(Ticket).where(and_(*filters)))
+    open_tickets = result.scalars().all()
+
+    if open_tickets:
+        for ticket in open_tickets:
+            ticket.status = Status.closed
+            ticket.closed_at = now
+            ticket.closed_by = user.ha_user_id if user else "manual"
+            closed_ids.append(ticket.id)
     else:
+        # Geen openstaand ticket — maak een nieuw aan en sluit direct
+        location_id = body.room_id if body.room_id else template.location_id
         ticket = Ticket(
             id=new_uuid(),
             title=template.title,
             description="Handmatig afgevinkt",
             category=template.category,
             priority=template.priority,
-            location_id=template.location_id,
-            created_by=user.ha_user_id,
-            assigned_to=user.ha_user_id,
+            location_id=location_id,
+            created_by=user.ha_user_id if user else "manual",
+            assigned_to=user.ha_user_id if user else None,
             recurring_template_id=template.id,
             status=Status.closed,
             closed_at=now,
-            closed_by=user.ha_user_id,
+            closed_by=user.ha_user_id if user else "manual",
         )
         db.add(ticket)
+        closed_ids.append(ticket.id)
 
     await sync_ticket_sensors(db)
-    return {"ok": True, "ticket_id": ticket.id}
+    return {"ok": True, "closed_ticket_ids": closed_ids}
+
+
+@router.get("/{template_id}/active-tickets")
+async def get_active_tickets(template_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Geeft openstaande tickets terug voor dit sjabloon (voor kamers-modus)."""
+    template = await db.get(RecurringTemplate, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
+
+    result = await db.execute(
+        select(Ticket).where(
+            and_(
+                Ticket.recurring_template_id == template_id,
+                Ticket.status != Status.closed,
+            )
+        ).order_by(Ticket.created_at)
+    )
+    tickets = result.scalars().all()
+    return [
+        {
+            "id": t.id,
+            "title": t.title,
+            "status": t.status,
+            "location_id": t.location_id,
+            "subtasks": json.loads(t.subtasks) if t.subtasks else None,
+            "assigned_to": t.assigned_to,
+            "notify_when_free": t.notify_when_free,
+        }
+        for t in tickets
+    ]
 
 
 @router.get("/{template_id}/history", response_model=list[HistoryOut])

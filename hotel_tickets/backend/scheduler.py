@@ -18,6 +18,7 @@ def get_scheduler() -> AsyncIOScheduler:
 
 async def _create_ticket_from_template(template_id: str) -> None:
     """Job functie die wordt aangeroepen door APScheduler."""
+    import json
     from .database import AsyncSessionLocal
     from .models import RecurringTemplate, Ticket
     from .services.ha_entities import sync_ticket_sensors
@@ -27,20 +28,61 @@ async def _create_ticket_from_template(template_id: str) -> None:
         if not template or not template.is_active:
             return
 
-        ticket = Ticket(
-            title=template.title,
-            description=template.description,
-            category=template.category,
-            priority=template.priority,
-            location_id=template.location_id,
-            assigned_to=template.assign_to,
-            created_by="system",
-            recurring_template_id=template.id,
-        )
-        db.add(ticket)
+        if template.subtask_mode == "rooms" and template.subtask_items:
+            # Maak één ticket per kamer
+            room_ids = json.loads(template.subtask_items)
+            for room_id in room_ids:
+                ticket = Ticket(
+                    title=template.title,
+                    description=template.description,
+                    category=template.category,
+                    priority=template.priority,
+                    location_id=room_id,
+                    assigned_to=template.assign_to,
+                    created_by="system",
+                    recurring_template_id=template.id,
+                    notify_when_free=template.notify_when_free,
+                )
+                db.add(ticket)
+            logger.info(f"Recurring tickets aangemaakt voor {len(room_ids)} kamers: {template.title}")
+        elif template.subtask_mode == "subtasks" and template.subtask_items:
+            # Maak één ticket met subtaken JSON
+            labels = json.loads(template.subtask_items)
+            subtasks_json = json.dumps([
+                {"label": l, "done": False, "done_by": None, "done_at": None}
+                for l in labels
+            ])
+            ticket = Ticket(
+                title=template.title,
+                description=template.description,
+                category=template.category,
+                priority=template.priority,
+                location_id=template.location_id,
+                assigned_to=template.assign_to,
+                created_by="system",
+                recurring_template_id=template.id,
+                notify_when_free=template.notify_when_free,
+                subtasks=subtasks_json,
+            )
+            db.add(ticket)
+            logger.info(f"Recurring ticket aangemaakt met {len(labels)} subtaken: {template.title}")
+        else:
+            ticket = Ticket(
+                title=template.title,
+                description=template.description,
+                category=template.category,
+                priority=template.priority,
+                location_id=template.location_id,
+                assigned_to=template.assign_to,
+                created_by="system",
+                recurring_template_id=template.id,
+                notify_when_free=template.notify_when_free,
+            )
+            db.add(ticket)
+            logger.info(f"Recurring ticket aangemaakt: {template.title}")
+
         await db.commit()
         await sync_ticket_sensors(db)
-        logger.info(f"Recurring ticket aangemaakt: {template.title}")
 
 
 async def schedule_template(template) -> None:
