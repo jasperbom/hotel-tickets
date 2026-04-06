@@ -6,6 +6,7 @@ import TicketList from "./pages/TicketList";
 import TicketDetail from "./pages/TicketDetail";
 import NewTicket from "./pages/NewTicket";
 import RecurringTasks from "./pages/RecurringTasks";
+import RecurringTaskDetail from "./pages/RecurringTaskDetail";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
 import { userApi, type UserRole } from "./api/client";
@@ -77,6 +78,7 @@ export default function App() {
           <Route path="/tickets" element={<TicketList />} />
           <Route path="/tickets/new" element={<NewTicket />} />
           <Route path="/tickets/:id" element={<TicketDetail />} />
+          <Route path="/recurring/:id" element={<RecurringTaskDetail />} />
           <Route path="/recurring" element={<RecurringTasks />} />
           <Route path="/reports" element={<Reports />} />
           <Route path="/settings" element={<Settings />} />

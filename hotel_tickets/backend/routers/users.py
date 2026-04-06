@@ -1,4 +1,4 @@
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
@@ -103,6 +103,7 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
         dept_templates = list(all_templates)
 
     today = date.today()
+    today_start = datetime.combine(today, datetime.min.time()).replace(tzinfo=timezone.utc)
     today_recurring = []
     upcoming_recurring = []
 
@@ -112,8 +113,18 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
             cron = croniter(t.cron_expression, base_dt)
             next_run = cron.get_next(datetime)
             if next_run.date() == today:
-                today_recurring.append(_template_dict(t, next_run))
-            # Volgende 5 voorkomens voor aankomende taken
+                # Alleen tonen als er vandaag nog geen ticket gesloten is
+                closed_today = await db.scalar(
+                    select(func.count()).where(
+                        and_(
+                            Ticket.recurring_template_id == t.id,
+                            Ticket.status == Status.closed,
+                            Ticket.closed_at >= today_start,
+                        )
+                    )
+                )
+                if not closed_today:
+                    today_recurring.append(_template_dict(t, next_run))
             upcoming_recurring.append((next_run, _template_dict(t, next_run)))
         except Exception:
             pass
