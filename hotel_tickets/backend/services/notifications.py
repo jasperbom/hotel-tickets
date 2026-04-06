@@ -62,31 +62,41 @@ def send_email(to: str, subject: str, body: str) -> None:
         logger.warning(f"E-mail mislukt naar {to}: {e}")
 
 
-async def notify_ticket_assigned(ticket_title: str, assignee_service: str | None, assignee_email: str | None) -> None:
+async def notify_ticket_assigned(
+    ticket_title: str,
+    assignee_service: str | None,
+    assignee_email: str | None,
+    ticket_url: str | None = None,
+) -> None:
     """Notificeer een medewerker bij toewijzing van een ticket."""
     title = "Ticket toegewezen"
     message = f"Je hebt een nieuw ticket: {ticket_title}"
 
     if assignee_service:
-        await notify_push(assignee_service, title, message)
+        data = {"url": ticket_url} if ticket_url else None
+        await notify_push(assignee_service, title, message, data=data)
 
     await notify_persistent(title, message, notification_id=f"ticket_assigned_{assignee_service}")
 
     if assignee_email:
         import asyncio
+        link = f'<p><a href="{ticket_url}">Open ticket</a></p>' if ticket_url else ""
         await asyncio.get_event_loop().run_in_executor(
             None, send_email, assignee_email, title,
-            f"<p>{message}</p>"
+            f"<p>{message}</p>{link}"
         )
 
 
-async def notify_room_free(ticket_title: str, location_name: str, assignee_service: str) -> None:
+async def notify_room_free(ticket_title: str, location_name: str, assignee_service: str, ticket_url: str | None = None) -> None:
     """Push-notificatie naar de toegewezen medewerker als de kamer vrij is."""
+    data: dict = {"tag": f"room_free_{assignee_service}"}
+    if ticket_url:
+        data["url"] = ticket_url
     await notify_push(
         assignee_service,
         title=f"🔓 {location_name} is nu vrij",
         message=f"Je kunt nu aan de slag: {ticket_title}",
-        data={"tag": f"room_free_{assignee_service}"},
+        data=data,
     )
 
 

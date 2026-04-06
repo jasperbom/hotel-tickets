@@ -165,6 +165,15 @@ export const integrationApi = {
   install: () => api.post<{ ok: boolean; version: string; message: string }>("/integration/install"),
 };
 
+export interface SystemSettings {
+  ticket_base_url: string;
+}
+
+export const systemSettingsApi = {
+  get: () => api.get<SystemSettings>("/settings/system"),
+  update: (data: Partial<SystemSettings>) => api.patch<SystemSettings>("/settings/system", data),
+};
+
 export const reportApi = {
   summary: (params?: Record<string, string>) => api.get<ReportSummary>("/reports/summary", { params }),
   timeline: (params?: Record<string, string>) => api.get<TimelinePoint[]>("/reports/timeline", { params }),

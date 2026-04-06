@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { userApi, integrationApi, type UserRole, type Role, type Category, type IntegrationStatus } from "../api/client";
+import { userApi, integrationApi, systemSettingsApi, type UserRole, type Role, type Category, type IntegrationStatus } from "../api/client";
 
 function IntegrationWidget() {
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
@@ -78,6 +78,54 @@ function IntegrationWidget() {
   );
 }
 
+function NotificationSettings() {
+  const [baseUrl, setBaseUrl] = useState("");
+  const [saved, setSaved] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    systemSettingsApi.get().then((r) => setBaseUrl(r.data.ticket_base_url)).catch(() => {});
+  }, []);
+
+  async function save() {
+    setSaving(true);
+    setSaved(false);
+    try {
+      const r = await systemSettingsApi.update({ ticket_base_url: baseUrl });
+      setBaseUrl(r.data.ticket_base_url);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 3000);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card space-y-3">
+      <h2 className="font-semibold">Notificatie-instellingen</h2>
+      <div className="space-y-1">
+        <label className="text-sm font-medium text-gray-700">Basis-URL voor notificatielinks</label>
+        <input
+          value={baseUrl}
+          onChange={(e) => setBaseUrl(e.target.value)}
+          className="w-full border border-gray-300 rounded px-3 py-1.5 text-sm font-mono"
+          placeholder="/hassio/ingress/hotel_tickets"
+        />
+        <p className="text-xs text-gray-500">
+          Wordt gebruikt als deep-link in push notificaties zodat tikken op een notificatie direct naar het ticket navigeert.
+          Standaard: <code>/hassio/ingress/hotel_tickets</code>
+        </p>
+      </div>
+      <div className="flex items-center gap-3">
+        <button onClick={save} disabled={saving} className="btn-primary text-sm">
+          {saving ? "Opslaan..." : "Opslaan"}
+        </button>
+        {saved && <span className="text-sm text-green-600">✓ Opgeslagen</span>}
+      </div>
+    </div>
+  );
+}
+
 const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
   supervisor: "Supervisor",
@@ -138,6 +186,8 @@ export default function Settings() {
       <h1 className="text-2xl font-bold text-gray-900">Instellingen</h1>
 
       <IntegrationWidget />
+
+      {isAdmin && <NotificationSettings />}
 
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
