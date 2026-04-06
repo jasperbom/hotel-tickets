@@ -23,16 +23,20 @@ def _get_supervisor_token() -> str:
 
 
 def _get_ha_user_id_for_device(hass: HomeAssistant, device_id: str | None) -> str | None:
-    """Zoek de HA user_id die hoort bij een mobile_app device_id."""
+    """Zoek de HA user_id via device registry → mobile_app config entry."""
     if not device_id:
         return None
     try:
         from homeassistant.components.mobile_app.const import DOMAIN as MOBILE_APP_DOMAIN
-        for entry in hass.config_entries.async_entries(MOBILE_APP_DOMAIN):
-            if entry.data.get("device_id") == device_id:
-                return entry.data.get("user_id")
-    except Exception:
-        pass
+        dev_reg = dr.async_get(hass)
+        device = dev_reg.async_get(device_id)
+        if device:
+            for entry_id in device.config_entries:
+                entry = hass.config_entries.async_get_entry(entry_id)
+                if entry and entry.domain == MOBILE_APP_DOMAIN:
+                    return entry.data.get("user_id")
+    except Exception as exc:
+        _LOGGER.warning("Kon ha_user_id niet bepalen voor device '%s': %s", device_id, exc)
     return None
 
 
