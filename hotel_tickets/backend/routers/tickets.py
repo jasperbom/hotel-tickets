@@ -3,7 +3,7 @@ from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, case
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
@@ -132,7 +132,14 @@ async def list_tickets(
     if location_id:
         filters.append(Ticket.location_id == location_id)
 
-    stmt = select(Ticket).where(and_(*filters)).order_by(Ticket.created_at.desc()).limit(limit).offset(offset)
+    priority_sort = case(
+        (Ticket.priority == "urgent", 0),
+        (Ticket.priority == "high", 1),
+        (Ticket.priority == "medium", 2),
+        (Ticket.priority == "low", 3),
+        else_=4,
+    )
+    stmt = select(Ticket).where(and_(*filters)).order_by(priority_sort, Ticket.created_at.desc()).limit(limit).offset(offset)
     result = await db.execute(stmt)
     return result.scalars().all()
 

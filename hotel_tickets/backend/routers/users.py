@@ -1,7 +1,8 @@
+import json
 from datetime import date, datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func
+from sqlalchemy import select, and_, func, case
 from pydantic import BaseModel
 from croniter import croniter
 
@@ -60,11 +61,19 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
     uid = user.ha_user_id
     dept = user.department
 
+    _priority_sort = case(
+        (Ticket.priority == "urgent", 0),
+        (Ticket.priority == "high", 1),
+        (Ticket.priority == "medium", 2),
+        (Ticket.priority == "low", 3),
+        else_=4,
+    )
+
     # Mijn openstaande tickets (aan mij toegewezen, niet gesloten)
     mine_result = await db.execute(
         select(Ticket).where(
             and_(Ticket.assigned_to == uid, Ticket.status != Status.closed)
-        ).order_by(Ticket.priority.desc(), Ticket.created_at)
+        ).order_by(_priority_sort, Ticket.created_at)
     )
     my_tickets = mine_result.scalars().all()
 
@@ -73,7 +82,7 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
     if dept and not user.is_admin:
         avail_filters.append(Ticket.category == dept)
     avail_result = await db.execute(
-        select(Ticket).where(and_(*avail_filters)).order_by(Ticket.priority.desc(), Ticket.created_at).limit(10)
+        select(Ticket).where(and_(*avail_filters)).order_by(_priority_sort, Ticket.created_at).limit(10)
     )
     available = avail_result.scalars().all()
 
@@ -107,6 +116,22 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
     today_recurring = []
     upcoming_recurring = []
 
+    # Laad actieve tickets met subtaken voor alle templates (één query)
+    template_ids = [t.id for t in dept_templates]
+    active_by_template: dict[str, Ticket] = {}
+    if template_ids:
+        active_result = await db.execute(
+            select(Ticket).where(
+                and_(
+                    Ticket.recurring_template_id.in_(template_ids),
+                    Ticket.status != Status.closed,
+                    Ticket.subtasks.isnot(None),
+                )
+            )
+        )
+        for ticket in active_result.scalars().all():
+            active_by_template[ticket.recurring_template_id] = ticket
+
     for t in dept_templates:
         try:
             base_dt = datetime.combine(today, datetime.min.time()) - timedelta(seconds=1)
@@ -124,7 +149,7 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
                     )
                 )
                 if not closed_today:
-                    today_recurring.append(_template_dict(t, next_run))
+                    today_recurring.append(_template_dict(t, next_run, active_by_template.get(t.id)))
             upcoming_recurring.append((next_run, _template_dict(t, next_run)))
         except Exception:
             pass
@@ -152,8 +177,8 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
     }
 
 
-def _template_dict(t: RecurringTemplate, next_run: datetime) -> dict:
-    return {
+def _template_dict(t: RecurringTemplate, next_run: datetime, active_ticket: "Ticket | None" = None) -> dict:
+    result = {
         "id": t.id,
         "title": t.title,
         "category": t.category,
@@ -162,18 +187,40 @@ def _template_dict(t: RecurringTemplate, next_run: datetime) -> dict:
         "nfc_tag_id": t.nfc_tag_id,
         "next_run": next_run.isoformat(),
     }
+    if active_ticket and active_ticket.subtasks:
+        try:
+            items = json.loads(active_ticket.subtasks)
+            result["subtask_done"] = sum(1 for s in items if s.get("done"))
+            result["subtask_total"] = len(items)
+        except Exception:
+            pass
+    return result
 
 
 def _ticket_dict(t: Ticket) -> dict:
+    subtasks = None
+    if t.subtasks:
+        try:
+            subtasks = json.loads(t.subtasks)
+        except Exception:
+            pass
     return {
         "id": t.id,
         "title": t.title,
+        "description": t.description,
         "category": t.category,
         "status": t.status,
         "priority": t.priority,
         "location_id": t.location_id,
         "assigned_to": t.assigned_to,
+        "created_by": t.created_by,
         "created_at": t.created_at.isoformat(),
+        "updated_at": t.updated_at.isoformat(),
+        "closed_at": None,
+        "closed_by": None,
+        "notify_when_free": t.notify_when_free,
+        "recurring_template_id": t.recurring_template_id,
+        "subtasks": subtasks,
     }
 
 

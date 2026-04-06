@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, useNavigate, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { recurringApi, locationApi, ticketApi, parseUTC, type RecurringTemplate, type HistoryEntry, type ActiveTicket, type KeycardStatus } from "../api/client";
@@ -8,6 +8,7 @@ import { cronToHuman } from "../components/RecurrenceEditor";
 
 export default function RecurringTaskDetail() {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const [template, setTemplate] = useState<RecurringTemplate | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeTickets, setActiveTickets] = useState<ActiveTicket[]>([]);
@@ -116,33 +117,26 @@ export default function RecurringTaskDetail() {
 
   return (
     <div className="space-y-4">
-      {/* Terug */}
-      <Link to="/recurring" className="inline-flex items-center gap-1 text-sm text-gray-500 hover:text-gray-700">
-        ← Herhalende taken
-      </Link>
-
-      {/* Header */}
-      <div className="card space-y-3">
-        <div className="flex items-start gap-3">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2 flex-wrap">
-              <h1 className="text-xl font-bold text-gray-900">{template.title}</h1>
-              {!template.is_active && (
-                <span className="badge bg-gray-100 text-gray-500">Inactief</span>
-              )}
-              {template.nfc_tag_id && (
-                <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">NFC</span>
-              )}
-              {isSubtaskMode && <span className="badge bg-blue-50 text-blue-600">☑️ Subtaken</span>}
-              {isRoomsMode && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
-            </div>
-            <div className="flex gap-1.5 mt-2 flex-wrap">
-              <CategoryBadge category={template.category} />
-              <PriorityBadge priority={template.priority} />
-            </div>
+      {/* Header boven de kaart — zoals TicketDetail */}
+      <div className="flex items-start gap-3">
+        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700 mt-1 text-lg shrink-0">←</button>
+        <div className="flex-1 min-w-0">
+          <h1 className="text-xl font-bold text-gray-900">{template.title}</h1>
+          <div className="flex gap-1.5 mt-2 flex-wrap">
+            <CategoryBadge category={template.category} />
+            <PriorityBadge priority={template.priority} />
+            {!template.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
+            {template.nfc_tag_id && (
+              <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">NFC</span>
+            )}
+            {isSubtaskMode && <span className="badge bg-blue-50 text-blue-600">☑️ Subtaken</span>}
+            {isRoomsMode && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
           </div>
         </div>
+      </div>
 
+      {/* Kaart */}
+      <div className="card space-y-3">
         {/* Locatie + keycard (enkelvoudig/subtaken) */}
         {!isRoomsMode && locationName && (
           <div className="flex items-center gap-2">
