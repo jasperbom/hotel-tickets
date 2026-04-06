@@ -95,7 +95,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
 
         ha_user_id = _get_ha_user_id_for_device(hass, device_id)
-        _LOGGER.debug("NFC tag gescand: %s door device %s (user %s)", tag_id, device_id, ha_user_id)
+        _LOGGER.info("NFC tag gescand: %s door device %s (user %s)", tag_id, device_id, ha_user_id)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -115,8 +115,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         except Exception as exc:
             _LOGGER.error("NFC scan verbindingsfout: %s", exc)
 
-    # Luister naar alle tag scans in HA
-    cancel_listener = hass.bus.async_listen("tag.tag_scanned", handle_tag_scanned)
+    # Luister naar alle tag scans in HA (event heet "tag_scanned", niet "tag.tag_scanned")
+    cancel_listener = hass.bus.async_listen("tag_scanned", handle_tag_scanned)
 
     hass.data[DOMAIN][entry.entry_id] = {
         "cancel_tag_listener": cancel_listener,
