@@ -4,6 +4,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 
 from .database import init_db
 from .scheduler import get_scheduler, load_all_templates, start_keycard_watcher
@@ -65,7 +66,18 @@ app.include_router(settings.router, prefix="/api")
 # Serve frontend (gebouwde React app)
 frontend_dist = os.path.join(os.path.dirname(__file__), "..", "frontend", "dist")
 if os.path.isdir(frontend_dist):
-    app.mount("/", StaticFiles(directory=frontend_dist, html=True), name="frontend")
+    # Assets (hashed bestandsnamen) mogen gecached worden
+    app.mount("/assets", StaticFiles(directory=os.path.join(frontend_dist, "assets")), name="assets")
+
+    # index.html altijd no-cache serveren zodat de browser nooit oude JS laadt
+    @app.get("/", include_in_schema=False)
+    @app.get("/{full_path:path}", include_in_schema=False)
+    async def serve_frontend(full_path: str = ""):
+        index = os.path.join(frontend_dist, "index.html")
+        return FileResponse(
+            index,
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
 else:
     logger.warning("Frontend dist niet gevonden, alleen API beschikbaar")
 
