@@ -55,8 +55,8 @@ export default function MijnOverzicht() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState<Record<string, string>>({});
-  // area_id -> true (bezet) | false (vrij) | null (geen sensor)
   const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
+  const [showAllToday, setShowAllToday] = useState(false);
 
   async function loadKeycards(tickets: Ticket[], locs: Record<string, string>) {
     const areaIds = [...new Set(tickets.map(t => t.location_id).filter(Boolean) as string[])];
@@ -102,7 +102,6 @@ export default function MijnOverzicht() {
 
   const { user, stats, my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
   const isManager = user.role === "admin" || user.role === "supervisor";
-  const [showAllToday, setShowAllToday] = useState(false);
   const visibleToday = showAllToday ? today_recurring : today_recurring.slice(0, 3);
 
   return (
