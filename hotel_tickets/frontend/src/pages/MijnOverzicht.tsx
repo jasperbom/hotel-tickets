@@ -102,6 +102,8 @@ export default function MijnOverzicht() {
 
   const { user, stats, my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
   const isManager = user.role === "admin" || user.role === "supervisor";
+  const [showAllToday, setShowAllToday] = useState(false);
+  const visibleToday = showAllToday ? today_recurring : today_recurring.slice(0, 3);
 
   return (
     <div className="space-y-6">
@@ -142,25 +144,18 @@ export default function MijnOverzicht() {
         <section>
           <h2 className="font-semibold text-gray-900 mb-3">Vandaag te doen</h2>
           <div className="space-y-2">
-            {today_recurring.map((t) => (
+            {visibleToday.map((t) => (
               <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} />
             ))}
           </div>
-        </section>
-      )}
-
-      {/* Aankomende herhalende taken */}
-      {upcoming_recurring.length > 0 && (
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900">Aankomende herhalende taken</h2>
-            <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
-          </div>
-          <div className="space-y-2">
-            {upcoming_recurring.map((t) => (
-              <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} />
-            ))}
-          </div>
+          {!showAllToday && today_recurring.length > 3 && (
+            <button
+              onClick={() => setShowAllToday(true)}
+              className="mt-2 text-sm text-blue-600 hover:underline w-full text-center py-1"
+            >
+              +{today_recurring.length - 3} meer tonen
+            </button>
+          )}
         </section>
       )}
 
@@ -199,6 +194,21 @@ export default function MijnOverzicht() {
           <div className="space-y-2">
             {available_tickets.map((t) => (
               <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={() => claimTicket(t.id)} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Aankomende herhalende taken */}
+      {upcoming_recurring.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900">Aankomende herhalende taken</h2>
+            <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
+          </div>
+          <div className="space-y-2">
+            {upcoming_recurring.map((t) => (
+              <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} />
             ))}
           </div>
         </section>
@@ -303,25 +313,31 @@ function formatNextRun(dateStr: string): string {
 
 function RecurringTaskRow({ task, locationName }: { task: UpcomingRecurring; locationName?: string }) {
   return (
-    <div className="card flex items-center gap-3 border-l-4 border-l-purple-400 p-3">
+    <Link
+      to={`/recurring/${task.id}`}
+      className="card flex items-center gap-3 border-l-4 border-l-purple-400 p-3 hover:shadow-md transition-shadow"
+    >
       <span className="text-xl shrink-0">🔁</span>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
-        <div className="flex gap-1.5 mt-1">
+        <div className="flex gap-1.5 mt-1 flex-wrap">
           <CategoryBadge category={task.category} />
           <PriorityBadge priority={task.priority} />
           {locationName && <span className="text-xs text-gray-500">🚪 {locationName}</span>}
-          {task.nfc_tag_id && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">📱 NFC</span>}
+          {task.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
         </div>
       </div>
       <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-lg shrink-0">Vandaag</span>
-    </div>
+    </Link>
   );
 }
 
 function UpcomingRecurringRow({ task, locationName }: { task: UpcomingRecurring; locationName?: string }) {
   return (
-    <div className="card flex items-center gap-3 p-3">
+    <Link
+      to={`/recurring/${task.id}`}
+      className="card flex items-center gap-3 p-3 hover:shadow-md transition-shadow"
+    >
       <span className="text-lg shrink-0">🗓️</span>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
@@ -331,7 +347,7 @@ function UpcomingRecurringRow({ task, locationName }: { task: UpcomingRecurring;
         </div>
       </div>
       <span className="text-xs font-medium text-gray-500 shrink-0">{formatNextRun(task.next_run)}</span>
-    </div>
+    </Link>
   );
 }
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { recurringApi, type RecurringTemplate, type Category, type Priority } from "../api/client";
 import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
 import AreaSelector from "../components/AreaSelector";
@@ -185,7 +186,7 @@ export default function RecurringTasks() {
             <div key={t.id} className={`card flex items-center gap-3 ${!t.is_active ? "opacity-60" : ""}`}>
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2">
-                  <p className="font-medium">{t.title}</p>
+                  <Link to={`/recurring/${t.id}`} className="font-medium hover:text-blue-600">{t.title}</Link>
                   {!t.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
                   {t.nfc_tag_id && <span className="badge bg-purple-100 text-purple-700">📱 NFC</span>}
                 </div>

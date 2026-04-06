@@ -90,6 +90,15 @@ export interface RecurringTemplate {
   advance_days: number;
   is_active: boolean;
   nfc_tag_id: string | null;
+  next_run: string | null;
+}
+
+export interface HistoryEntry {
+  id: string;
+  title: string;
+  closed_at: string | null;
+  closed_by: string | null;
+  created_at: string;
 }
 
 export interface UpcomingRecurring {
@@ -162,6 +171,8 @@ export const recurringApi = {
   get: (id: string) => api.get<RecurringTemplate>(`/recurring/${id}`),
   update: (id: string, data: Partial<RecurringTemplate>) => api.patch<RecurringTemplate>(`/recurring/${id}`, data),
   remove: (id: string) => api.delete(`/recurring/${id}`),
+  complete: (id: string) => api.post<{ ok: boolean; ticket_id: string | null }>(`/recurring/${id}/complete`),
+  history: (id: string) => api.get<HistoryEntry[]>(`/recurring/${id}/history`),
 };
 
 export interface IntegrationStatus {
