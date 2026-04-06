@@ -9,7 +9,7 @@ from pydantic import BaseModel, field_validator
 from ..database import get_db
 from ..models import Ticket, TicketComment, Category, Status, Priority, Role, UserRole
 from ..auth import RequireUser, CurrentUser
-from ..services.notifications import notify_ticket_assigned, notify_ticket_created
+from ..services.notifications import notify_ticket_assigned, notify_ticket_created, notify_urgent_ticket
 from ..services.ha_entities import sync_ticket_sensors
 from .settings import get_ticket_base_url
 
@@ -172,12 +172,21 @@ async def create_ticket(
 
     # Notificaties
     await notify_ticket_created(ticket.title, ticket.category.value)
+    base_url = await get_ticket_base_url(db)
+    ticket_url = f"{base_url}/#/tickets/{ticket.id}"
     if body.assigned_to:
         assignee = await db.get(UserRole, body.assigned_to)
         if assignee:
-            base_url = await get_ticket_base_url(db)
-            ticket_url = f"{base_url}/#/tickets/{ticket.id}"
             await notify_ticket_assigned(ticket.title, assignee.ha_notify_service, assignee.email, ticket_url)
+    if ticket.priority == Priority.urgent:
+        admins_result = await db.execute(
+            select(UserRole).where(
+                and_(UserRole.role == Role.admin, UserRole.notify_push == True, UserRole.ha_notify_service.isnot(None))
+            )
+        )
+        admin_services = [u.ha_notify_service for u in admins_result.scalars().all() if u.ha_notify_service]
+        if admin_services:
+            await notify_urgent_ticket(ticket.title, admin_services, ticket_url)
 
     await sync_ticket_sensors(db)
     return ticket

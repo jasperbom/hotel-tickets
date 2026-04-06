@@ -17,6 +17,7 @@ interface Overview {
     team_open: number;
     urgent: number;
   };
+  urgent_tickets: Ticket[];
   my_tickets: Ticket[];
   available_tickets: Ticket[];
   today_recurring: UpcomingRecurring[];
@@ -78,7 +79,7 @@ export default function MijnOverzicht() {
     ]).then(([ov, locs]) => {
       setOverview(ov.data);
       const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
-      const allTickets = [...ov.data.my_tickets, ...ov.data.available_tickets];
+      const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
       loadKeycards(allTickets, ov.data.today_recurring ?? [], locMap);
     }).finally(() => setLoading(false));
   }, []);
@@ -88,7 +89,7 @@ export default function MijnOverzicht() {
     const [ov, locs] = await Promise.all([api.get<Overview>("/users/me/overview"), locationApi.list()]);
     setOverview(ov.data);
     const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
-    const allTickets = [...ov.data.my_tickets, ...ov.data.available_tickets];
+    const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
     loadKeycards(allTickets, ov.data.today_recurring ?? [], locMap);
   }
 
@@ -102,7 +103,7 @@ export default function MijnOverzicht() {
 
   if (!overview) return null;
 
-  const { user, stats, my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
+  const { user, stats, urgent_tickets = [], my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
   const isManager = user.role === "admin" || user.role === "supervisor";
   const visibleToday = showAllToday ? today_recurring : today_recurring.slice(0, 3);
 
@@ -139,6 +140,22 @@ export default function MijnOverzicht() {
           pulse={stats.urgent > 0}
         />
       </div>
+
+      {/* Urgente tickets */}
+      {urgent_tickets.length > 0 && (
+        <section>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-red-600 text-lg">🚨</span>
+            <h2 className="font-semibold text-red-700">Urgente tickets</h2>
+            <span className="text-xs font-bold bg-red-600 text-white px-1.5 py-0.5 rounded-full">{urgent_tickets.length}</span>
+          </div>
+          <div className="space-y-2">
+            {urgent_tickets.map((t) => (
+              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Vandaag te doen */}
       {today_recurring.length > 0 && (
@@ -372,6 +389,34 @@ function UpcomingRecurringRow({ task, locationName }: { task: UpcomingRecurring;
         </div>
       </div>
       <span className="text-xs font-medium text-gray-500 shrink-0">{formatNextRun(task.next_run)}</span>
+    </Link>
+  );
+}
+
+function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locationName?: string; occupied?: boolean | null }) {
+  return (
+    <Link
+      to={`/tickets/${ticket.id}`}
+      className="card flex flex-col gap-1.5 border-l-4 border-l-red-500 bg-red-50 p-3 hover:shadow-md transition-shadow"
+    >
+      {locationName && <RoomBadge name={locationName} occupied={occupied} />}
+      <div className="flex items-center justify-between gap-2">
+        <p className="font-semibold text-sm text-red-900 truncate">{ticket.title}</p>
+        <StatusBadge status={ticket.status} />
+      </div>
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1.5 items-center flex-wrap">
+          <CategoryBadge category={ticket.category} />
+          {ticket.subtasks && ticket.subtasks.length > 0 && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-700">
+              ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
+            </span>
+          )}
+        </div>
+        <p className="text-xs text-red-400">
+          {format(parseUTC(ticket.created_at), "d MMM HH:mm", { locale: nl })}
+        </p>
+      </div>
     </Link>
   );
 }

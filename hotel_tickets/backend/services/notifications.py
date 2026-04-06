@@ -106,3 +106,21 @@ async def notify_ticket_created(ticket_title: str, category: str) -> None:
         title=f"Nieuw ticket: {category}",
         message=ticket_title,
     )
+
+
+async def notify_urgent_ticket(
+    ticket_title: str,
+    admin_services: list[str],
+    ticket_url: str | None = None,
+) -> None:
+    """Stuur een push naar alle admins bij een urgent ticket."""
+    data: dict = {"tag": "urgent_ticket"}
+    if ticket_url:
+        data["url"] = ticket_url
+    for service in admin_services:
+        await notify_push(
+            service,
+            title="🚨 Urgent ticket",
+            message=ticket_title,
+            data=data,
+        )
