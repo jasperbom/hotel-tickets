@@ -12,8 +12,20 @@ export default function NewTicket() {
     priority: "medium" as Priority,
     location_id: null as string | null,
   });
+  const [subtaskLabels, setSubtaskLabels] = useState<string[]>([]);
+  const [newSubtask, setNewSubtask] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  function addSubtask() {
+    if (!newSubtask.trim()) return;
+    setSubtaskLabels((prev) => [...prev, newSubtask.trim()]);
+    setNewSubtask("");
+  }
+
+  function removeSubtask(idx: number) {
+    setSubtaskLabels((prev) => prev.filter((_, i) => i !== idx));
+  }
 
   async function submit(e: React.FormEvent) {
     e.preventDefault();
@@ -21,9 +33,11 @@ export default function NewTicket() {
     setSaving(true);
     setError("");
     try {
-      const r = await ticketApi.create(form);
+      const payload: Parameters<typeof ticketApi.create>[0] = { ...form };
+      if (subtaskLabels.length > 0) payload.subtask_labels = subtaskLabels;
+      const r = await ticketApi.create(payload);
       navigate(`/tickets/${r.data.id}`);
-    } catch (err: any) {
+    } catch {
       setError("Fout bij aanmaken ticket. Probeer opnieuw.");
       setSaving(false);
     }
@@ -92,6 +106,34 @@ export default function NewTicket() {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-1">Locatie (kamer/zone)</label>
           <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
+        </div>
+
+        {/* Subtaken */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-2">
+            Subtaken <span className="text-gray-400 font-normal">(optioneel)</span>
+          </label>
+          {subtaskLabels.length > 0 && (
+            <div className="space-y-1.5 mb-2">
+              {subtaskLabels.map((label, idx) => (
+                <div key={idx} className="flex items-center gap-2">
+                  <span className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">{label}</span>
+                  <button type="button" onClick={() => removeSubtask(idx)} className="text-red-500 hover:text-red-700 text-sm px-1">✕</button>
+                </div>
+              ))}
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={newSubtask}
+              onChange={(e) => setNewSubtask(e.target.value)}
+              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSubtask())}
+              placeholder="bijv. Vloer dweilen..."
+              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+            />
+            <button type="button" onClick={addSubtask} className="btn-secondary text-sm">+ Toevoegen</button>
+          </div>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}

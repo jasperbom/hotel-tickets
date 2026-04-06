@@ -289,9 +289,18 @@ function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locat
         <PriorityBadge priority={ticket.priority} />
       </div>
       <div className="flex items-center justify-between">
-        <div className="flex gap-1.5">
+        <div className="flex gap-1.5 items-center flex-wrap">
           <StatusBadge status={ticket.status} />
           <CategoryBadge category={ticket.category} />
+          {ticket.subtasks && ticket.subtasks.length > 0 && (
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+              ticket.subtasks.every((s) => s.done)
+                ? "bg-green-100 text-green-700"
+                : "bg-blue-50 text-blue-600"
+            }`}>
+              ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
+            </span>
+          )}
         </div>
         <p className="text-xs text-gray-400">
           {format(parseUTC(ticket.created_at), "d MMM", { locale: nl })}
@@ -367,9 +376,14 @@ function AvailableTicketRow({ ticket, locationName, occupied, onClaim }: { ticke
           <Link to={`/tickets/${ticket.id}`}>
             <p className="font-medium text-sm text-gray-900 truncate hover:text-blue-600">{ticket.title}</p>
           </Link>
-          <div className="flex gap-1.5 mt-1">
+          <div className="flex gap-1.5 mt-1 items-center flex-wrap">
             <CategoryBadge category={ticket.category} />
             <PriorityBadge priority={ticket.priority} />
+            {ticket.subtasks && ticket.subtasks.length > 0 && (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
+                ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
+              </span>
+            )}
           </div>
         </div>
         <button

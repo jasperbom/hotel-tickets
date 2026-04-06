@@ -53,6 +53,12 @@ export default function TicketDetail() {
     setTicket(r.data);
   }
 
+  async function toggleSubtask(index: number, currentDone: boolean) {
+    if (!id) return;
+    const r = await ticketApi.updateSubtask(id, index, !currentDone);
+    setTicket((prev) => prev ? { ...prev, subtasks: r.data.subtasks } : prev);
+  }
+
   async function claimTicket() {
     if (!id) return;
     const r = await ticketApi.claim(id);
@@ -185,6 +191,40 @@ export default function TicketDetail() {
           </div>
         )}
       </div>
+
+      {/* Subtaken */}
+      {ticket.subtasks && ticket.subtasks.length > 0 && (
+        <div className="card space-y-2">
+          <div className="flex items-center justify-between">
+            <h2 className="font-semibold">Subtaken</h2>
+            <span className="text-xs text-gray-400">
+              {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length} gedaan
+            </span>
+          </div>
+          {ticket.subtasks.map((subtask, idx) => (
+            <button
+              key={idx}
+              type="button"
+              onClick={() => toggleSubtask(idx, subtask.done)}
+              disabled={ticket.status === "closed"}
+              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all disabled:opacity-60 ${
+                subtask.done
+                  ? "border-green-200 bg-green-50"
+                  : "border-gray-200 bg-white hover:border-gray-300"
+              }`}
+            >
+              <span className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
+                subtask.done ? "bg-green-500 border-green-500 text-white" : "border-gray-300"
+              }`}>
+                {subtask.done && <span className="text-xs font-bold">✓</span>}
+              </span>
+              <span className={`flex-1 text-sm font-medium ${subtask.done ? "line-through text-gray-400" : "text-gray-800"}`}>
+                {subtask.label}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
 
       {/* Details */}
       <div className="card space-y-4">

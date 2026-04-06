@@ -37,9 +37,18 @@ export default function TicketCard({ ticket, users = {}, locations = {} }: Props
             <PriorityBadge priority={ticket.priority} />
           </div>
 
-          <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-1.5 items-center">
             <StatusBadge status={ticket.status} />
             <CategoryBadge category={ticket.category} />
+            {ticket.subtasks && ticket.subtasks.length > 0 && (
+              <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                ticket.subtasks.every((s) => s.done)
+                  ? "bg-green-100 text-green-700"
+                  : "bg-blue-50 text-blue-600"
+              }`}>
+                ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center justify-between text-xs text-gray-500 pt-1">
