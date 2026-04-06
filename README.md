@@ -170,6 +170,119 @@ De kaart laadt automatisch je HA zones/gebieden als locatiekeuzelijst.
 
 ---
 
+## NFC-tags koppelen aan terugkerende taken
+
+Met NFC-tags kun je terugkerende taken (zoals schoonmaken van een kamer of technische controles) automatisch afronden door de tag te scannen met de HA Companion app.
+
+### Hoe het werkt
+
+1. Medewerker scant een NFC-tag met de HA app
+2. HA triggert een automatisering
+3. De automatisering roept het `/api/nfc/scan` endpoint aan
+4. De bijbehorende openstaande taak wordt afgesloten
+5. De medewerker ontvangt een pushmelding ter bevestiging
+
+---
+
+### Stap 1 — NFC-tag koppelen in de app
+
+1. Ga in de Tickets app naar **Herhalend**
+2. Maak een nieuw sjabloon aan of bewerk een bestaand sjabloon
+3. Vul bij **NFC-tag ID** de ID in van je HA NFC-tag
+
+**NFC-tag ID vinden:**  
+Ga in HA naar **Instellingen → Tags** en klik op de tag. De ID staat onderaan, bijv. `abc123-def456-ghi789`.
+
+---
+
+### Stap 2 — Push notificaties instellen per medewerker
+
+Om een bevestigingsmelding te ontvangen na het scannen moet de `ha_notify_service` van de medewerker ingevuld zijn.
+
+1. Ga in de Tickets app naar **Instellingen → Medewerkers**
+2. Bewerk de medewerker en vul bij **HA notify service** de naam van de notify-service in
+
+De notify-service naam vind je via **Developer Tools → Diensten** — zoek op `notify.`. Elke telefoon met de HA Companion app heeft een eigen service, bijv.:
+- `notify.mobile_app_iphone_jan`
+- `notify.mobile_app_pixel_7_marie`
+
+---
+
+### Stap 3 — HA automatisering aanmaken
+
+Maak in HA een automatisering aan die bij het scannen van de NFC-tag het scan-endpoint aanroept.
+
+**Via de UI (aanbevolen):**
+
+1. Ga naar **Instellingen → Automatiseringen → + Automatisering aanmaken**
+2. Trigger: **Tag** → selecteer de NFC-tag
+3. Actie: **REST-commando aanroepen** → zie configuratie hieronder
+
+**Via YAML:**
+
+```yaml
+automation:
+  alias: "NFC scan - Kamer 301 schoonmaak"
+  trigger:
+    - platform: tag
+      tag_id: "abc123-def456-ghi789"   # jouw NFC-tag ID
+  action:
+    - service: rest_command.hotel_tickets_nfc_scan
+      data:
+        tag_id: "abc123-def456-ghi789"
+        ha_user_id: "{{ trigger.device_id }}"
+```
+
+---
+
+### Stap 4 — REST command instellen in configuration.yaml
+
+Voeg dit toe aan je `configuration.yaml`:
+
+```yaml
+rest_command:
+  hotel_tickets_nfc_scan:
+    url: "http://supervisor/ingress/hotel_tickets/api/nfc/scan"
+    method: POST
+    content_type: "application/json"
+    payload: '{"tag_id": "{{ tag_id }}", "ha_user_id": "{{ ha_user_id }}"}'
+    headers:
+      Authorization: "Bearer {{ states('sensor.supervisor_token') }}"
+```
+
+> **Let op:** De URL `http://supervisor/ingress/hotel_tickets/` werkt alleen binnen HA (supervisor netwerk). Herstart HA na het aanpassen van `configuration.yaml`.
+
+---
+
+### Meerdere NFC-tags
+
+Maak voor elke locatie/taak een aparte automatisering met de bijbehorende `tag_id`. Je kunt één `rest_command` hergebruiken voor alle tags:
+
+```yaml
+automation:
+  - alias: "NFC - Kamer 101 schoonmaak"
+    trigger:
+      platform: tag
+      tag_id: "tag-id-kamer-101"
+    action:
+      service: rest_command.hotel_tickets_nfc_scan
+      data:
+        tag_id: "tag-id-kamer-101"
+        ha_user_id: "{{ trigger.device_id }}"
+
+  - alias: "NFC - Kamer 102 schoonmaak"
+    trigger:
+      platform: tag
+      tag_id: "tag-id-kamer-102"
+    action:
+      service: rest_command.hotel_tickets_nfc_scan
+      data:
+        tag_id: "tag-id-kamer-102"
+        ha_user_id: "{{ trigger.device_id }}"
+```
+
+---
+
 ## Gebruik in automaties
 
 Na installatie van de custom component kun je tickets aanmaken vanuit HA automaties:
