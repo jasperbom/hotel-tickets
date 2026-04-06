@@ -1,5 +1,16 @@
 # Hotel Ticket System
 
+## Versiebeheer
+
+Bij elke commit die naar GitHub gepusht wordt, **moet** de versie in `hotel_tickets/config.yaml` verhoogd worden met `0.0.1`.
+
+- Huidig formaat: `"x.y.z"` (bijv. `"1.3.22"`)
+- Elke push: z +1 (bijv. 1.3.22 → 1.3.23)
+- Bij z = 99: y +1 en z = 0 (bijv. 1.3.99 → 1.4.0)
+- Bij y = 99: x +1 en y = 0 en z = 0
+
+De versie in `config.yaml` en de commit message moeten altijd overeenkomen (bijv. `v1.3.23: ...`).
+
 Ticket- en taakbeheersysteem voor hotels, gebouwd als Home Assistant addon.
 Bedoeld voor drie afdelingen: technische dienst, huishouding en receptie/conciërge.
 

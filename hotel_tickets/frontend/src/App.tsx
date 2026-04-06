@@ -20,47 +20,8 @@ const NAV_ITEMS = [
 export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Top navigatie — desktop */}
-      <nav className="hidden md:block bg-hotel-900 text-white shadow-lg">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="flex items-center gap-1 h-14">
-            <span className="font-bold text-lg mr-3 text-white shrink-0">🎫 Hotel Tickets</span>
-            {NAV_ITEMS.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                end={item.end}
-                className={({ isActive }) =>
-                  `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
-                    isActive
-                      ? "bg-white/20 text-white"
-                      : "text-white/70 hover:text-white hover:bg-white/10"
-                  }`
-                }
-              >
-                <span>{item.icon}</span>
-                <span>{item.label}</span>
-              </NavLink>
-            ))}
-            <a
-              href="/"
-              className="ml-auto shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              ← Naar dashboard
-            </a>
-          </div>
-        </div>
-      </nav>
-
-      {/* HA-terugknop — mobiel */}
-      <div className="md:hidden bg-hotel-900 text-white px-4 py-2 flex items-center">
-        <a href="/" className="text-sm text-white/70 hover:text-white flex items-center gap-1 transition-colors">
-          ← Naar dashboard
-        </a>
-      </div>
-
       {/* Inhoud */}
-      <main className="max-w-5xl mx-auto px-4 py-6 pb-24 md:pb-6">
+      <main className="max-w-5xl mx-auto px-4 py-6 pb-24">
         <Routes>
           <Route path="/" element={<MijnOverzicht />} />
           <Route path="/dashboard" element={<Dashboard />} />
@@ -72,9 +33,10 @@ export default function App() {
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </main>
-      {/* Bottom navigatie — mobiel/tablet */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-hotel-900 text-white shadow-[0_-2px_8px_rgba(0,0,0,0.2)] md:hidden z-50">
-        <div className="flex">
+
+      {/* Bottom navigatie — alle schermformaten */}
+      <nav className="fixed bottom-0 left-0 right-0 bg-hotel-900 text-white shadow-[0_-2px_8px_rgba(0,0,0,0.2)] z-50">
+        <div className="flex max-w-5xl mx-auto">
           {NAV_ITEMS.map((item) => (
             <NavLink
               key={item.to}
