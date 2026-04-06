@@ -49,7 +49,11 @@ async def _run_migrations(conn):
     column_migrations = [
         ("tickets", "notify_when_free", "BOOLEAN NOT NULL DEFAULT 0"),
         ("tickets", "closed_by", "VARCHAR(255)"),
+        ("tickets", "subtasks", "TEXT"),
         ("recurring_templates", "nfc_tag_id", "VARCHAR(255)"),
+        ("recurring_templates", "subtask_mode", "VARCHAR(20) NOT NULL DEFAULT 'none'"),
+        ("recurring_templates", "subtask_items", "TEXT"),
+        ("recurring_templates", "notify_when_free", "BOOLEAN NOT NULL DEFAULT 0"),
     ]
     for table, column, col_def in column_migrations:
         if not await _column_exists(conn, table, column):

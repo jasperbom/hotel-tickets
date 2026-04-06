@@ -41,6 +41,13 @@ export type Status = "open" | "in_progress" | "closed";
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type Role = "admin" | "supervisor" | "technician" | "housekeeping" | "reception";
 
+export interface Subtask {
+  label: string;
+  done: boolean;
+  done_by: string | null;
+  done_at: string | null;
+}
+
 export interface Ticket {
   id: string;
   title: string;
@@ -57,6 +64,7 @@ export interface Ticket {
   closed_at: string | null;
   closed_by: string | null;
   notify_when_free: boolean;
+  subtasks: Subtask[] | null;
 }
 
 export interface Comment {
@@ -78,6 +86,8 @@ export interface UserRole {
   ha_notify_service: string | null;
 }
 
+export type SubtaskMode = "none" | "subtasks" | "rooms";
+
 export interface RecurringTemplate {
   id: string;
   title: string;
@@ -91,6 +101,19 @@ export interface RecurringTemplate {
   is_active: boolean;
   nfc_tag_id: string | null;
   next_run: string | null;
+  subtask_mode: SubtaskMode;
+  subtask_items: string[] | null;
+  notify_when_free: boolean;
+}
+
+export interface ActiveTicket {
+  id: string;
+  title: string;
+  status: Status;
+  location_id: string | null;
+  subtasks: Subtask[] | null;
+  assigned_to: string | null;
+  notify_when_free: boolean;
 }
 
 export interface HistoryEntry {
@@ -150,6 +173,8 @@ export const ticketApi = {
   remove: (id: string) => api.delete(`/tickets/${id}`),
   getComments: (id: string) => api.get<Comment[]>(`/tickets/${id}/comments`),
   addComment: (id: string, body: string) => api.post<Comment>(`/tickets/${id}/comments`, { body }),
+  updateSubtask: (id: string, index: number, done: boolean) =>
+    api.patch<{ ok: boolean; subtasks: Subtask[] }>(`/tickets/${id}/subtasks`, { index, done }),
 };
 
 export const userApi = {
@@ -171,8 +196,10 @@ export const recurringApi = {
   get: (id: string) => api.get<RecurringTemplate>(`/recurring/${id}`),
   update: (id: string, data: Partial<RecurringTemplate>) => api.patch<RecurringTemplate>(`/recurring/${id}`, data),
   remove: (id: string) => api.delete(`/recurring/${id}`),
-  complete: (id: string) => api.post<{ ok: boolean; ticket_id: string | null }>(`/recurring/${id}/complete`),
+  complete: (id: string, roomId?: string) =>
+    api.post<{ ok: boolean; closed_ticket_ids: string[] }>(`/recurring/${id}/complete`, { room_id: roomId ?? null }),
   history: (id: string) => api.get<HistoryEntry[]>(`/recurring/${id}/history`),
+  activeTickets: (id: string) => api.get<ActiveTicket[]>(`/recurring/${id}/active-tickets`),
 };
 
 export interface IntegrationStatus {

@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query
@@ -44,6 +45,11 @@ class CommentCreate(BaseModel):
     body: str
 
 
+class SubtaskUpdate(BaseModel):
+    index: int
+    done: bool
+
+
 class TicketOut(BaseModel):
     id: str
     title: str
@@ -60,8 +66,19 @@ class TicketOut(BaseModel):
     closed_at: datetime | None
     closed_by: str | None
     notify_when_free: bool
+    subtasks: list | None = None
 
     model_config = {"from_attributes": True}
+
+    @classmethod
+    def from_orm_with_subtasks(cls, ticket):
+        data = cls.model_validate(ticket)
+        if ticket.subtasks:
+            try:
+                data.subtasks = json.loads(ticket.subtasks)
+            except Exception:
+                data.subtasks = None
+        return data
 
 
 class CommentOut(BaseModel):
@@ -219,6 +236,43 @@ async def delete_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = De
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
     await db.delete(ticket)
     await sync_ticket_sensors(db)
+
+
+# --- Subtaken ---
+
+@router.patch("/{ticket_id}/subtasks")
+async def update_subtask(
+    ticket_id: str,
+    body: SubtaskUpdate,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Markeer een subtaak als gedaan of ongedaan."""
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    if not ticket.subtasks:
+        raise HTTPException(status_code=400, detail="Ticket heeft geen subtaken")
+
+    try:
+        subtasks = json.loads(ticket.subtasks)
+    except Exception:
+        raise HTTPException(status_code=400, detail="Subtaken data ongeldig")
+
+    if body.index < 0 or body.index >= len(subtasks):
+        raise HTTPException(status_code=400, detail="Ongeldige subtaak index")
+
+    subtasks[body.index]["done"] = body.done
+    if body.done:
+        subtasks[body.index]["done_by"] = user.ha_user_id
+        subtasks[body.index]["done_at"] = datetime.now(timezone.utc).isoformat()
+    else:
+        subtasks[body.index]["done_by"] = None
+        subtasks[body.index]["done_at"] = None
+
+    ticket.subtasks = json.dumps(subtasks)
+    ticket.updated_at = datetime.now(timezone.utc)
+    return {"ok": True, "subtasks": subtasks}
 
 
 # --- Commentaar ---

@@ -58,8 +58,10 @@ export default function MijnOverzicht() {
   const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
   const [showAllToday, setShowAllToday] = useState(false);
 
-  async function loadKeycards(tickets: Ticket[], locs: Record<string, string>) {
-    const areaIds = [...new Set(tickets.map(t => t.location_id).filter(Boolean) as string[])];
+  async function loadKeycards(tickets: Ticket[], recurring: UpcomingRecurring[], locs: Record<string, string>) {
+    const ticketLocs = tickets.map(t => t.location_id).filter(Boolean) as string[];
+    const recurringLocs = recurring.map(t => t.location_id).filter(Boolean) as string[];
+    const areaIds = [...new Set([...ticketLocs, ...recurringLocs])];
     const results = await Promise.allSettled(
       areaIds.map(id => locationApi.keycard(id).then(r => ({ id, occupied: r.data.found ? r.data.occupied : null })))
     );
@@ -77,7 +79,7 @@ export default function MijnOverzicht() {
       setOverview(ov.data);
       const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
       const allTickets = [...ov.data.my_tickets, ...ov.data.available_tickets];
-      loadKeycards(allTickets, locMap);
+      loadKeycards(allTickets, ov.data.today_recurring ?? [], locMap);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -87,7 +89,7 @@ export default function MijnOverzicht() {
     setOverview(ov.data);
     const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
     const allTickets = [...ov.data.my_tickets, ...ov.data.available_tickets];
-    loadKeycards(allTickets, locMap);
+    loadKeycards(allTickets, ov.data.today_recurring ?? [], locMap);
   }
 
   if (loading) {
@@ -144,7 +146,7 @@ export default function MijnOverzicht() {
           <h2 className="font-semibold text-gray-900 mb-3">Vandaag te doen</h2>
           <div className="space-y-2">
             {visibleToday.map((t) => (
-              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} />
+              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} />
             ))}
           </div>
           {!showAllToday && today_recurring.length > 3 && (
@@ -310,7 +312,7 @@ function formatNextRun(dateStr: string): string {
   return format(date, "eee d MMM", { locale: nl });
 }
 
-function RecurringTaskRow({ task, locationName }: { task: UpcomingRecurring; locationName?: string }) {
+function RecurringTaskRow({ task, locationName, occupied }: { task: UpcomingRecurring; locationName?: string; occupied?: boolean | null }) {
   return (
     <Link
       to={`/recurring/${task.id}`}
@@ -319,10 +321,16 @@ function RecurringTaskRow({ task, locationName }: { task: UpcomingRecurring; loc
       <span className="text-xl shrink-0">🔁</span>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
-        <div className="flex gap-1.5 mt-1 flex-wrap">
+        <div className="flex gap-1.5 mt-1 flex-wrap items-center">
           <CategoryBadge category={task.category} />
           <PriorityBadge priority={task.priority} />
-          {locationName && <span className="text-xs text-gray-500">🚪 {locationName}</span>}
+          {locationName && (
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              🚪 {locationName}
+              {occupied === true && <span className="font-semibold px-1 rounded bg-orange-100 text-orange-700">Bezet</span>}
+              {occupied === false && <span className="font-semibold px-1 rounded bg-green-100 text-green-700">Vrij</span>}
+            </span>
+          )}
           {task.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
         </div>
       </div>
