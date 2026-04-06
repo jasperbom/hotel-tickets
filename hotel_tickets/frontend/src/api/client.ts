@@ -132,6 +132,8 @@ export interface UpcomingRecurring {
   location_id: string | null;
   nfc_tag_id: string | null;
   next_run: string;
+  subtask_done?: number;
+  subtask_total?: number;
 }
 
 export interface Location {

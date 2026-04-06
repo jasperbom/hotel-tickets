@@ -341,6 +341,15 @@ function RecurringTaskRow({ task, locationName, occupied }: { task: UpcomingRecu
             </span>
           )}
           {task.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
+          {task.subtask_total !== undefined && (
+            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+              task.subtask_done === task.subtask_total
+                ? "bg-green-100 text-green-700"
+                : "bg-blue-50 text-blue-600"
+            }`}>
+              ☑ {task.subtask_done}/{task.subtask_total}
+            </span>
+          )}
         </div>
       </div>
       <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-lg shrink-0">Vandaag</span>
