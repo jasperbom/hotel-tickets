@@ -95,7 +95,8 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
             return
 
         ha_user_id = _get_ha_user_id_for_device(hass, device_id)
-        _LOGGER.info("NFC tag gescand: %s door device %s (user %s)", tag_id, device_id, ha_user_id)
+        _LOGGER.info("NFC tag gescand: tag_id='%s' device_id='%s' ha_user_id='%s'", tag_id, device_id, ha_user_id)
+        _LOGGER.info("NFC → POST %s/api/nfc/scan", ADDON_URL)
 
         try:
             async with aiohttp.ClientSession() as session:
@@ -104,16 +105,17 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
                     headers={"Authorization": f"Bearer {supervisor_token}"},
                     json={"tag_id": tag_id, "ha_user_id": ha_user_id},
                 ) as resp:
+                    body = await resp.text()
+                    _LOGGER.info("NFC scan response HTTP %s: %s", resp.status, body[:300])
                     if resp.status == 200:
-                        data = await resp.json()
-                        _LOGGER.info("NFC afgerond: %s", data.get("message", ""))
+                        _LOGGER.info("NFC afgerond voor tag '%s'", tag_id)
                     elif resp.status == 404:
-                        _LOGGER.debug("NFC tag '%s' niet gekoppeld aan een taak — genegeerd", tag_id)
-                    else:
-                        body = await resp.text()
-                        _LOGGER.warning("NFC scan mislukt HTTP %s: %s", resp.status, body[:200])
+                        _LOGGER.warning(
+                            "NFC tag '%s' niet gevonden in de addon — controleer of de tag ID exact overeenkomt met het sjabloon",
+                            tag_id,
+                        )
         except Exception as exc:
-            _LOGGER.error("NFC scan verbindingsfout: %s", exc)
+            _LOGGER.error("NFC scan verbindingsfout naar %s: %s", ADDON_URL, exc)
 
     # Luister naar alle tag scans in HA (event heet "tag_scanned", niet "tag.tag_scanned")
     cancel_listener = hass.bus.async_listen("tag_scanned", handle_tag_scanned)
