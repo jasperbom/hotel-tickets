@@ -4,7 +4,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 
 from ..database import get_db
 from ..models import Ticket, TicketComment, Category, Status, Priority, Role, UserRole
@@ -29,6 +29,7 @@ class TicketCreate(BaseModel):
     location_id: str | None = None
     assigned_to: str | None = None
     creator_name: str | None = None  # display-naam bij aanmaken via card/service
+    subtask_labels: list[str] | None = None  # optionele subtaken bij aanmaken
 
 
 class TicketUpdate(BaseModel):
@@ -70,15 +71,15 @@ class TicketOut(BaseModel):
 
     model_config = {"from_attributes": True}
 
+    @field_validator("subtasks", mode="before")
     @classmethod
-    def from_orm_with_subtasks(cls, ticket):
-        data = cls.model_validate(ticket)
-        if ticket.subtasks:
+    def parse_subtasks(cls, v):
+        if isinstance(v, str):
             try:
-                data.subtasks = json.loads(ticket.subtasks)
+                return json.loads(v)
             except Exception:
-                data.subtasks = None
-        return data
+                return None
+        return v
 
 
 class CommentOut(BaseModel):
@@ -143,6 +144,12 @@ async def create_ticket(
     db: AsyncSession = Depends(get_db),
 ):
     logger.info("[tickets] Ticket aanmaken: title=%r category=%s door user=%s", body.title, body.category, user.ha_user_id)
+    subtasks_json = None
+    if body.subtask_labels:
+        subtasks_json = json.dumps([
+            {"label": l, "done": False, "done_by": None, "done_at": None}
+            for l in body.subtask_labels
+        ])
     ticket = Ticket(
         title=body.title,
         description=body.description,
@@ -151,6 +158,7 @@ async def create_ticket(
         location_id=body.location_id,
         assigned_to=body.assigned_to,
         created_by=body.creator_name if body.creator_name else user.ha_user_id,
+        subtasks=subtasks_json,
     )
     db.add(ticket)
     await db.flush()
