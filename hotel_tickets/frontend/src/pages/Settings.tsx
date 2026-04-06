@@ -187,7 +187,7 @@ export default function Settings() {
 
       <IntegrationWidget />
 
-      {isAdmin && <NotificationSettings />}
+      <NotificationSettings />
 
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
