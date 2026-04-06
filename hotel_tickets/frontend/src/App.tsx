@@ -20,16 +20,6 @@ const NAV_ITEMS = [
 export default function App() {
   return (
     <div className="min-h-screen bg-gray-50">
-      {/* Header — alleen 'Naar dashboard' knop */}
-      <header className="bg-hotel-900 text-white shadow-lg px-4 h-11 flex items-center">
-        <a
-          href="/"
-          className="flex items-center gap-1.5 px-3 py-1 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-        >
-          ← Naar dashboard
-        </a>
-      </header>
-
       {/* Inhoud */}
       <main className="max-w-5xl mx-auto px-4 py-6 pb-24">
         <Routes>
