@@ -1,6 +1,9 @@
+import logging
 import os
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
+
+logger = logging.getLogger(__name__)
 
 DB_PATH = os.environ.get("DB_PATH", "./hotel_tickets.db")
 DATABASE_URL = f"sqlite+aiosqlite:///{DB_PATH}"
@@ -26,22 +29,29 @@ async def get_db():
 async def init_db():
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+    # Migraties in een aparte transactie zodat create_all altijd commit
+    async with engine.begin() as conn:
         await _run_migrations(conn)
+
+
+async def _column_exists(conn, table: str, column: str) -> bool:
+    result = await conn.exec_driver_sql(f"PRAGMA table_info({table})")
+    rows = result.fetchall()
+    return any(row[1] == column for row in rows)
 
 
 async def _run_migrations(conn):
     """
-    Voeg ontbrekende kolommen toe aan bestaande tabellen.
-    SQLite ondersteunt geen IF NOT EXISTS bij ALTER TABLE,
-    dus we vangen de fout af als de kolom al bestaat.
+    Voeg ontbrekende kolommen toe aan bestaande tabellen via PRAGMA-check.
+    Zo worden fouten nooit stilletjes geslokt — alleen echt ontbrekende kolommen
+    worden toegevoegd.
     """
-    migrations = [
-        "ALTER TABLE tickets ADD COLUMN notify_when_free BOOLEAN NOT NULL DEFAULT 0",
-        "ALTER TABLE tickets ADD COLUMN closed_by VARCHAR(255)",
-        "ALTER TABLE recurring_templates ADD COLUMN nfc_tag_id VARCHAR(255)",
+    column_migrations = [
+        ("tickets", "notify_when_free", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("tickets", "closed_by", "VARCHAR(255)"),
+        ("recurring_templates", "nfc_tag_id", "VARCHAR(255)"),
     ]
-    for sql in migrations:
-        try:
-            await conn.exec_driver_sql(sql)
-        except Exception:
-            pass  # Kolom bestaat al — geen actie nodig
+    for table, column, col_def in column_migrations:
+        if not await _column_exists(conn, table, column):
+            logger.info("Migratie: %s.%s toevoegen", table, column)
+            await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
