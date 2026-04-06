@@ -186,6 +186,7 @@ export default function Settings() {
       <h1 className="text-2xl font-bold text-gray-900">Instellingen</h1>
 
       <IntegrationWidget />
+      <NotificationSettings />
 
       <div className="card space-y-4">
         <div className="flex items-center justify-between">
@@ -294,8 +295,6 @@ export default function Settings() {
           </div>
         )}
       </div>
-
-      <NotificationSettings />
     </div>
   );
 }
