@@ -200,6 +200,8 @@ export const recurringApi = {
   remove: (id: string) => api.delete(`/recurring/${id}`),
   complete: (id: string, roomId?: string) =>
     api.post<{ ok: boolean; closed_ticket_ids: string[] }>(`/recurring/${id}/complete`, { room_id: roomId ?? null }),
+  start: (id: string) =>
+    api.post<{ ok: boolean; created_ticket_ids: string[] }>(`/recurring/${id}/start`),
   history: (id: string) => api.get<HistoryEntry[]>(`/recurring/${id}/history`),
   activeTickets: (id: string) => api.get<ActiveTicket[]>(`/recurring/${id}/active-tickets`),
 };

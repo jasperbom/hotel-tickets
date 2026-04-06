@@ -17,6 +17,7 @@ export default function RecurringTaskDetail() {
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<string | "all" | null>(null);
   const [subtaskLoading, setSubtaskLoading] = useState(false);
+  const [starting, setStarting] = useState(false);
 
   async function load() {
     if (!id) return;
@@ -32,10 +33,13 @@ export default function RecurringTaskDetail() {
     const locMap = Object.fromEntries(locs.data.map((l) => [l.id, l.name]));
     setLocations(locMap);
 
-    // Load keycards for relevant locations
+    // Load keycards for relevant locations (incl. template rooms even when no active tickets)
     const locationIds = new Set<string>();
     if (tmpl.data.location_id) locationIds.add(tmpl.data.location_id);
     active.data.forEach((t) => { if (t.location_id) locationIds.add(t.location_id); });
+    if (tmpl.data.subtask_mode === "rooms" && tmpl.data.subtask_items) {
+      tmpl.data.subtask_items.forEach((roomId) => locationIds.add(roomId));
+    }
     if (locationIds.size > 0) {
       const results = await Promise.allSettled(
         [...locationIds].map((lid) => locationApi.keycard(lid).then((r) => ({ id: lid, data: r.data })))
@@ -72,6 +76,17 @@ export default function RecurringTaskDetail() {
       );
     } finally {
       setSubtaskLoading(false);
+    }
+  }
+
+  async function startTask() {
+    if (!id || starting) return;
+    setStarting(true);
+    try {
+      await recurringApi.start(id);
+      await load();
+    } finally {
+      setStarting(false);
     }
   }
 
@@ -222,49 +237,85 @@ export default function RecurringTaskDetail() {
         )}
 
         {/* Alles afronden (kamers) */}
-        {isRoomsMode && activeTickets.length > 0 && (
+        {isRoomsMode && !doneToday && (activeTickets.length > 0 || (template.subtask_items?.length ?? 0) > 0) && (
           <button
             onClick={() => handleComplete()}
             disabled={completing !== null || !template.is_active}
             className="w-full py-3 rounded-xl font-semibold text-sm bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50"
           >
-            {completing === "all" ? "Bezig..." : `✓ Alle ${activeTickets.length} kamers afronden`}
+            {completing === "all"
+              ? "Bezig..."
+              : `✓ Alle ${activeTickets.length || template.subtask_items?.length} kamers afronden`}
           </button>
         )}
       </div>
 
       {/* Subtaken-sectie */}
-      {isSubtaskMode && activeTicket?.subtasks && activeTicket.subtasks.length > 0 && (
+      {isSubtaskMode && (
         <div className="card">
-          <h2 className="font-semibold text-gray-900 mb-3">Subtaken</h2>
-          <div className="space-y-2">
-            {activeTicket.subtasks.map((subtask, idx) => (
-              <button
-                key={idx}
-                type="button"
-                onClick={() => toggleSubtask(activeTicket, idx)}
-                disabled={subtaskLoading}
-                className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
-                  subtask.done
-                    ? "border-green-200 bg-green-50"
-                    : "border-gray-200 bg-white hover:border-gray-300"
-                }`}
-              >
-                <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 transition-all ${
-                  subtask.done ? "bg-green-500 border-green-500 text-white" : "border-gray-300"
-                }`}>
-                  {subtask.done && <span className="text-xs font-bold">✓</span>}
-                </span>
-                <span className={`flex-1 text-sm font-medium ${subtask.done ? "line-through text-gray-400" : "text-gray-800"}`}>
-                  {subtask.label}
-                </span>
-              </button>
-            ))}
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900">Subtaken</h2>
+            {activeTicket?.subtasks && (
+              <span className="text-xs text-gray-400">
+                {activeTicket.subtasks.filter((s) => s.done).length}/{activeTicket.subtasks.length} gedaan
+              </span>
+            )}
           </div>
-          {activeTicket.subtasks.every((s) => s.done) && (
-            <p className="text-sm text-green-700 font-medium mt-3 text-center">
-              ✓ Alle subtaken afgevinkt — druk op Taak afronden om te voltooien
-            </p>
+
+          {activeTicket?.subtasks && activeTicket.subtasks.length > 0 ? (
+            /* Actief ticket aanwezig — interactieve checkboxen */
+            <>
+              <div className="space-y-2">
+                {activeTicket.subtasks.map((subtask, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => toggleSubtask(activeTicket, idx)}
+                    disabled={subtaskLoading}
+                    className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
+                      subtask.done
+                        ? "border-green-200 bg-green-50"
+                        : "border-gray-200 bg-white hover:border-gray-300"
+                    }`}
+                  >
+                    <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 transition-all ${
+                      subtask.done ? "bg-green-500 border-green-500 text-white" : "border-gray-300"
+                    }`}>
+                      {subtask.done && <span className="text-xs font-bold">✓</span>}
+                    </span>
+                    <span className={`flex-1 text-sm font-medium ${subtask.done ? "line-through text-gray-400" : "text-gray-800"}`}>
+                      {subtask.label}
+                    </span>
+                  </button>
+                ))}
+              </div>
+              {activeTicket.subtasks.every((s) => s.done) && (
+                <p className="text-sm text-green-700 font-medium mt-3 text-center">
+                  ✓ Alle subtaken afgevinkt — druk op Taak afronden om te voltooien
+                </p>
+              )}
+            </>
+          ) : template.subtask_items && template.subtask_items.length > 0 ? (
+            /* Nog geen actief ticket — toon preview + activeer-knop */
+            <>
+              <div className="space-y-2 opacity-50 pointer-events-none">
+                {template.subtask_items.map((label, idx) => (
+                  <div key={idx} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 border-gray-200 bg-white">
+                    <span className="w-5 h-5 rounded border-2 border-gray-300 shrink-0" />
+                    <span className="text-sm font-medium text-gray-700">{label}</span>
+                  </div>
+                ))}
+              </div>
+              <button
+                onClick={startTask}
+                disabled={starting || doneToday || !template.is_active}
+                className="w-full mt-3 py-2.5 rounded-xl font-semibold text-sm border-2 border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-all disabled:opacity-50"
+              >
+                {starting ? "Bezig..." : "▶ Taak activeren om te beginnen"}
+              </button>
+            </>
+          ) : (
+            <p className="text-sm text-gray-400 text-center py-4">Geen subtaken geconfigureerd</p>
           )}
         </div>
       )}
@@ -273,12 +324,11 @@ export default function RecurringTaskDetail() {
       {isRoomsMode && (
         <div className="card">
           <h2 className="font-semibold text-gray-900 mb-3">Kamers</h2>
-          {activeTickets.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">
-              {doneToday ? "Alle kamers zijn vandaag afgerond ✓" : "Geen openstaande kamertaken"}
-            </p>
+          {doneToday && activeTickets.length === 0 ? (
+            <p className="text-sm text-gray-400 text-center py-4">Alle kamers zijn vandaag afgerond ✓</p>
           ) : (
             <div className="space-y-2">
+              {/* Actieve tickets (open kamers) */}
               {activeTickets.map((ticket) => {
                 const roomName = ticket.location_id ? locations[ticket.location_id] : null;
                 const roomKeycard = ticket.location_id ? keycards[ticket.location_id] : null;
@@ -307,6 +357,40 @@ export default function RecurringTaskDetail() {
                   </div>
                 );
               })}
+
+              {/* Nog geen actieve tickets — toon geconfigureerde kamers direct */}
+              {activeTickets.length === 0 && template.subtask_items && template.subtask_items.map((roomId) => {
+                const roomName = locations[roomId];
+                const roomKeycard = keycards[roomId];
+                const isCompletingRoom = completing === roomId;
+                return (
+                  <div key={roomId} className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm font-medium text-gray-900">
+                          🚪 {roomName ?? roomId}
+                        </span>
+                        {roomKeycard?.found && (
+                          roomKeycard.occupied
+                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Bezet</span>
+                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">Vrij</span>
+                        )}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => handleComplete(roomId)}
+                      disabled={completing !== null || !template.is_active}
+                      className="shrink-0 text-sm text-green-700 font-medium border border-green-200 rounded-lg px-3 py-1.5 hover:bg-green-50 transition-colors disabled:opacity-50"
+                    >
+                      {isCompletingRoom ? "Bezig..." : "✓ Afronden"}
+                    </button>
+                  </div>
+                );
+              })}
+
+              {activeTickets.length === 0 && !template.subtask_items?.length && (
+                <p className="text-sm text-gray-400 text-center py-4">Geen kamers geconfigureerd</p>
+              )}
             </div>
           )}
         </div>

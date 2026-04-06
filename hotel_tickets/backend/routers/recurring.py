@@ -2,7 +2,7 @@ import json
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, func
 from pydantic import BaseModel
 from croniter import croniter
 
@@ -188,6 +188,63 @@ async def delete_template(template_id: str, user: RequireUser, db: AsyncSession 
     await remove_template(template.id)
 
     await db.delete(template)
+
+
+@router.post("/{template_id}/start")
+async def start_template(template_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Maak actieve (open) tickets aan voor dit sjabloon, zonder ze meteen te sluiten.
+    Gebruikt wanneer de gebruiker subtaken handmatig wil afvinken vóór afronding."""
+    template = await db.get(RecurringTemplate, template_id)
+    if not template:
+        raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
+
+    existing = await db.scalar(
+        select(func.count()).where(
+            and_(Ticket.recurring_template_id == template_id, Ticket.status != Status.closed)
+        )
+    )
+    if existing:
+        raise HTTPException(status_code=409, detail="Er zijn al openstaande tickets voor dit sjabloon")
+
+    created_ids = []
+    if template.subtask_mode == "rooms" and template.subtask_items:
+        room_ids = json.loads(template.subtask_items)
+        for room_id in room_ids:
+            ticket = Ticket(
+                id=new_uuid(), title=template.title, description=template.description,
+                category=template.category, priority=template.priority,
+                location_id=room_id, created_by=user.ha_user_id,
+                recurring_template_id=template.id,
+                notify_when_free=template.notify_when_free,
+            )
+            db.add(ticket)
+            created_ids.append(ticket.id)
+    elif template.subtask_mode == "subtasks" and template.subtask_items:
+        labels = json.loads(template.subtask_items)
+        subtasks_json = json.dumps([{"label": l, "done": False, "done_by": None, "done_at": None} for l in labels])
+        ticket = Ticket(
+            id=new_uuid(), title=template.title, description=template.description,
+            category=template.category, priority=template.priority,
+            location_id=template.location_id, created_by=user.ha_user_id,
+            recurring_template_id=template.id,
+            subtasks=subtasks_json, notify_when_free=template.notify_when_free,
+        )
+        db.add(ticket)
+        created_ids.append(ticket.id)
+    else:
+        ticket = Ticket(
+            id=new_uuid(), title=template.title, description=template.description,
+            category=template.category, priority=template.priority,
+            location_id=template.location_id, created_by=user.ha_user_id,
+            recurring_template_id=template.id,
+            notify_when_free=template.notify_when_free,
+        )
+        db.add(ticket)
+        created_ids.append(ticket.id)
+
+    await db.flush()
+    await sync_ticket_sensors(db)
+    return {"ok": True, "created_ticket_ids": created_ids}
 
 
 class CompleteRequest(BaseModel):
