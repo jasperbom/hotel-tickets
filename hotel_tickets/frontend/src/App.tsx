@@ -42,9 +42,22 @@ export default function App() {
                 <span>{item.label}</span>
               </NavLink>
             ))}
+            <a
+              href="/"
+              className="ml-auto shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              ← Naar dashboard
+            </a>
           </div>
         </div>
       </nav>
+
+      {/* HA-terugknop — mobiel */}
+      <div className="md:hidden bg-hotel-900 text-white px-4 py-2 flex items-center">
+        <a href="/" className="text-sm text-white/70 hover:text-white flex items-center gap-1 transition-colors">
+          ← Naar dashboard
+        </a>
+      </div>
 
       {/* Inhoud */}
       <main className="max-w-5xl mx-auto px-4 py-6 pb-24 md:pb-6">
