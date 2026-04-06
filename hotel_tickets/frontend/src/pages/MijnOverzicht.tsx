@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import api, { ticketApi, locationApi, parseUTC, type Ticket, type Category, type Role } from "../api/client";
+import api, { ticketApi, locationApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
 import { PriorityBadge, CategoryBadge, StatusBadge } from "../components/StatusBadge";
 
 interface Overview {
@@ -19,6 +19,8 @@ interface Overview {
   };
   my_tickets: Ticket[];
   available_tickets: Ticket[];
+  today_recurring: UpcomingRecurring[];
+  upcoming_recurring: UpcomingRecurring[];
 }
 
 const ROLE_LABELS: Record<Role, string> = {
@@ -98,7 +100,7 @@ export default function MijnOverzicht() {
 
   if (!overview) return null;
 
-  const { user, stats, my_tickets, available_tickets } = overview;
+  const { user, stats, my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
   const isManager = user.role === "admin" || user.role === "supervisor";
 
   return (
@@ -134,6 +136,33 @@ export default function MijnOverzicht() {
           pulse={stats.urgent > 0}
         />
       </div>
+
+      {/* Vandaag te doen */}
+      {today_recurring.length > 0 && (
+        <section>
+          <h2 className="font-semibold text-gray-900 mb-3">Vandaag te doen</h2>
+          <div className="space-y-2">
+            {today_recurring.map((t) => (
+              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Aankomende herhalende taken */}
+      {upcoming_recurring.length > 0 && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-gray-900">Aankomende herhalende taken</h2>
+            <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
+          </div>
+          <div className="space-y-2">
+            {upcoming_recurring.map((t) => (
+              <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} />
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Mijn tickets */}
       <section>
@@ -258,6 +287,51 @@ function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locat
         </p>
       </div>
     </Link>
+  );
+}
+
+function formatNextRun(dateStr: string): string {
+  const date = parseUTC(dateStr);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Vandaag";
+  if (diffDays === 1) return "Morgen";
+  if (diffDays < 7) return `Over ${diffDays} dagen`;
+  return format(date, "eee d MMM", { locale: nl });
+}
+
+function RecurringTaskRow({ task, locationName }: { task: UpcomingRecurring; locationName?: string }) {
+  return (
+    <div className="card flex items-center gap-3 border-l-4 border-l-purple-400 p-3">
+      <span className="text-xl shrink-0">🔁</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
+        <div className="flex gap-1.5 mt-1">
+          <CategoryBadge category={task.category} />
+          <PriorityBadge priority={task.priority} />
+          {locationName && <span className="text-xs text-gray-500">🚪 {locationName}</span>}
+          {task.nfc_tag_id && <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">📱 NFC</span>}
+        </div>
+      </div>
+      <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-lg shrink-0">Vandaag</span>
+    </div>
+  );
+}
+
+function UpcomingRecurringRow({ task, locationName }: { task: UpcomingRecurring; locationName?: string }) {
+  return (
+    <div className="card flex items-center gap-3 p-3">
+      <span className="text-lg shrink-0">🗓️</span>
+      <div className="flex-1 min-w-0">
+        <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
+        <div className="flex gap-1.5 mt-1">
+          <CategoryBadge category={task.category} />
+          {locationName && <span className="text-xs text-gray-500">🚪 {locationName}</span>}
+        </div>
+      </div>
+      <span className="text-xs font-medium text-gray-500 shrink-0">{formatNextRun(task.next_run)}</span>
+    </div>
   );
 }
 

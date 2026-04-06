@@ -1,6 +1,9 @@
 import { useState } from "react";
 
-type Freq = "daily" | "workdays" | "weekly" | "monthly";
+type Freq = "daily" | "weekly" | "monthly" | "every_x_months";
+
+const FIXED_HOUR = 8;
+const FIXED_MINUTE = 0;
 
 const WEEK_DAYS = [
   { short: "Ma", label: "Maandag",    idx: 1 },
@@ -19,49 +22,55 @@ function ordinal(n: number): string {
 }
 
 export function cronToHuman(cron: string): string {
-  const { freq, hour, minute, weekDays, monthDay } = parseCron(cron);
-  return humanLabel(freq, hour, minute, weekDays, monthDay);
+  const { freq, weekDays, monthDay, everyXMonths } = parseCron(cron);
+  return humanLabel(freq, weekDays, monthDay, everyXMonths);
 }
 
-function humanLabel(freq: Freq, hour: number, minute: number, weekDays: number[], monthDay: number): string {
-  const time = `${String(hour).padStart(2, "0")}:${String(minute).padStart(2, "0")}`;
+function humanLabel(freq: Freq, weekDays: number[], monthDay: number, everyXMonths: number): string {
   switch (freq) {
-    case "daily":    return `Elke dag om ${time}`;
-    case "workdays": return `Elke werkdag (ma–vr) om ${time}`;
+    case "daily":   return "Elke dag";
     case "weekly": {
-      if (weekDays.length === 0) return `Wekelijks om ${time}`;
+      if (weekDays.length === 0) return "Wekelijks";
       const names = [...weekDays].sort((a, b) => a - b)
         .map(d => WEEK_DAYS.find(x => x.idx === d)?.label ?? String(d));
-      if (names.length === 1) return `Elke ${names[0]} om ${time}`;
-      return `Elke ${names.slice(0, -1).join(", ")} en ${names[names.length - 1]} om ${time}`;
+      if (names.length === 1) return `Elke ${names[0]}`;
+      return `Elke ${names.slice(0, -1).join(", ")} en ${names[names.length - 1]}`;
     }
-    case "monthly":  return `Elke ${ordinal(monthDay)} van de maand om ${time}`;
+    case "monthly":        return `Elke ${ordinal(monthDay)} van de maand`;
+    case "every_x_months": return `Elke ${everyXMonths} maanden (${ordinal(monthDay)})`;
   }
 }
 
-function buildCron(freq: Freq, hour: number, minute: number, weekDays: number[], monthDay: number): string {
+function buildCron(freq: Freq, weekDays: number[], monthDay: number, everyXMonths: number): string {
+  const h = FIXED_HOUR;
+  const m = FIXED_MINUTE;
   switch (freq) {
-    case "daily":    return `${minute} ${hour} * * *`;
-    case "workdays": return `${minute} ${hour} * * 1-5`;
+    case "daily":          return `${m} ${h} * * *`;
     case "weekly":
-      return `${minute} ${hour} * * ${weekDays.length ? [...weekDays].sort((a,b)=>a-b).join(",") : "1"}`;
-    case "monthly":  return `${minute} ${hour} ${monthDay} * *`;
+      return `${m} ${h} * * ${weekDays.length ? [...weekDays].sort((a,b)=>a-b).join(",") : "1"}`;
+    case "monthly":        return `${m} ${h} ${monthDay} * *`;
+    case "every_x_months": return `${m} ${h} ${monthDay} */${everyXMonths} *`;
   }
 }
 
-function parseCron(cron: string): { freq: Freq; hour: number; minute: number; weekDays: number[]; monthDay: number } {
+function parseCron(cron: string): { freq: Freq; weekDays: number[]; monthDay: number; everyXMonths: number } {
   const parts = cron.trim().split(/\s+/);
-  const fallback = { freq: "daily" as Freq, hour: 8, minute: 0, weekDays: [1], monthDay: 1 };
+  const fallback = { freq: "daily" as Freq, weekDays: [1], monthDay: 1, everyXMonths: 1 };
   if (parts.length !== 5) return fallback;
-  const [min, hr, dom, , dow] = parts;
-  const hour   = parseInt(hr)  ?? 8;
-  const minute = parseInt(min) ?? 0;
-  const mDay   = parseInt(dom);
-  if (!isNaN(mDay) && dom !== "*") return { freq: "monthly",  hour, minute, weekDays: [1], monthDay: mDay };
-  if (dow === "1-5")                return { freq: "workdays", hour, minute, weekDays: [], monthDay: 1 };
-  if (dow === "*")                  return { freq: "daily",    hour, minute, weekDays: [], monthDay: 1 };
+  const [, , dom, month, dow] = parts;
+  const mDay = parseInt(dom);
+
+  if (!isNaN(mDay) && dom !== "*") {
+    // Monthly of every_x_months
+    if (month.startsWith("*/")) {
+      const x = parseInt(month.slice(2));
+      return { freq: "every_x_months", weekDays: [], monthDay: mDay, everyXMonths: isNaN(x) ? 1 : x };
+    }
+    return { freq: "monthly", weekDays: [], monthDay: mDay, everyXMonths: 1 };
+  }
+  if (dow === "*") return { freq: "daily", weekDays: [], monthDay: 1, everyXMonths: 1 };
   const days = dow.split(",").map(Number).filter(n => !isNaN(n));
-  return { freq: "weekly", hour, minute, weekDays: days, monthDay: 1 };
+  return { freq: "weekly", weekDays: days, monthDay: 1, everyXMonths: 1 };
 }
 
 interface Props {
@@ -70,27 +79,26 @@ interface Props {
 }
 
 const FREQ_OPTIONS: { key: Freq; label: string; icon: string }[] = [
-  { key: "daily",    label: "Dagelijks",   icon: "☀️" },
-  { key: "workdays", label: "Werkdagen",   icon: "💼" },
-  { key: "weekly",   label: "Wekelijks",   icon: "📅" },
-  { key: "monthly",  label: "Maandelijks", icon: "🗓️" },
+  { key: "daily",          label: "Dagelijks",       icon: "☀️" },
+  { key: "weekly",         label: "Wekelijks",        icon: "📅" },
+  { key: "monthly",        label: "Maandelijks",      icon: "🗓️" },
+  { key: "every_x_months", label: "Elke X maanden",  icon: "📆" },
 ];
 
 export default function RecurrenceEditor({ value, onChange }: Props) {
-  const parsed = parseCron(value || "0 8 * * 1-5");
-  const [freq,     setFreq]     = useState<Freq>(parsed.freq);
-  const [hour,     setHour]     = useState(parsed.hour);
-  const [minute,   setMinute]   = useState(parsed.minute);
-  const [weekDays, setWeekDays] = useState<number[]>(parsed.weekDays.length ? parsed.weekDays : [1]);
-  const [monthDay, setMonthDay] = useState(parsed.monthDay || 1);
+  const parsed = parseCron(value || "0 8 * * *");
+  const [freq,          setFreq]          = useState<Freq>(parsed.freq);
+  const [weekDays,      setWeekDays]      = useState<number[]>(parsed.weekDays.length ? parsed.weekDays : [1]);
+  const [monthDay,      setMonthDay]      = useState(parsed.monthDay || 1);
+  const [everyXMonths,  setEveryXMonths]  = useState(parsed.everyXMonths || 1);
 
-  function emit(f: Freq, h: number, m: number, wd: number[], md: number) {
-    onChange(buildCron(f, h, m, wd, md));
+  function emit(f: Freq, wd: number[], md: number, xm: number) {
+    onChange(buildCron(f, wd, md, xm));
   }
 
   function handleFreq(f: Freq) {
     setFreq(f);
-    emit(f, hour, minute, weekDays, monthDay);
+    emit(f, weekDays, monthDay, everyXMonths);
   }
 
   function toggleWeekDay(idx: number) {
@@ -99,28 +107,26 @@ export default function RecurrenceEditor({ value, onChange }: Props) {
       : [...weekDays, idx];
     const safe = next.length === 0 ? [idx] : next;
     setWeekDays(safe);
-    emit(freq, hour, minute, safe, monthDay);
-  }
-
-  function handleTime(rawH: string, rawM: string) {
-    const h = Math.min(23, Math.max(0, parseInt(rawH) || 0));
-    const m = Math.min(59, Math.max(0, parseInt(rawM) || 0));
-    setHour(h);
-    setMinute(m);
-    emit(freq, h, m, weekDays, monthDay);
+    emit(freq, safe, monthDay, everyXMonths);
   }
 
   function handleMonthDay(d: number) {
     setMonthDay(d);
-    emit(freq, hour, minute, weekDays, d);
+    emit(freq, weekDays, d, everyXMonths);
   }
 
-  const summary = humanLabel(freq, hour, minute, weekDays, monthDay);
+  function handleEveryXMonths(x: number) {
+    const safe = Math.min(12, Math.max(1, x));
+    setEveryXMonths(safe);
+    emit(freq, weekDays, monthDay, safe);
+  }
+
+  const summary = humanLabel(freq, weekDays, monthDay, everyXMonths);
 
   return (
     <div className="space-y-4">
 
-      {/* Stap 1: frequentie */}
+      {/* Frequentie */}
       <div>
         <p className="text-sm font-medium text-gray-700 mb-2">Hoe vaak?</p>
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -142,7 +148,7 @@ export default function RecurrenceEditor({ value, onChange }: Props) {
         </div>
       </div>
 
-      {/* Stap 2: dag-selectie (alleen bij wekelijks of maandelijks) */}
+      {/* Dag-selectie wekelijks */}
       {freq === "weekly" && (
         <div>
           <p className="text-sm font-medium text-gray-700 mb-2">Op welke dag(en)?</p>
@@ -166,7 +172,8 @@ export default function RecurrenceEditor({ value, onChange }: Props) {
         </div>
       )}
 
-      {freq === "monthly" && (
+      {/* Dag van de maand (maandelijks + elke X maanden) */}
+      {(freq === "monthly" || freq === "every_x_months") && (
         <div>
           <p className="text-sm font-medium text-gray-700 mb-2">Op welke dag van de maand?</p>
           <div className="flex flex-wrap gap-1.5">
@@ -188,27 +195,23 @@ export default function RecurrenceEditor({ value, onChange }: Props) {
         </div>
       )}
 
-      {/* Stap 3: tijdstip */}
-      <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Hoe laat?</p>
-        <div className="flex items-center gap-2">
-          <input
-            type="number"
-            min={0} max={23}
-            value={String(hour).padStart(2, "0")}
-            onChange={e => handleTime(e.target.value, String(minute))}
-            className="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center font-mono"
-          />
-          <span className="text-gray-500 font-bold">:</span>
-          <input
-            type="number"
-            min={0} max={59}
-            value={String(minute).padStart(2, "0")}
-            onChange={e => handleTime(String(hour), e.target.value)}
-            className="w-16 border border-gray-300 rounded-lg px-2 py-2 text-sm text-center font-mono"
-          />
+      {/* Interval voor elke X maanden */}
+      {freq === "every_x_months" && (
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Elke hoeveel maanden?</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              min={1}
+              max={12}
+              value={everyXMonths}
+              onChange={e => handleEveryXMonths(parseInt(e.target.value) || 1)}
+              className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm text-center font-mono"
+            />
+            <span className="text-sm text-gray-500">maanden</span>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Samenvatting */}
       <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">

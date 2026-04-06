@@ -1,10 +1,12 @@
+from datetime import date, datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
 from pydantic import BaseModel
+from croniter import croniter
 
 from ..database import get_db
-from ..models import UserRole, Role, Category, Ticket, Status
+from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate
 from ..auth import RequireUser
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -88,6 +90,38 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
         select(func.count()).where(and_(Ticket.status == Status.open, Ticket.priority == "urgent", *count_filters[1:]))
     )
 
+    # Herhalende taken: vandaag gepland + aankomende
+    templates_result = await db.execute(
+        select(RecurringTemplate).where(RecurringTemplate.is_active == True)
+    )
+    all_templates = templates_result.scalars().all()
+
+    # Filter op afdeling (admins/supervisors zien alles)
+    if dept and not user.is_admin:
+        dept_templates = [t for t in all_templates if t.category == dept]
+    else:
+        dept_templates = list(all_templates)
+
+    today = date.today()
+    today_recurring = []
+    upcoming_recurring = []
+
+    for t in dept_templates:
+        try:
+            base_dt = datetime.combine(today, datetime.min.time()) - timedelta(seconds=1)
+            cron = croniter(t.cron_expression, base_dt)
+            next_run = cron.get_next(datetime)
+            if next_run.date() == today:
+                today_recurring.append(_template_dict(t, next_run))
+            # Volgende 5 voorkomens voor aankomende taken
+            upcoming_recurring.append((next_run, _template_dict(t, next_run)))
+        except Exception:
+            pass
+
+    # Sorteer aankomende en neem de eerste 5
+    upcoming_recurring.sort(key=lambda x: x[0])
+    upcoming_5 = [item for _, item in upcoming_recurring[:5]]
+
     return {
         "user": {
             "ha_user_id": user.ha_user_id,
@@ -102,6 +136,20 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
         },
         "my_tickets": [_ticket_dict(t) for t in my_tickets],
         "available_tickets": [_ticket_dict(t) for t in available],
+        "today_recurring": today_recurring,
+        "upcoming_recurring": upcoming_5,
+    }
+
+
+def _template_dict(t: RecurringTemplate, next_run: datetime) -> dict:
+    return {
+        "id": t.id,
+        "title": t.title,
+        "category": t.category,
+        "priority": t.priority,
+        "location_id": t.location_id,
+        "nfc_tag_id": t.nfc_tag_id,
+        "next_run": next_run.isoformat(),
     }
 
 

@@ -21,6 +21,7 @@ class TemplateCreate(BaseModel):
     cron_expression: str
     advance_days: int = 0
     is_active: bool = True
+    nfc_tag_id: str | None = None
 
 
 class TemplateUpdate(BaseModel):
@@ -33,6 +34,7 @@ class TemplateUpdate(BaseModel):
     cron_expression: str | None = None
     advance_days: int | None = None
     is_active: bool | None = None
+    nfc_tag_id: str | None = None
 
 
 class TemplateOut(BaseModel):
@@ -46,6 +48,7 @@ class TemplateOut(BaseModel):
     cron_expression: str
     advance_days: int
     is_active: bool
+    nfc_tag_id: str | None
 
     model_config = {"from_attributes": True}
 

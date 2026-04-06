@@ -4,43 +4,45 @@ import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
 import AreaSelector from "../components/AreaSelector";
 import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 
+const DEFAULT_CRON = "0 8 * * *";
+
+const EMPTY_FORM = {
+  title: "",
+  description: "",
+  category: "technical" as Category,
+  priority: "medium" as Priority,
+  location_id: null as string | null,
+  cron_expression: DEFAULT_CRON,
+  advance_days: 0,
+  is_active: true,
+  nfc_tag_id: "",
+};
+
 export default function RecurringTasks() {
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-
-  const [form, setForm] = useState({
-    title: "",
-    description: "",
-    category: "technical" as Category,
-    priority: "medium" as Priority,
-    location_id: null as string | null,
-    cron_expression: "0 8 * * 1-5",
-    advance_days: 0,
-    is_active: true,
-  });
+  const [form, setForm] = useState({ ...EMPTY_FORM });
 
   useEffect(() => {
     recurringApi.list().then((r) => setTemplates(r.data)).finally(() => setLoading(false));
   }, []);
 
   function resetForm() {
-    setForm({
-      title: "", description: "", category: "technical", priority: "medium",
-      location_id: null, cron_expression: "0 8 * * 1-5", advance_days: 0, is_active: true,
-    });
+    setForm({ ...EMPTY_FORM });
     setEditId(null);
     setShowForm(false);
   }
 
   async function saveTemplate() {
     if (!form.title.trim()) return;
+    const payload = { ...form, nfc_tag_id: form.nfc_tag_id || null };
     if (editId) {
-      const r = await recurringApi.update(editId, form);
+      const r = await recurringApi.update(editId, payload);
       setTemplates((prev) => prev.map((t) => t.id === editId ? r.data : t));
     } else {
-      const r = await recurringApi.create(form);
+      const r = await recurringApi.create(payload);
       setTemplates((prev) => [...prev, r.data]);
     }
     resetForm();
@@ -67,6 +69,7 @@ export default function RecurringTasks() {
       cron_expression: template.cron_expression,
       advance_days: template.advance_days,
       is_active: template.is_active,
+      nfc_tag_id: template.nfc_tag_id || "",
     });
     setEditId(template.id);
     setShowForm(true);
@@ -145,6 +148,20 @@ export default function RecurringTasks() {
             />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">NFC-tag ID <span className="text-gray-400 font-normal">(optioneel)</span></label>
+            <input
+              type="text"
+              value={form.nfc_tag_id}
+              onChange={(e) => setForm({ ...form, nfc_tag_id: e.target.value })}
+              placeholder="bijv. abc123-def456-..."
+              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+            />
+            <p className="text-xs text-gray-500 mt-1">
+              Koppel een HA NFC-tag aan deze taak. Scannen via de HA-app rondt de taak automatisch af.
+            </p>
+          </div>
+
           <div className="flex gap-2">
             <button onClick={saveTemplate} className="btn-primary">Opslaan</button>
             <button onClick={resetForm} className="btn-secondary">Annuleren</button>
@@ -170,6 +187,7 @@ export default function RecurringTasks() {
                 <div className="flex items-center gap-2">
                   <p className="font-medium">{t.title}</p>
                   {!t.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
+                  {t.nfc_tag_id && <span className="badge bg-purple-100 text-purple-700">📱 NFC</span>}
                 </div>
                 <div className="flex gap-1.5 mt-1">
                   <CategoryBadge category={t.category} />
