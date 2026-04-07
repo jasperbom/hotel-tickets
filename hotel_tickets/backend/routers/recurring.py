@@ -115,6 +115,7 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
         "subtask_mode": template.subtask_mode or "none",
         "subtask_items": subtask_items,
         "notify_when_free": template.notify_when_free,
+        "emoji": template.emoji,
         "next_run": _calc_next_run(template.cron_expression),
     }
 
