@@ -8,6 +8,8 @@ import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 
 const DEFAULT_CRON = "0 8 * * *";
 
+const HOTEL_EMOJIS = ["🛏️", "🧹", "🔧", "🚿", "🍽️", "🛁", "🔑", "🧺", "🧽", "🪴", "🔌", "💡", "🛗", "🏊", "🌡️", "❄️", "🧴", "🪣", "🚽", "🪟", "🛎️", "🍷", "☕", "🧻"];
+
 const EMPTY_FORM = {
   title: "",
   description: "",
@@ -21,6 +23,7 @@ const EMPTY_FORM = {
   notify_when_free: false,
   subtask_mode: "none" as SubtaskMode,
   subtask_items: [] as string[],
+  emoji: "",
 };
 
 export default function RecurringTasks() {
@@ -67,6 +70,7 @@ export default function RecurringTasks() {
     const payload = {
       ...form,
       nfc_tag_id: form.nfc_tag_id || null,
+      emoji: form.emoji || null,
       subtask_items: form.subtask_items.length > 0 ? form.subtask_items : null,
     };
     if (editId) {
@@ -104,6 +108,7 @@ export default function RecurringTasks() {
       notify_when_free: template.notify_when_free,
       subtask_mode: template.subtask_mode || "none",
       subtask_items: template.subtask_items || [],
+      emoji: template.emoji || "",
     });
     setEditId(template.id);
     setShowForm(true);
@@ -129,6 +134,39 @@ export default function RecurringTasks() {
               onChange={(e) => setForm({ ...form, title: e.target.value })}
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-2">Emoji <span className="text-gray-400 font-normal">(optioneel)</span></label>
+            <div className="flex flex-wrap gap-1.5 mb-2">
+              {HOTEL_EMOJIS.map((e) => (
+                <button
+                  key={e}
+                  type="button"
+                  onClick={() => setForm({ ...form, emoji: form.emoji === e ? "" : e })}
+                  className={`text-xl w-9 h-9 rounded-lg border-2 flex items-center justify-center transition-all ${
+                    form.emoji === e ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300 bg-white"
+                  }`}
+                >
+                  {e}
+                </button>
+              ))}
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-gray-500">Of typ zelf:</span>
+              <input
+                type="text"
+                value={form.emoji}
+                onChange={(e) => setForm({ ...form, emoji: e.target.value.slice(0, 4) })}
+                placeholder="✨"
+                className="w-16 border border-gray-300 rounded-lg px-2 py-1 text-center text-lg"
+              />
+              {form.emoji && (
+                <button type="button" onClick={() => setForm({ ...form, emoji: "" })} className="text-sm text-gray-400 hover:text-gray-600">
+                  Wissen
+                </button>
+              )}
+            </div>
           </div>
 
           <div>
@@ -286,6 +324,7 @@ export default function RecurringTasks() {
           )}
           {templates.map((t) => (
             <div key={t.id} className={`card flex items-center gap-3 ${!t.is_active ? "opacity-60" : ""}`}>
+              {t.emoji && <span className="text-2xl shrink-0">{t.emoji}</span>}
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
                   <Link to={`/recurring/${t.id}`} className="font-medium hover:text-blue-600">{t.title}</Link>

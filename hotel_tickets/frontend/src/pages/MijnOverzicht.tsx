@@ -62,7 +62,10 @@ export default function MijnOverzicht() {
   async function loadKeycards(tickets: Ticket[], recurring: UpcomingRecurring[], locs: Record<string, string>) {
     const ticketLocs = tickets.map(t => t.location_id).filter(Boolean) as string[];
     const recurringLocs = recurring.map(t => t.location_id).filter(Boolean) as string[];
-    const areaIds = [...new Set([...ticketLocs, ...recurringLocs])];
+    const roomsItems = recurring
+      .filter(t => t.subtask_mode === "rooms")
+      .flatMap(t => t.subtask_items ?? []);
+    const areaIds = [...new Set([...ticketLocs, ...recurringLocs, ...roomsItems])];
     const results = await Promise.allSettled(
       areaIds.map(id => locationApi.keycard(id).then(r => ({ id, occupied: r.data.found ? r.data.occupied : null })))
     );
@@ -80,7 +83,8 @@ export default function MijnOverzicht() {
       setOverview(ov.data);
       const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
       const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
-      loadKeycards(allTickets, ov.data.today_recurring ?? [], locMap);
+      const allRecurring = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
+      loadKeycards(allTickets, allRecurring, locMap);
     }).finally(() => setLoading(false));
   }, []);
 
@@ -90,7 +94,8 @@ export default function MijnOverzicht() {
     setOverview(ov.data);
     const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
     const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
-    loadKeycards(allTickets, ov.data.today_recurring ?? [], locMap);
+    const allRecurring = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
+    loadKeycards(allTickets, allRecurring, locMap);
   }
 
   if (loading) {
@@ -163,7 +168,7 @@ export default function MijnOverzicht() {
           <h2 className="font-semibold text-gray-900 mb-3">Vandaag te doen</h2>
           <div className="space-y-2">
             {visibleToday.map((t) => (
-              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} />
+              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} />
             ))}
           </div>
           {!showAllToday && today_recurring.length > 3 && (
@@ -226,7 +231,7 @@ export default function MijnOverzicht() {
           </div>
           <div className="space-y-2">
             {upcoming_recurring.map((t) => (
-              <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} />
+              <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} />
             ))}
           </div>
         </section>
@@ -338,24 +343,48 @@ function formatNextRun(dateStr: string): string {
   return format(date, "eee d MMM", { locale: nl });
 }
 
-function RecurringTaskRow({ task, locationName, occupied }: { task: UpcomingRecurring; locationName?: string; occupied?: boolean | null }) {
+function RecurringTaskRow({ task, locationName, occupied, keycards, locations }: {
+  task: UpcomingRecurring;
+  locationName?: string;
+  occupied?: boolean | null;
+  keycards?: Record<string, boolean | null>;
+  locations?: Record<string, string>;
+}) {
+  const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
+  const visibleRooms = isRoomsMode ? task.subtask_items!.slice(0, 2) : [];
+  const extraRooms = isRoomsMode ? task.subtask_items!.length - 2 : 0;
+
   return (
     <Link
       to={`/recurring/${task.id}`}
       className="card flex items-center gap-3 border-l-4 border-l-purple-400 p-3 hover:shadow-md transition-shadow"
     >
-      <span className="text-xl shrink-0">🔁</span>
+      <span className="text-xl shrink-0">{task.emoji || "🔁"}</span>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
         <div className="flex gap-1.5 mt-1 flex-wrap items-center">
           <CategoryBadge category={task.category} />
           <PriorityBadge priority={task.priority} />
-          {locationName && (
+          {locationName && !isRoomsMode && (
             <span className="flex items-center gap-1 text-xs text-gray-500">
               🚪 {locationName}
               {occupied === true && <span className="font-semibold px-1 rounded bg-orange-100 text-orange-700">Bezet</span>}
               {occupied === false && <span className="font-semibold px-1 rounded bg-green-100 text-green-700">Vrij</span>}
             </span>
+          )}
+          {isRoomsMode && visibleRooms.map((roomId) => {
+            const name = locations?.[roomId] ?? roomId;
+            const occ = keycards?.[roomId];
+            return (
+              <span key={roomId} className="flex items-center gap-1 text-xs text-gray-500">
+                🚪 {name}
+                {occ === true && <span className="font-semibold px-1 rounded bg-orange-100 text-orange-700">Bezet</span>}
+                {occ === false && <span className="font-semibold px-1 rounded bg-green-100 text-green-700">Vrij</span>}
+              </span>
+            );
+          })}
+          {isRoomsMode && extraRooms > 0 && (
+            <span className="text-xs text-gray-400">+{extraRooms} meer</span>
           )}
           {task.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
           {task.subtask_total !== undefined && (
@@ -374,18 +403,48 @@ function RecurringTaskRow({ task, locationName, occupied }: { task: UpcomingRecu
   );
 }
 
-function UpcomingRecurringRow({ task, locationName }: { task: UpcomingRecurring; locationName?: string }) {
+function UpcomingRecurringRow({ task, locationName, occupied, keycards, locations }: {
+  task: UpcomingRecurring;
+  locationName?: string;
+  occupied?: boolean | null;
+  keycards?: Record<string, boolean | null>;
+  locations?: Record<string, string>;
+}) {
+  const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
+  const visibleRooms = isRoomsMode ? task.subtask_items!.slice(0, 2) : [];
+  const extraRooms = isRoomsMode ? task.subtask_items!.length - 2 : 0;
+
   return (
     <Link
       to={`/recurring/${task.id}`}
       className="card flex items-center gap-3 p-3 hover:shadow-md transition-shadow"
     >
-      <span className="text-lg shrink-0">🗓️</span>
+      <span className="text-lg shrink-0">{task.emoji || "🗓️"}</span>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
-        <div className="flex gap-1.5 mt-1">
+        <div className="flex gap-1.5 mt-1 flex-wrap items-center">
           <CategoryBadge category={task.category} />
-          {locationName && <span className="text-xs text-gray-500">🚪 {locationName}</span>}
+          {locationName && !isRoomsMode && (
+            <span className="flex items-center gap-1 text-xs text-gray-500">
+              🚪 {locationName}
+              {occupied === true && <span className="font-semibold px-1 rounded bg-orange-100 text-orange-700">Bezet</span>}
+              {occupied === false && <span className="font-semibold px-1 rounded bg-green-100 text-green-700">Vrij</span>}
+            </span>
+          )}
+          {isRoomsMode && visibleRooms.map((roomId) => {
+            const name = locations?.[roomId] ?? roomId;
+            const occ = keycards?.[roomId];
+            return (
+              <span key={roomId} className="flex items-center gap-1 text-xs text-gray-500">
+                🚪 {name}
+                {occ === true && <span className="font-semibold px-1 rounded bg-orange-100 text-orange-700">Bezet</span>}
+                {occ === false && <span className="font-semibold px-1 rounded bg-green-100 text-green-700">Vrij</span>}
+              </span>
+            );
+          })}
+          {isRoomsMode && extraRooms > 0 && (
+            <span className="text-xs text-gray-400">+{extraRooms} meer</span>
+          )}
         </div>
       </div>
       <span className="text-xs font-medium text-gray-500 shrink-0">{formatNextRun(task.next_run)}</span>

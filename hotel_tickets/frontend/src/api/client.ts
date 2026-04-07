@@ -104,6 +104,7 @@ export interface RecurringTemplate {
   subtask_mode: SubtaskMode;
   subtask_items: string[] | null;
   notify_when_free: boolean;
+  emoji: string | null;
 }
 
 export interface ActiveTicket {
@@ -134,6 +135,9 @@ export interface UpcomingRecurring {
   next_run: string;
   subtask_done?: number;
   subtask_total?: number;
+  emoji?: string | null;
+  subtask_mode?: string;
+  subtask_items?: string[];
 }
 
 export interface Location {

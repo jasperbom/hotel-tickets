@@ -196,6 +196,9 @@ def _template_dict(t: RecurringTemplate, next_run: datetime, active_ticket: "Tic
         "location_id": t.location_id,
         "nfc_tag_id": t.nfc_tag_id,
         "next_run": next_run.isoformat(),
+        "emoji": t.emoji,
+        "subtask_mode": t.subtask_mode,
+        "subtask_items": json.loads(t.subtask_items) if t.subtask_items else [],
     }
     if active_ticket and active_ticket.subtasks:
         try:
