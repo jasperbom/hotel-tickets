@@ -165,7 +165,7 @@ export default function RecurringTaskDetail() {
         )}
 
         <div className="flex items-center gap-2 text-sm text-gray-600">
-          <span>🔁</span>
+          <span>{template.emoji || "🔁"}</span>
           <span>{cronToHuman(template.cron_expression)}</span>
         </div>
 

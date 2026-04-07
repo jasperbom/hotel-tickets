@@ -28,6 +28,7 @@ class TemplateCreate(BaseModel):
     subtask_mode: str = "none"  # none | subtasks | rooms
     subtask_items: list[str] | None = None
     notify_when_free: bool = False
+    emoji: str | None = None
 
 
 class TemplateUpdate(BaseModel):
@@ -44,6 +45,7 @@ class TemplateUpdate(BaseModel):
     subtask_mode: str | None = None
     subtask_items: list[str] | None = None
     notify_when_free: bool | None = None
+    emoji: str | None = None
 
 
 class TemplateOut(BaseModel):
@@ -61,6 +63,7 @@ class TemplateOut(BaseModel):
     subtask_mode: str
     subtask_items: list[str] | None
     notify_when_free: bool
+    emoji: str | None
     next_run: str | None = None
 
     model_config = {"from_attributes": True}

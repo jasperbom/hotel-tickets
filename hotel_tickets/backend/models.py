@@ -90,6 +90,7 @@ class RecurringTemplate(Base):
     subtask_mode: Mapped[str] = mapped_column(String(20), default="none")  # none | subtasks | rooms
     subtask_items: Mapped[str | None] = mapped_column(Text)  # JSON: [label, ...] or [area_id, ...]
     notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
+    emoji: Mapped[str | None] = mapped_column(String(10))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     tickets: Mapped[list[Ticket]] = relationship("Ticket", back_populates="recurring_template")
