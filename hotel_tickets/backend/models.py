@@ -56,6 +56,7 @@ class Ticket(Base):
     closed_by: Mapped[str | None] = mapped_column(String(255))  # HA user_id
     notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
     subtasks: Mapped[str | None] = mapped_column(Text)  # JSON: [{label, done, done_by, done_at}]
+    photos: Mapped[str | None] = mapped_column(Text)  # JSON: ["filename1.jpg", ...]
 
     comments: Mapped[list["TicketComment"]] = relationship("TicketComment", back_populates="ticket", cascade="all, delete-orphan")
     recurring_template: Mapped["RecurringTemplate | None"] = relationship("RecurringTemplate", back_populates="tickets")

@@ -2,6 +2,7 @@ import json
 import os
 import uuid as uuid_mod
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import FileResponse
@@ -75,12 +76,23 @@ class TicketOut(BaseModel):
     closed_by: str | None
     notify_when_free: bool
     subtasks: list | None = None
+    photos: list[str] | None = None
 
     model_config = {"from_attributes": True}
 
     @field_validator("subtasks", mode="before")
     @classmethod
     def parse_subtasks(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return None
+        return v
+
+    @field_validator("photos", mode="before")
+    @classmethod
+    def parse_photos(cls, v):
         if isinstance(v, str):
             try:
                 return json.loads(v)
@@ -411,6 +423,12 @@ async def upload_photo(
     with open(filepath, "wb") as f:
         f.write(content)
 
+    # Update photos JSON in DB voor overzicht-emoji
+    photos = json.loads(ticket.photos) if ticket.photos else []
+    photos.append(filename)
+    ticket.photos = json.dumps(photos)
+    ticket.updated_at = datetime.now(timezone.utc)
+
     return {"filename": filename, "size": len(content), "content_type": file.content_type}
 
 
@@ -443,7 +461,6 @@ async def get_photo(
     user: RequireUser,
 ):
     """Serveer een specifieke foto."""
-    # Voorkom path traversal
     if "/" in filename or "\\" in filename or ".." in filename:
         raise HTTPException(status_code=400, detail="Ongeldige bestandsnaam")
     filepath = os.path.join(UPLOAD_DIR, ticket_id, filename)
@@ -469,3 +486,9 @@ async def delete_photo(
     if not os.path.isfile(filepath):
         raise HTTPException(status_code=404, detail="Foto niet gevonden")
     os.remove(filepath)
+
+    # Update photos JSON in DB
+    photos = json.loads(ticket.photos) if ticket.photos else []
+    photos = [p for p in photos if p != filename]
+    ticket.photos = json.dumps(photos) if photos else None
+    ticket.updated_at = datetime.now(timezone.utc)

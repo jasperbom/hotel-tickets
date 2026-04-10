@@ -391,6 +391,11 @@ function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locat
               ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
             </span>
           )}
+          {ticket.photos && ticket.photos.length > 0 && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
+              📷 {ticket.photos.length}
+            </span>
+          )}
         </div>
         <p className="text-xs text-gray-400">
           {format(parseUTC(ticket.created_at), "d MMM", { locale: nl })}
@@ -438,7 +443,7 @@ function RecurringTaskRow({ task, locationName, occupied, keycards, locations }:
       {/* Titel + status badge */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base shrink-0">{task.emoji || "🔁"}</span>
+          <span className="text-base shrink-0">🔁</span>
           <p className={`font-medium text-sm truncate ${isOverdue ? "text-red-900" : "text-gray-900"}`}>{task.title}</p>
         </div>
         {isOverdue ? (
@@ -487,7 +492,7 @@ function UpcomingRecurringRow({ task, locationName, occupied, keycards, location
       to={`/recurring/${task.id}`}
       className="card flex items-center gap-3 p-3 hover:shadow-md transition-shadow"
     >
-      <span className="text-lg shrink-0">{task.emoji || "🗓️"}</span>
+      <span className="text-lg shrink-0">🔁</span>
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
         <div className="flex gap-1.5 mt-1 flex-wrap items-center">
@@ -540,6 +545,11 @@ function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; l
               ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
             </span>
           )}
+          {ticket.photos && ticket.photos.length > 0 && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
+              📷 {ticket.photos.length}
+            </span>
+          )}
         </div>
         <p className="text-xs text-red-400">
           {format(parseUTC(ticket.created_at), "d MMM HH:mm", { locale: nl })}
@@ -564,6 +574,11 @@ function AvailableTicketRow({ ticket, locationName, occupied, onClaim }: { ticke
             {ticket.subtasks && ticket.subtasks.length > 0 && (
               <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
                 ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
+              </span>
+            )}
+            {ticket.photos && ticket.photos.length > 0 && (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
+                📷 {ticket.photos.length}
               </span>
             )}
           </div>
