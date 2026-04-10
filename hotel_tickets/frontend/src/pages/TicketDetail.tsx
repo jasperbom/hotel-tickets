@@ -26,6 +26,7 @@ export default function TicketDetail() {
   const [editingBody, setEditingBody] = useState("");
   const [photos, setPhotos] = useState<{ filename: string }[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const usersMap = Object.fromEntries(users.map((u) => [u.ha_user_id, u.display_name]));
@@ -348,11 +349,16 @@ export default function TicketDetail() {
           <div className="grid grid-cols-2 gap-2">
             {photos.map((p) => (
               <div key={p.filename} className="relative group">
-                <img
-                  src={ticketApi.photoUrl(id!, p.filename)}
-                  alt=""
-                  className="w-full h-32 object-cover rounded-lg border border-gray-200"
-                />
+                <button
+                  onClick={() => setViewingPhoto(p.filename)}
+                  className="w-full focus:outline-none"
+                >
+                  <img
+                    src={ticketApi.photoUrl(id!, p.filename)}
+                    alt=""
+                    className="w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                  />
+                </button>
                 <button
                   onClick={() => deletePhoto(p.filename)}
                   className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -362,6 +368,27 @@ export default function TicketDetail() {
                 </button>
               </div>
             ))}
+          </div>
+        )}
+
+        {/* Foto lightbox */}
+        {viewingPhoto && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+            onClick={() => setViewingPhoto(null)}
+          >
+            <button
+              onClick={() => setViewingPhoto(null)}
+              className="absolute top-4 right-4 text-white text-3xl font-bold hover:opacity-80 z-10"
+            >
+              ✕
+            </button>
+            <img
+              src={ticketApi.photoUrl(id!, viewingPhoto)}
+              alt=""
+              className="max-w-full max-h-full object-contain rounded-lg"
+              onClick={(e) => e.stopPropagation()}
+            />
           </div>
         )}
 
