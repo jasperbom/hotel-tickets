@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -24,21 +24,26 @@ export default function TicketDetail() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [photos, setPhotos] = useState<{ filename: string }[]>([]);
+  const [uploading, setUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const usersMap = Object.fromEntries(users.map((u) => [u.ha_user_id, u.display_name]));
 
   const load = useCallback(async () => {
     if (!id) return;
-    const [t, c, u, locs] = await Promise.all([
+    const [t, c, u, locs, p] = await Promise.all([
       ticketApi.get(id),
       ticketApi.getComments(id),
       userApi.list(),
       locationApi.list(),
+      ticketApi.listPhotos(id),
     ]);
     setTicket(t.data);
     setComments(c.data);
     setUsers(u.data);
     setLocations(Object.fromEntries(locs.data.map((l) => [l.id, l.name])));
+    setPhotos(p.data);
 
     // Haal huidige gebruiker op voor commentaar-bewerking
     userApi.me().then((r) => setCurrentUserId(r.data.ha_user_id)).catch(() => {});
@@ -91,6 +96,37 @@ export default function TicketDetail() {
     setSaving(false);
   }
 
+  async function deleteComment(commentId: string) {
+    if (!id) return;
+    if (!confirm("Weet je zeker dat je dit commentaar wil verwijderen?")) return;
+    await ticketApi.deleteComment(id, commentId);
+    setComments((prev) => prev.filter((c) => c.id !== commentId));
+    setEditingCommentId(null);
+    setEditingBody("");
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    if (!id || !e.target.files?.length) return;
+    setUploading(true);
+    try {
+      for (const file of Array.from(e.target.files)) {
+        await ticketApi.uploadPhoto(id, file);
+      }
+      const p = await ticketApi.listPhotos(id);
+      setPhotos(p.data);
+    } finally {
+      setUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function deletePhoto(filename: string) {
+    if (!id) return;
+    if (!confirm("Foto verwijderen?")) return;
+    await ticketApi.deletePhoto(id, filename);
+    setPhotos((prev) => prev.filter((p) => p.filename !== filename));
+  }
+
   async function deleteTicket() {
     if (!id) return;
     if (!confirm("Weet je zeker dat je dit ticket wil verwijderen?")) return;
@@ -110,10 +146,14 @@ export default function TicketDetail() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      {/* Header */}
+      {/* Header met terug-knop en ticket sluiten/heropenen */}
       <div className="flex items-start gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700 mt-1 text-lg">←</button>
-        <div className="flex-1">
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+        <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold text-gray-900">{ticket.title}</h1>
           <div className="flex flex-wrap gap-1.5 mt-2">
             <StatusBadge status={ticket.status} />
@@ -121,6 +161,21 @@ export default function TicketDetail() {
             <CategoryBadge category={ticket.category} />
           </div>
         </div>
+        {ticket.status !== "closed" ? (
+          <button
+            onClick={() => updateField({ status: "closed" })}
+            className="shrink-0 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold text-sm transition-colors flex items-center gap-1.5"
+          >
+            <span>✓</span> Sluiten
+          </button>
+        ) : (
+          <button
+            onClick={() => updateField({ status: "open" })}
+            className="shrink-0 px-4 py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium transition-colors"
+          >
+            Heropenen
+          </button>
+        )}
       </div>
 
       {/* Kamer-banner */}
@@ -143,11 +198,6 @@ export default function TicketDetail() {
               </div>
             )}
           </div>
-          {keycard?.found === false && (
-            <div className="bg-blue-50 px-5 py-1.5 text-xs text-blue-400">
-              Geen keycard-sensor gevonden ({keycard.entity_id})
-            </div>
-          )}
 
           {/* Meld mij toggle — alleen als: toegewezen + kamer bezet + sensor gevonden */}
           {ticket.assigned_to && keycard?.found && keycard.occupied && (
@@ -183,7 +233,7 @@ export default function TicketDetail() {
         </div>
       )}
 
-      {/* Aangemaakt / gesloten door */}
+      {/* Info: Aangemaakt door / Gesloten door / Toegewezen aan */}
       <div className="card space-y-2 text-sm">
         <div className="flex items-center gap-2 text-gray-600">
           <span className="text-base">✏️</span>
@@ -206,6 +256,21 @@ export default function TicketDetail() {
             <span className="text-gray-400">{format(parseUTC(ticket.closed_at!), "d MMM yyyy HH:mm", { locale: nl })}</span>
           </div>
         )}
+
+        <div className="flex items-center gap-2 text-gray-600">
+          <span className="text-base">👤</span>
+          <span>Toegewezen aan</span>
+          <select
+            value={ticket.assigned_to || ""}
+            onChange={(e) => updateField({ assigned_to: e.target.value || null })}
+            className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white"
+          >
+            <option value="">— Niet toegewezen —</option>
+            {users.map((u) => (
+              <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
+            ))}
+          </select>
+        </div>
       </div>
 
       {/* Subtaken */}
@@ -245,24 +310,13 @@ export default function TicketDetail() {
       {/* Details */}
       <div className="card space-y-4">
         {ticket.description && (
-          <p className="text-gray-700 whitespace-pre-wrap">{ticket.description}</p>
+          <div>
+            <h2 className="font-semibold mb-1">Omschrijving</h2>
+            <p className="text-gray-700 whitespace-pre-wrap">{ticket.description}</p>
+          </div>
         )}
 
         <div className="grid grid-cols-2 gap-4 text-sm">
-          <div>
-            <p className="text-gray-500">Toegewezen aan</p>
-            <select
-              value={ticket.assigned_to || ""}
-              onChange={(e) => updateField({ assigned_to: e.target.value || null })}
-              className="mt-1 border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white w-full"
-            >
-              <option value="">— Niet toegewezen —</option>
-              {users.map((u) => (
-                <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
-              ))}
-            </select>
-          </div>
-
           <div>
             <p className="text-gray-500">Status</p>
             <select
@@ -283,24 +337,55 @@ export default function TicketDetail() {
               Ticket overnemen
             </button>
           )}
+        </div>
+      </div>
 
-          {ticket.status !== "closed" && (
-            <button
-              onClick={() => updateField({ status: "closed" })}
-              className="w-full py-3 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold text-base transition-colors flex items-center justify-center gap-2"
-            >
-              <span>✓</span> Ticket sluiten
-            </button>
-          )}
+      {/* Foto's */}
+      <div className="card space-y-3">
+        <h2 className="font-semibold">Foto's</h2>
 
-          {ticket.status === "closed" && (
-            <button
-              onClick={() => updateField({ status: "open" })}
-              className="w-full py-2 rounded-xl border border-gray-300 text-gray-600 hover:bg-gray-50 text-sm font-medium transition-colors"
-            >
-              Ticket heropenen
-            </button>
-          )}
+        {photos.length > 0 && (
+          <div className="grid grid-cols-2 gap-2">
+            {photos.map((p) => (
+              <div key={p.filename} className="relative group">
+                <img
+                  src={ticketApi.photoUrl(id!, p.filename)}
+                  alt=""
+                  className="w-full h-32 object-cover rounded-lg border border-gray-200"
+                />
+                <button
+                  onClick={() => deletePhoto(p.filename)}
+                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-6 h-6 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                  title="Verwijderen"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {photos.length === 0 && (
+          <p className="text-sm text-gray-400 text-center py-2">Nog geen foto's</p>
+        )}
+
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/*"
+          capture="environment"
+          multiple
+          onChange={handlePhotoUpload}
+          className="hidden"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading}
+            className="btn-secondary flex-1 flex items-center justify-center gap-2 text-sm"
+          >
+            {uploading ? "Uploaden..." : (<><span>📷</span> Foto toevoegen</>)}
+          </button>
         </div>
       </div>
 
@@ -318,13 +403,22 @@ export default function TicketDetail() {
                 <div className="flex items-center gap-2">
                   <span>{format(parseUTC(c.created_at), "d MMM HH:mm", { locale: nl })}</span>
                   {currentUserId === c.author_id && editingCommentId !== c.id && (
-                    <button
-                      onClick={() => { setEditingCommentId(c.id); setEditingBody(c.body); }}
-                      className="text-blue-500 hover:text-blue-700"
-                      title="Bewerken"
-                    >
-                      ✏️
-                    </button>
+                    <>
+                      <button
+                        onClick={() => { setEditingCommentId(c.id); setEditingBody(c.body); }}
+                        className="text-blue-500 hover:text-blue-700"
+                        title="Bewerken"
+                      >
+                        ✏️
+                      </button>
+                      <button
+                        onClick={() => deleteComment(c.id)}
+                        className="text-red-400 hover:text-red-600"
+                        title="Verwijderen"
+                      >
+                        🗑️
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -343,6 +437,12 @@ export default function TicketDetail() {
                       className="btn-primary text-sm"
                     >
                       Opslaan
+                    </button>
+                    <button
+                      onClick={() => deleteComment(c.id)}
+                      className="text-sm text-red-600 hover:text-red-700 font-medium px-3 py-1.5"
+                    >
+                      Verwijderen
                     </button>
                     <button
                       onClick={() => { setEditingCommentId(null); setEditingBody(""); }}

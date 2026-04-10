@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { recurringApi, locationApi, ticketApi, parseUTC, type RecurringTemplate, type HistoryEntry, type ActiveTicket, type KeycardStatus } from "../api/client";
+import { recurringApi, locationApi, ticketApi, userApi, parseUTC, type RecurringTemplate, type HistoryEntry, type ActiveTicket, type KeycardStatus, type UserRole } from "../api/client";
 import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 import { cronToHuman } from "../components/RecurrenceEditor";
 
@@ -14,6 +14,7 @@ export default function RecurringTaskDetail() {
   const [activeTickets, setActiveTickets] = useState<ActiveTicket[]>([]);
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [keycards, setKeycards] = useState<Record<string, KeycardStatus>>({});
+  const [users, setUsers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [completing, setCompleting] = useState<string | "all" | null>(null);
   const [subtaskLoading, setSubtaskLoading] = useState(false);
@@ -21,15 +22,17 @@ export default function RecurringTaskDetail() {
 
   async function load() {
     if (!id) return;
-    const [tmpl, hist, locs, active] = await Promise.all([
+    const [tmpl, hist, locs, active, u] = await Promise.all([
       recurringApi.get(id),
       recurringApi.history(id),
       locationApi.list(),
       recurringApi.activeTickets(id),
+      userApi.list(),
     ]);
     setTemplate(tmpl.data);
     setHistory(hist.data);
     setActiveTickets(active.data);
+    setUsers(Object.fromEntries(u.data.map((user) => [user.ha_user_id, user.display_name])));
     const locMap = Object.fromEntries(locs.data.map((l) => [l.id, l.name]));
     setLocations(locMap);
 
@@ -134,7 +137,11 @@ export default function RecurringTaskDetail() {
     <div className="space-y-4">
       {/* Header boven de kaart — zoals TicketDetail */}
       <div className="flex items-start gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700 mt-1 text-lg shrink-0">←</button>
+        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
+          <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
         <div className="flex-1 min-w-0">
           <h1 className="text-xl font-bold text-gray-900">{template.title}</h1>
           <div className="flex gap-1.5 mt-2 flex-wrap">
@@ -148,6 +155,20 @@ export default function RecurringTaskDetail() {
             {isRoomsMode && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
           </div>
         </div>
+        {/* Afrond-knop rechtsboven (enkelvoudig/subtaken) */}
+        {!isRoomsMode && (
+          <button
+            onClick={() => handleComplete()}
+            disabled={doneToday || completing !== null || !template.is_active}
+            className={`shrink-0 px-4 py-2 rounded-xl font-semibold text-sm transition-all ${
+              doneToday || !template.is_active
+                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
+          >
+            {completing === "all" ? "Bezig..." : doneToday ? "✓ Afgerond" : "✓ Afronden"}
+          </button>
+        )}
       </div>
 
       {/* Kamer-banner (enkelvoudig/subtaken) */}
@@ -229,21 +250,6 @@ export default function RecurringTaskDetail() {
             </button>
             <label className="text-sm text-gray-700">🔑 Meld mij wanneer de kamer vrij is</label>
           </div>
-        )}
-
-        {/* Afronden knop (enkelvoudig/subtaken) */}
-        {!isRoomsMode && (
-          <button
-            onClick={() => handleComplete()}
-            disabled={doneToday || completing !== null || !template.is_active}
-            className={`w-full py-3 rounded-xl font-semibold text-sm transition-all ${
-              doneToday || !template.is_active
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "bg-green-600 text-white hover:bg-green-700 active:scale-95"
-            }`}
-          >
-            {completing === "all" ? "Bezig..." : doneToday ? "✓ Al afgerond vandaag" : "✓ Taak afronden"}
-          </button>
         )}
 
         {/* Alles afronden (kamers) */}
@@ -422,7 +428,7 @@ export default function RecurringTaskDetail() {
                       ? "Via NFC"
                       : entry.closed_by === "system"
                       ? "Systeem"
-                      : entry.closed_by || "Onbekend"}
+                      : (entry.closed_by && users[entry.closed_by]) || entry.closed_by || "Onbekend"}
                   </span>
                 </div>
                 <span className="text-xs text-gray-400 shrink-0">
