@@ -6,7 +6,7 @@ import {
 import { reportApi, type ReportSummary, type TimelinePoint } from "../api/client";
 
 const CATEGORY_COLORS = { technical: "#8b5cf6", housekeeping: "#14b8a6", reception: "#6366f1" };
-const CATEGORY_LABELS = { technical: "Technisch", housekeeping: "Huishouding", reception: "Receptie" };
+const CATEGORY_LABELS = { technical: "TD", housekeeping: "Huishouding", reception: "Receptie" };
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);

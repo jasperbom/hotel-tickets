@@ -17,7 +17,7 @@ create_ticket:
       selector:
         select:
           options:
-            - label: "Technische dienst"
+            - label: "TD"
               value: "technical"
             - label: "Huishouding"
               value: "housekeeping"

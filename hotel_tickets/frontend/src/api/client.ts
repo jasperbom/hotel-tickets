@@ -74,6 +74,7 @@ export interface Comment {
   author_id: string;
   body: string;
   created_at: string;
+  updated_at: string | null;
 }
 
 export interface UserRole {
@@ -180,17 +181,21 @@ export const ticketApi = {
   remove: (id: string) => api.delete(`/tickets/${id}`),
   getComments: (id: string) => api.get<Comment[]>(`/tickets/${id}/comments`),
   addComment: (id: string, body: string) => api.post<Comment>(`/tickets/${id}/comments`, { body }),
+  updateComment: (ticketId: string, commentId: string, body: string) =>
+    api.patch<Comment>(`/tickets/${ticketId}/comments/${commentId}`, { body }),
+  deleteComment: (ticketId: string, commentId: string) =>
+    api.delete(`/tickets/${ticketId}/comments/${commentId}`),
   updateSubtask: (id: string, index: number, done: boolean) =>
     api.patch<{ ok: boolean; subtasks: Subtask[] }>(`/tickets/${id}/subtasks`, { index, done }),
+  listPhotos: (id: string) => api.get<{ filename: string }[]>(`/tickets/${id}/photos`),
   uploadPhoto: (id: string, file: File) => {
-    const formData = new FormData();
-    formData.append("file", file);
-    return api.post<{ ok: boolean; filename: string; photos: string[] }>(`/tickets/${id}/photos`, formData, {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<{ filename: string }>(`/tickets/${id}/photos`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
-  deletePhoto: (id: string, filename: string) =>
-    api.delete<{ ok: boolean; photos: string[] }>(`/tickets/${id}/photos/${filename}`),
+  deletePhoto: (id: string, filename: string) => api.delete(`/tickets/${id}/photos/${filename}`),
   photoUrl: (id: string, filename: string) => `${API_BASE}/tickets/${id}/photos/${filename}`,
 };
 

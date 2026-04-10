@@ -70,6 +70,7 @@ class TicketComment(Base):
     author_id: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id
     body: Mapped[str] = mapped_column(Text, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime | None] = mapped_column(DateTime)
 
     ticket: Mapped[Ticket] = relationship("Ticket", back_populates="comments")
 

@@ -150,7 +150,7 @@ export default function RecurringTasks() {
                 onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
                 className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
-                <option value="technical">Technisch</option>
+                <option value="technical">TD</option>
                 <option value="housekeeping">Huishouding</option>
                 <option value="reception">Receptie</option>
               </select>
@@ -286,38 +286,47 @@ export default function RecurringTasks() {
             </div>
           )}
           {templates.map((t) => (
-            <div key={t.id} className={`card flex items-center gap-3 ${!t.is_active ? "opacity-60" : ""}`}>
-              <span className="text-2xl shrink-0">🔁</span>
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <Link to={`/recurring/${t.id}`} className="font-medium hover:text-blue-600">{t.title}</Link>
-                  {!t.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
-                  {t.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
-                  {t.subtask_mode === "subtasks" && <span className="badge bg-blue-50 text-blue-600">☑️ Subtaken</span>}
-                  {t.subtask_mode === "rooms" && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
+            <div key={t.id} className={`card overflow-hidden ${!t.is_active ? "opacity-60" : ""}`}>
+              {/* Blauwe kamer-bar */}
+              {t.location_id && locations[t.location_id] && t.subtask_mode !== "rooms" && (
+                <div className="flex items-center gap-3 bg-blue-600 text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
+                  <span className="text-lg">🚪</span>
+                  <span className="font-bold tracking-wide">{locations[t.location_id]}</span>
                 </div>
-                <div className="flex gap-1.5 mt-1 flex-wrap items-center">
-                  <CategoryBadge category={t.category} />
-                  <PriorityBadge priority={t.priority} />
-                  <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression)}</span>
-                  {t.location_id && locations[t.location_id] && (
-                    <span className="text-xs text-gray-500">🚪 {locations[t.location_id]}</span>
-                  )}
-                  {t.subtask_mode === "rooms" && t.subtask_items && t.subtask_items.length > 0 && (
-                    <span className="text-xs text-gray-500">{t.subtask_items.length} kamers</span>
-                  )}
+              )}
+              {t.subtask_mode === "rooms" && t.subtask_items && t.subtask_items.length > 0 && (
+                <div className="flex items-center gap-3 bg-blue-600 text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
+                  <span className="text-lg">🚪</span>
+                  <span className="font-bold tracking-wide">{t.subtask_items.length} kamers</span>
                 </div>
-              </div>
-              <div className="flex gap-2 shrink-0">
-                <button onClick={() => toggleActive(t)} className="text-sm text-gray-500 hover:text-gray-700">
-                  {t.is_active ? "Pauzeren" : "Activeren"}
-                </button>
-                <button onClick={() => startEdit(t)} className="text-sm text-blue-600 hover:text-blue-700">
-                  Bewerken
-                </button>
-                <button onClick={() => deleteTemplate(t.id)} className="text-sm text-red-600 hover:text-red-700">
-                  Verwijderen
-                </button>
+              )}
+              <div className="flex items-center gap-3">
+                <span className="text-2xl shrink-0">🔁</span>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Link to={`/recurring/${t.id}`} className="font-medium hover:text-blue-600">{t.title}</Link>
+                    {!t.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
+                    {t.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
+                    {t.subtask_mode === "subtasks" && <span className="badge bg-blue-50 text-blue-600">☑️ Subtaken</span>}
+                    {t.subtask_mode === "rooms" && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
+                  </div>
+                  <div className="flex gap-1.5 mt-1 flex-wrap items-center">
+                    <CategoryBadge category={t.category} />
+                    <PriorityBadge priority={t.priority} />
+                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression)}</span>
+                  </div>
+                </div>
+                <div className="flex gap-2 shrink-0">
+                  <button onClick={() => toggleActive(t)} className="text-sm text-gray-500 hover:text-gray-700">
+                    {t.is_active ? "Pauzeren" : "Activeren"}
+                  </button>
+                  <button onClick={() => startEdit(t)} className="text-sm text-blue-600 hover:text-blue-700">
+                    Bewerken
+                  </button>
+                  <button onClick={() => deleteTemplate(t.id)} className="text-sm text-red-600 hover:text-red-700">
+                    Verwijderen
+                  </button>
+                </div>
               </div>
             </div>
           ))}
