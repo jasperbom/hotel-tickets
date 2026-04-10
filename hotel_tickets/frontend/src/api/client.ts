@@ -73,6 +73,7 @@ export interface Comment {
   author_id: string;
   body: string;
   created_at: string;
+  updated_at: string | null;
 }
 
 export interface UserRole {
@@ -179,6 +180,8 @@ export const ticketApi = {
   remove: (id: string) => api.delete(`/tickets/${id}`),
   getComments: (id: string) => api.get<Comment[]>(`/tickets/${id}/comments`),
   addComment: (id: string, body: string) => api.post<Comment>(`/tickets/${id}/comments`, { body }),
+  updateComment: (ticketId: string, commentId: string, body: string) =>
+    api.patch<Comment>(`/tickets/${ticketId}/comments/${commentId}`, { body }),
   updateSubtask: (id: string, index: number, done: boolean) =>
     api.patch<{ ok: boolean; subtasks: Subtask[] }>(`/tickets/${id}/subtasks`, { index, done }),
 };

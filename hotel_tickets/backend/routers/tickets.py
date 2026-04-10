@@ -82,12 +82,17 @@ class TicketOut(BaseModel):
         return v
 
 
+class CommentUpdate(BaseModel):
+    body: str
+
+
 class CommentOut(BaseModel):
     id: str
     ticket_id: str
     author_id: str
     body: str
     created_at: datetime
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -133,7 +138,10 @@ async def list_tickets(
     if priority:
         filters.append(Ticket.priority == priority)
     if assigned_to:
-        filters.append(Ticket.assigned_to == assigned_to)
+        if assigned_to == "me":
+            filters.append(Ticket.assigned_to == user.ha_user_id)
+        else:
+            filters.append(Ticket.assigned_to == assigned_to)
     if location_id:
         filters.append(Ticket.location_id == location_id)
 
@@ -326,5 +334,24 @@ async def add_comment(
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
     comment = TicketComment(ticket_id=ticket_id, author_id=user.ha_user_id, body=body.body)
     db.add(comment)
+    await db.flush()
+    return comment
+
+
+@router.patch("/{ticket_id}/comments/{comment_id}", response_model=CommentOut)
+async def update_comment(
+    ticket_id: str,
+    comment_id: str,
+    body: CommentUpdate,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    comment = await db.get(TicketComment, comment_id)
+    if not comment or comment.ticket_id != ticket_id:
+        raise HTTPException(status_code=404, detail="Commentaar niet gevonden")
+    if comment.author_id != user.ha_user_id:
+        raise HTTPException(status_code=403, detail="Je kunt alleen je eigen commentaar bewerken")
+    comment.body = body.body
+    comment.updated_at = datetime.now(timezone.utc)
     await db.flush()
     return comment

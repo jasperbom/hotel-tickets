@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState, useRef } from "react";
+import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import api, { ticketApi, locationApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
@@ -33,7 +33,7 @@ const ROLE_LABELS: Record<Role, string> = {
 };
 
 const DEPT_LABELS: Record<Category, string> = {
-  technical: "Technische dienst",
+  technical: "TD",
   housekeeping: "Huishouding",
   reception: "Receptie",
 };
@@ -58,6 +58,9 @@ export default function MijnOverzicht() {
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
   const [showAllToday, setShowAllToday] = useState(false);
+  const [deptFilter, setDeptFilter] = useState<Category | "">("");
+  const todaySectionRef = useRef<HTMLElement>(null);
+  const navigate = useNavigate();
 
   async function loadKeycards(tickets: Ticket[], recurring: UpcomingRecurring[], locs: Record<string, string>) {
     const ticketLocs = tickets.map(t => t.location_id).filter(Boolean) as string[];
@@ -75,27 +78,32 @@ export default function MijnOverzicht() {
     setLocations(locs);
   }
 
-  useEffect(() => {
-    Promise.all([
-      api.get<Overview>("/users/me/overview"),
+  async function loadData(dept?: Category | "") {
+    const params = dept ? `?department=${dept}` : "";
+    const [ov, locs] = await Promise.all([
+      api.get<Overview>(`/users/me/overview${params}`),
       locationApi.list(),
-    ]).then(([ov, locs]) => {
-      setOverview(ov.data);
-      const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
-      const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
-      const allRecurring = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
-      loadKeycards(allTickets, allRecurring, locMap);
-    }).finally(() => setLoading(false));
-  }, []);
-
-  async function claimTicket(ticketId: string) {
-    await ticketApi.claim(ticketId);
-    const [ov, locs] = await Promise.all([api.get<Overview>("/users/me/overview"), locationApi.list()]);
+    ]);
     setOverview(ov.data);
     const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
     const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
     const allRecurring = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
     loadKeycards(allTickets, allRecurring, locMap);
+  }
+
+  useEffect(() => {
+    loadData(deptFilter).finally(() => setLoading(false));
+  }, []);
+
+  function changeDeptFilter(value: Category | "") {
+    setDeptFilter(value);
+    setLoading(true);
+    loadData(value).finally(() => setLoading(false));
+  }
+
+  async function claimTicket(ticketId: string) {
+    await ticketApi.claim(ticketId);
+    await loadData(deptFilter);
   }
 
   if (loading) {
@@ -125,24 +133,53 @@ export default function MijnOverzicht() {
         </p>
       </div>
 
+      {/* Afdelingsfilter voor admin/supervisor */}
+      {isManager && (
+        <div className="flex gap-2 flex-wrap">
+          {([["", "Alle afdelingen"], ["technical", "TD"], ["housekeeping", "Huishouding"], ["reception", "Receptie"]] as const).map(([val, label]) => (
+            <button
+              key={val}
+              onClick={() => changeDeptFilter(val as Category | "")}
+              className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+                deptFilter === val
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Statistieken */}
-      <div className="grid grid-cols-3 gap-3">
+      <div className="grid grid-cols-4 gap-3">
         <StatCard
           value={stats.my_open}
           label="Mijn openstaand"
           color="blue"
           empty="Niets te doen"
+          onClick={() => navigate("/tickets?status=open,in_progress&assigned=me")}
         />
         <StatCard
           value={stats.team_open}
           label={isManager ? "Totaal open" : "Team open"}
           color="gray"
+          onClick={() => navigate("/tickets?status=open,in_progress")}
         />
         <StatCard
           value={stats.urgent}
           label="Urgent"
           color={stats.urgent > 0 ? "red" : "gray"}
           pulse={stats.urgent > 0}
+          onClick={() => navigate("/tickets?priority=urgent&status=open,in_progress")}
+        />
+        <StatCard
+          value={today_recurring.length}
+          label="Herhalend vandaag"
+          color="purple"
+          empty="Geen taken"
+          onClick={() => todaySectionRef.current?.scrollIntoView({ behavior: "smooth" })}
         />
       </div>
 
@@ -162,10 +199,14 @@ export default function MijnOverzicht() {
         </section>
       )}
 
-      {/* Vandaag te doen */}
+      {/* Herhalende taken vandaag */}
       {today_recurring.length > 0 && (
-        <section>
-          <h2 className="font-semibold text-gray-900 mb-3">Vandaag te doen</h2>
+        <section ref={todaySectionRef}>
+          <div className="flex items-center gap-2 mb-3">
+            <span className="text-purple-600 text-lg">🔁</span>
+            <h2 className="font-semibold text-gray-900">Herhalende taken vandaag</h2>
+            <span className="text-xs font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded-full">{today_recurring.length}</span>
+          </div>
           <div className="space-y-2">
             {visibleToday.map((t) => (
               <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} />
@@ -185,7 +226,10 @@ export default function MijnOverzicht() {
       {/* Mijn tickets */}
       <section>
         <div className="flex items-center justify-between mb-3">
-          <h2 className="font-semibold text-gray-900">Mijn openstaande tickets</h2>
+          <div className="flex items-center gap-2">
+            <span className="text-blue-600 text-lg">🎫</span>
+            <h2 className="font-semibold text-gray-900">Mijn openstaande tickets</h2>
+          </div>
           <Link to="/tickets?assigned=me" className="text-sm text-blue-600 hover:underline">
             Alle →
           </Link>
@@ -209,7 +253,10 @@ export default function MijnOverzicht() {
       {available_tickets.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900">Beschikbaar om op te pakken</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-blue-600 text-lg">🎫</span>
+              <h2 className="font-semibold text-gray-900">Beschikbaar om op te pakken</h2>
+            </div>
             <Link to="/tickets?status=open" className="text-sm text-blue-600 hover:underline">
               Alle open →
             </Link>
@@ -226,7 +273,10 @@ export default function MijnOverzicht() {
       {upcoming_recurring.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900">Aankomende herhalende taken</h2>
+            <div className="flex items-center gap-2">
+              <span className="text-purple-600 text-lg">🔁</span>
+              <h2 className="font-semibold text-gray-900">Aankomende taken</h2>
+            </div>
             <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
           </div>
           <div className="space-y-2">
@@ -253,28 +303,33 @@ export default function MijnOverzicht() {
 }
 
 function StatCard({
-  value, label, color, empty, pulse = false,
+  value, label, color, empty, pulse = false, onClick,
 }: {
   value: number;
   label: string;
-  color: "blue" | "red" | "gray";
+  color: "blue" | "red" | "gray" | "purple";
   empty?: string;
   pulse?: boolean;
+  onClick?: () => void;
 }) {
   const colors = {
     blue: "bg-blue-50 text-blue-700",
     red: "bg-red-50 text-red-700",
     gray: "bg-gray-100 text-gray-600",
+    purple: "bg-purple-50 text-purple-700",
   };
   return (
-    <div className={`rounded-xl p-3 text-center ${colors[color]}`}>
+    <button
+      onClick={onClick}
+      className={`rounded-xl p-3 text-center ${colors[color]} cursor-pointer hover:shadow-md transition-shadow w-full`}
+    >
       <div className="relative inline-block">
         <p className={`text-3xl font-bold ${pulse ? "animate-pulse" : ""}`}>{value}</p>
       </div>
       <p className="text-xs font-medium mt-1 opacity-80 leading-tight">
         {value === 0 && empty ? empty : label}
       </p>
-    </div>
+    </button>
   );
 }
 
@@ -351,29 +406,41 @@ function RecurringTaskRow({ task, locationName, occupied, keycards, locations }:
   locations?: Record<string, string>;
 }) {
   const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
+  const nextRunDate = parseUTC(task.next_run);
+  const isOverdue = nextRunDate < new Date();
 
   return (
     <Link
       to={`/recurring/${task.id}`}
-      className="card flex flex-col gap-1.5 border-l-4 border-l-purple-400 p-3 hover:shadow-md transition-shadow"
+      className={`card flex flex-col gap-1.5 border-l-4 p-3 hover:shadow-md transition-shadow ${
+        isOverdue ? "border-l-red-500 bg-red-50" : "border-l-purple-400"
+      }`}
     >
-      {/* Kamer(s) bovenaan — zelfde patroon als openstaande tickets */}
+      {/* Kamer(s) bovenaan */}
       {locationName && !isRoomsMode && <RoomBadge name={locationName} occupied={occupied} />}
       {isRoomsMode && task.subtask_items!.map((roomId) => (
         <RoomBadge key={roomId} name={locations?.[roomId] ?? roomId} occupied={keycards?.[roomId]} />
       ))}
 
-      {/* Titel + "Vandaag" badge */}
+      {/* Titel + status badge */}
       <div className="flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-base shrink-0">{task.emoji || "🔁"}</span>
-          <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
+          <p className={`font-medium text-sm truncate ${isOverdue ? "text-red-900" : "text-gray-900"}`}>{task.title}</p>
         </div>
-        <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-lg shrink-0">Vandaag</span>
+        {isOverdue ? (
+          <div className="flex items-center gap-1.5 shrink-0">
+            <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-lg">Verlopen</span>
+            <span className="text-xs text-red-500">{format(nextRunDate, "HH:mm")}</span>
+          </div>
+        ) : (
+          <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-lg shrink-0">Vandaag</span>
+        )}
       </div>
 
       {/* Badges */}
       <div className="flex gap-1.5 items-center flex-wrap">
+        <span className="badge bg-purple-100 text-purple-700">Herhalend</span>
         <CategoryBadge category={task.category} />
         <PriorityBadge priority={task.priority} />
         {task.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
@@ -411,6 +478,7 @@ function UpcomingRecurringRow({ task, locationName, occupied, keycards, location
       <div className="flex-1 min-w-0">
         <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
         <div className="flex gap-1.5 mt-1 flex-wrap items-center">
+          <span className="badge bg-purple-100 text-purple-700">Herhalend</span>
           <CategoryBadge category={task.category} />
           {locationName && !isRoomsMode && (
             <span className="flex items-center gap-1 text-xs text-gray-500">

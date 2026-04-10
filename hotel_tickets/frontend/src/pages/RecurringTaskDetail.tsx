@@ -150,20 +150,30 @@ export default function RecurringTaskDetail() {
         </div>
       </div>
 
-      {/* Kaart */}
-      <div className="card space-y-3">
-        {/* Locatie + keycard (enkelvoudig/subtaken) */}
-        {!isRoomsMode && locationName && (
-          <div className="flex items-center gap-2">
-            <span className="text-sm text-gray-600">🚪 {locationName}</span>
+      {/* Kamer-banner (enkelvoudig/subtaken) */}
+      {!isRoomsMode && locationName && (
+        <div className="rounded-xl overflow-hidden border border-blue-200">
+          <div className="flex items-center justify-between bg-blue-600 text-white px-5 py-3">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">🚪</span>
+              <span className="text-xl font-bold tracking-wide">{locationName}</span>
+            </div>
             {keycard?.found && (
-              keycard.occupied
-                ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Bezet</span>
-                : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">Vrij</span>
+              <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-semibold ${
+                keycard.occupied
+                  ? "bg-orange-400 text-white"
+                  : "bg-green-400 text-white"
+              }`}>
+                <span>{keycard.occupied ? "🔑" : "🔓"}</span>
+                <span>{keycard.occupied ? "Bezet" : "Vrij"}</span>
+              </div>
             )}
           </div>
-        )}
+        </div>
+      )}
 
+      {/* Kaart */}
+      <div className="card space-y-3">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span>{template.emoji || "🔁"}</span>
           <span>{cronToHuman(template.cron_expression)}</span>

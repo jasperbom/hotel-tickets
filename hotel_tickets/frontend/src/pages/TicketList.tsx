@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { ticketApi, locationApi, userApi, type Ticket, type Category, type Status, type Priority } from "../api/client";
 import TicketCard from "../components/TicketCard";
 
 const DEPARTMENTS = [
   { value: "", label: "Alle afdelingen" },
-  { value: "technical", label: "Technisch" },
+  { value: "technical", label: "TD" },
   { value: "housekeeping", label: "Huishouding" },
   { value: "reception", label: "Receptie" },
 ];
@@ -25,19 +25,29 @@ const PRIORITIES = [
 ];
 
 export default function TicketList() {
+  const [searchParams] = useSearchParams();
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
 
-  const [department, setDepartment] = useState("");
-  const [selectedStatuses, setSelectedStatuses] = useState<Status[]>(["open", "in_progress"]);
-  const [priority, setPriority] = useState("");
+  // Initialiseer filters vanuit URL params
+  const urlStatus = searchParams.get("status");
+  const urlCategory = searchParams.get("category");
+  const urlPriority = searchParams.get("priority");
+  const urlAssigned = searchParams.get("assigned");
+
+  const [department, setDepartment] = useState(urlCategory || "");
+  const [selectedStatuses, setSelectedStatuses] = useState<Status[]>(
+    urlStatus ? urlStatus.split(",").filter((s): s is Status => ["open", "in_progress", "closed"].includes(s)) : ["open", "in_progress"]
+  );
+  const [priority, setPriority] = useState(urlPriority || "");
+  const [assignedToMe, setAssignedToMe] = useState(urlAssigned === "me");
 
   function toggleStatus(value: Status) {
     setSelectedStatuses((prev) =>
       prev.includes(value)
-        ? prev.length > 1 ? prev.filter((s) => s !== value) : prev // keep at least one
+        ? prev.length > 1 ? prev.filter((s) => s !== value) : prev
         : [...prev, value]
     );
   }
@@ -55,11 +65,12 @@ export default function TicketList() {
     if (department) params.category = department;
     if (selectedStatuses.length < 3) params.status = selectedStatuses.join(",");
     if (priority) params.priority = priority;
+    if (assignedToMe) params.assigned_to = "me";
 
     ticketApi.list(params)
       .then((r) => setTickets(r.data))
       .finally(() => setLoading(false));
-  }, [department, selectedStatuses, priority]);
+  }, [department, selectedStatuses, priority, assignedToMe]);
 
   return (
     <div className="space-y-4">
@@ -92,7 +103,7 @@ export default function TicketList() {
           })}
         </div>
 
-        {/* Afdeling + prioriteit dropdowns */}
+        {/* Afdeling + prioriteit + mijn tickets */}
         <div className="flex flex-wrap gap-2">
           <select
             value={department}
@@ -108,6 +119,17 @@ export default function TicketList() {
           >
             {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
           </select>
+          <button
+            onClick={() => setAssignedToMe(!assignedToMe)}
+            className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+              assignedToMe
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+            }`}
+          >
+            {assignedToMe && <span className="text-xs mr-1">✓</span>}
+            Mijn tickets
+          </button>
         </div>
       </div>
 

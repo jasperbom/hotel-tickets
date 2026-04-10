@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type KeycardStatus } from "../api/client";
+import { ticketApi, userApi, locationApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type KeycardStatus, type Role } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "../components/StatusBadge";
 
 const STATUS_OPTIONS: { value: Status; label: string }[] = [
@@ -21,6 +21,9 @@ export default function TicketDetail() {
   const [keycard, setKeycard] = useState<KeycardStatus | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
 
   const usersMap = Object.fromEntries(users.map((u) => [u.ha_user_id, u.display_name]));
 
@@ -36,6 +39,9 @@ export default function TicketDetail() {
     setComments(c.data);
     setUsers(u.data);
     setLocations(Object.fromEntries(locs.data.map((l) => [l.id, l.name])));
+
+    // Haal huidige gebruiker op voor commentaar-bewerking
+    userApi.me().then((r) => setCurrentUserId(r.data.ha_user_id)).catch(() => {});
 
     // Keycard sensor ophalen als er een locatie is
     if (t.data.location_id) {
@@ -72,6 +78,16 @@ export default function TicketDetail() {
     const r = await ticketApi.addComment(id, commentBody);
     setComments((prev) => [...prev, r.data]);
     setCommentBody("");
+    setSaving(false);
+  }
+
+  async function saveEditComment(commentId: string) {
+    if (!id || !editingBody.trim()) return;
+    setSaving(true);
+    const r = await ticketApi.updateComment(id, commentId, editingBody);
+    setComments((prev) => prev.map((c) => c.id === commentId ? r.data : c));
+    setEditingCommentId(null);
+    setEditingBody("");
     setSaving(false);
   }
 
@@ -295,10 +311,50 @@ export default function TicketDetail() {
           {comments.map((c) => (
             <div key={c.id} className="bg-gray-50 rounded-lg p-3">
               <div className="flex items-center justify-between text-xs text-gray-500 mb-1">
-                <span>{usersMap[c.author_id] || c.author_id}</span>
-                <span>{format(parseUTC(c.created_at), "d MMM HH:mm", { locale: nl })}</span>
+                <div className="flex items-center gap-2">
+                  <span>{usersMap[c.author_id] || c.author_id}</span>
+                  {c.updated_at && <span className="text-gray-400 italic">(bewerkt)</span>}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span>{format(parseUTC(c.created_at), "d MMM HH:mm", { locale: nl })}</span>
+                  {currentUserId === c.author_id && editingCommentId !== c.id && (
+                    <button
+                      onClick={() => { setEditingCommentId(c.id); setEditingBody(c.body); }}
+                      className="text-blue-500 hover:text-blue-700"
+                      title="Bewerken"
+                    >
+                      ✏️
+                    </button>
+                  )}
+                </div>
               </div>
-              <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.body}</p>
+              {editingCommentId === c.id ? (
+                <div className="space-y-2">
+                  <textarea
+                    value={editingBody}
+                    onChange={(e) => setEditingBody(e.target.value)}
+                    rows={3}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => saveEditComment(c.id)}
+                      disabled={saving || !editingBody.trim()}
+                      className="btn-primary text-sm"
+                    >
+                      Opslaan
+                    </button>
+                    <button
+                      onClick={() => { setEditingCommentId(null); setEditingBody(""); }}
+                      className="btn-secondary text-sm"
+                    >
+                      Annuleren
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.body}</p>
+              )}
             </div>
           ))}
           {comments.length === 0 && (
