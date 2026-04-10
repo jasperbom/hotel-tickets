@@ -65,6 +65,7 @@ export interface Ticket {
   closed_by: string | null;
   notify_when_free: boolean;
   subtasks: Subtask[] | null;
+  photos: string[] | null;
 }
 
 export interface Comment {
@@ -181,6 +182,16 @@ export const ticketApi = {
   addComment: (id: string, body: string) => api.post<Comment>(`/tickets/${id}/comments`, { body }),
   updateSubtask: (id: string, index: number, done: boolean) =>
     api.patch<{ ok: boolean; subtasks: Subtask[] }>(`/tickets/${id}/subtasks`, { index, done }),
+  uploadPhoto: (id: string, file: File) => {
+    const formData = new FormData();
+    formData.append("file", file);
+    return api.post<{ ok: boolean; filename: string; photos: string[] }>(`/tickets/${id}/photos`, formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deletePhoto: (id: string, filename: string) =>
+    api.delete<{ ok: boolean; photos: string[] }>(`/tickets/${id}/photos/${filename}`),
+  photoUrl: (id: string, filename: string) => `${API_BASE}/tickets/${id}/photos/${filename}`,
 };
 
 export const userApi = {

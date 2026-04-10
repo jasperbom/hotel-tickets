@@ -1,7 +1,11 @@
 import json
+import os
+import uuid as uuid_mod
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, case
 from pydantic import BaseModel, field_validator
@@ -15,6 +19,9 @@ from .settings import get_ticket_base_url
 
 import logging
 logger = logging.getLogger(__name__)
+
+PHOTOS_DIR = Path(os.environ.get("PHOTOS_DIR", "/data/photos" if not os.environ.get("DEV_MODE") else "./photos"))
+ALLOWED_EXTENSIONS = {".jpg", ".jpeg", ".png", ".webp"}
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -68,12 +75,23 @@ class TicketOut(BaseModel):
     closed_by: str | None
     notify_when_free: bool
     subtasks: list | None = None
+    photos: list[str] | None = None
 
     model_config = {"from_attributes": True}
 
     @field_validator("subtasks", mode="before")
     @classmethod
     def parse_subtasks(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return None
+        return v
+
+    @field_validator("photos", mode="before")
+    @classmethod
+    def parse_photos(cls, v):
         if isinstance(v, str):
             try:
                 return json.loads(v)
@@ -328,3 +346,67 @@ async def add_comment(
     db.add(comment)
     await db.flush()
     return comment
+
+
+# --- Foto's ---
+
+@router.post("/{ticket_id}/photos")
+async def upload_photo(
+    ticket_id: str,
+    user: RequireUser,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+
+    ext = Path(file.filename or "photo.jpg").suffix.lower()
+    if ext not in ALLOWED_EXTENSIONS:
+        raise HTTPException(status_code=400, detail=f"Ongeldig bestandstype. Toegestaan: {', '.join(ALLOWED_EXTENSIONS)}")
+
+    filename = f"{uuid_mod.uuid4().hex}{ext}"
+    ticket_dir = PHOTOS_DIR / ticket_id
+    ticket_dir.mkdir(parents=True, exist_ok=True)
+    file_path = ticket_dir / filename
+
+    content = await file.read()
+    file_path.write_bytes(content)
+
+    photos = json.loads(ticket.photos) if ticket.photos else []
+    photos.append(filename)
+    ticket.photos = json.dumps(photos)
+    ticket.updated_at = datetime.now(timezone.utc)
+
+    return {"ok": True, "filename": filename, "photos": photos}
+
+
+@router.get("/{ticket_id}/photos/{filename}")
+async def get_photo(ticket_id: str, filename: str):
+    file_path = PHOTOS_DIR / ticket_id / filename
+    if not file_path.is_file():
+        raise HTTPException(status_code=404, detail="Foto niet gevonden")
+    return FileResponse(file_path)
+
+
+@router.delete("/{ticket_id}/photos/{filename}")
+async def delete_photo(
+    ticket_id: str,
+    filename: str,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+
+    file_path = PHOTOS_DIR / ticket_id / filename
+    if file_path.is_file():
+        file_path.unlink()
+
+    photos = json.loads(ticket.photos) if ticket.photos else []
+    photos = [p for p in photos if p != filename]
+    ticket.photos = json.dumps(photos) if photos else None
+    ticket.updated_at = datetime.now(timezone.utc)
+
+    return {"ok": True, "photos": photos}

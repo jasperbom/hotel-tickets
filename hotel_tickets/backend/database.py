@@ -55,8 +55,12 @@ async def _run_migrations(conn):
         ("recurring_templates", "subtask_items", "TEXT"),
         ("recurring_templates", "notify_when_free", "BOOLEAN NOT NULL DEFAULT 0"),
         ("recurring_templates", "emoji", "VARCHAR(10)"),
+        ("tickets", "photos", "TEXT"),
     ]
     for table, column, col_def in column_migrations:
         if not await _column_exists(conn, table, column):
             logger.info("Migratie: %s.%s toevoegen", table, column)
             await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
+
+    # Reset custom emoji's van recurring templates naar NULL (altijd 🔁 gebruiken)
+    await conn.exec_driver_sql("UPDATE recurring_templates SET emoji = NULL WHERE emoji IS NOT NULL")

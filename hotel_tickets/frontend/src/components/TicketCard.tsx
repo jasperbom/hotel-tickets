@@ -49,6 +49,11 @@ export default function TicketCard({ ticket, users = {}, locations = {} }: Props
                 ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
               </span>
             )}
+            {ticket.photos && ticket.photos.length > 0 && (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
+                📷 {ticket.photos.length}
+              </span>
+            )}
           </div>
 
           <div className="flex items-center justify-between text-xs text-gray-500 pt-1">

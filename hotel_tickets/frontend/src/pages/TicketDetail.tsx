@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -21,6 +21,9 @@ export default function TicketDetail() {
   const [keycard, setKeycard] = useState<KeycardStatus | null>(null);
   const [commentBody, setCommentBody] = useState("");
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [viewPhoto, setViewPhoto] = useState<string | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const usersMap = Object.fromEntries(users.map((u) => [u.ha_user_id, u.display_name]));
 
@@ -73,6 +76,27 @@ export default function TicketDetail() {
     setComments((prev) => [...prev, r.data]);
     setCommentBody("");
     setSaving(false);
+  }
+
+  async function handlePhotoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file || !id) return;
+    setUploading(true);
+    try {
+      const r = await ticketApi.uploadPhoto(id, file);
+      setTicket((prev) => prev ? { ...prev, photos: r.data.photos } : prev);
+    } catch {
+      // ignore
+    } finally {
+      setUploading(false);
+      if (fileInput.current) fileInput.current.value = "";
+    }
+  }
+
+  async function deletePhoto(filename: string) {
+    if (!id) return;
+    const r = await ticketApi.deletePhoto(id, filename);
+    setTicket((prev) => prev ? { ...prev, photos: r.data.photos.length > 0 ? r.data.photos : null } : prev);
   }
 
   async function deleteTicket() {
@@ -285,6 +309,72 @@ export default function TicketDetail() {
               Ticket heropenen
             </button>
           )}
+        </div>
+      </div>
+
+      {/* Foto's */}
+      <div className="card space-y-3">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Foto's</h2>
+          <span className="text-xs text-gray-400">
+            {ticket.photos ? `${ticket.photos.length} foto${ticket.photos.length !== 1 ? "'s" : ""}` : "Geen foto's"}
+          </span>
+        </div>
+
+        {ticket.photos && ticket.photos.length > 0 && (
+          <div className="grid grid-cols-3 gap-2">
+            {ticket.photos.map((filename) => (
+              <div key={filename} className="relative group">
+                <button type="button" onClick={() => setViewPhoto(filename)} className="block w-full">
+                  <img
+                    src={ticketApi.photoUrl(ticket.id, filename)}
+                    alt="Ticket foto"
+                    className="w-full h-24 object-cover rounded-lg border border-gray-200"
+                  />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => deletePhoto(filename)}
+                  className="absolute top-1 right-1 bg-red-600 text-white rounded-full w-5 h-5 text-xs flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                >
+                  ✕
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Foto viewer overlay */}
+        {viewPhoto && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4"
+            onClick={() => setViewPhoto(null)}
+          >
+            <img
+              src={ticketApi.photoUrl(ticket.id, viewPhoto)}
+              alt="Foto groot"
+              className="max-w-full max-h-full rounded-lg"
+            />
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          <input
+            ref={fileInput}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            onChange={handlePhotoUpload}
+            className="hidden"
+          />
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            disabled={uploading}
+            className="btn-secondary text-sm flex items-center gap-1.5"
+          >
+            <span>📷</span> {uploading ? "Uploaden..." : "Foto toevoegen"}
+          </button>
         </div>
       </div>
 

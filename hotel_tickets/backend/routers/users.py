@@ -217,6 +217,12 @@ def _ticket_dict(t: Ticket) -> dict:
             subtasks = json.loads(t.subtasks)
         except Exception:
             pass
+    photos = None
+    if t.photos:
+        try:
+            photos = json.loads(t.photos)
+        except Exception:
+            pass
     return {
         "id": t.id,
         "title": t.title,
@@ -234,6 +240,7 @@ def _ticket_dict(t: Ticket) -> dict:
         "notify_when_free": t.notify_when_free,
         "recurring_template_id": t.recurring_template_id,
         "subtasks": subtasks,
+        "photos": photos,
     }
 
 
