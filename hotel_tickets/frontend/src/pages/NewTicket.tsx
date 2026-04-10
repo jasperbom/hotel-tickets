@@ -97,7 +97,7 @@ export default function NewTicket() {
               onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
             >
-              <option value="technical">Technisch</option>
+              <option value="technical">TD</option>
               <option value="housekeeping">Huishouding</option>
               <option value="reception">Receptie</option>
             </select>

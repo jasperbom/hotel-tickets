@@ -1,6 +1,7 @@
 import json
 from datetime import date, datetime, timedelta, timezone
-from fastapi import APIRouter, Depends, HTTPException, status
+from typing import Optional
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func, case
 from pydantic import BaseModel
@@ -56,10 +57,18 @@ async def get_me(user: RequireUser, db: AsyncSession = Depends(get_db)):
 
 
 @router.get("/me/overview")
-async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db)):
+async def get_my_overview(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    department: Optional[Category] = Query(None),
+):
     """Gepersonaliseerd overzicht voor de ingelogde medewerker."""
     uid = user.ha_user_id
-    dept = user.department
+    # Admin/supervisor kan optioneel filteren op afdeling via query param
+    if department and user.is_admin:
+        dept = department
+    else:
+        dept = user.department
 
     _priority_sort = case(
         (Ticket.priority == "urgent", 0),
@@ -147,8 +156,8 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
             cron = croniter(t.cron_expression, base_dt)
             next_run = cron.get_next(datetime)
             if next_run.date() == today:
-                # Alleen tonen als er vandaag nog geen ticket gesloten is
-                closed_today = await db.scalar(
+                # Tel het aantal vandaag gesloten tickets voor dit sjabloon
+                closed_today_count = await db.scalar(
                     select(func.count()).where(
                         and_(
                             Ticket.recurring_template_id == t.id,
@@ -157,9 +166,26 @@ async def get_my_overview(user: RequireUser, db: AsyncSession = Depends(get_db))
                         )
                     )
                 )
-                if not closed_today:
+                # Voor kamers-modus: alleen verbergen als ALLE kamers afgerond zijn
+                is_rooms = t.subtask_mode == "rooms" and t.subtask_items
+                if is_rooms:
+                    total_rooms = len(json.loads(t.subtask_items)) if t.subtask_items else 0
+                    all_done = closed_today_count >= total_rooms and total_rooms > 0
+                else:
+                    all_done = closed_today_count > 0
+
+                if not all_done:
                     today_recurring.append(_template_dict(t, next_run, active_by_template.get(t.id)))
-            upcoming_recurring.append((next_run, _template_dict(t, next_run)))
+
+                # Voor upcoming: toon de volgende uitvoering na vandaag als vandaag al afgerond
+                if all_done:
+                    cron_future = croniter(t.cron_expression, datetime.now())
+                    future_run = cron_future.get_next(datetime)
+                    upcoming_recurring.append((future_run, _template_dict(t, future_run)))
+                else:
+                    upcoming_recurring.append((next_run, _template_dict(t, next_run)))
+            else:
+                upcoming_recurring.append((next_run, _template_dict(t, next_run)))
         except Exception:
             pass
 

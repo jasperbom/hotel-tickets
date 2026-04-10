@@ -10,7 +10,7 @@
  */
 
 const CATEGORIES = [
-  { value: "technical",    label: "Technische dienst" },
+  { value: "technical",    label: "TD" },
   { value: "housekeeping", label: "Huishouding" },
   { value: "reception",    label: "Receptie" },
 ];

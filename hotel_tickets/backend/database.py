@@ -55,6 +55,7 @@ async def _run_migrations(conn):
         ("recurring_templates", "subtask_items", "TEXT"),
         ("recurring_templates", "notify_when_free", "BOOLEAN NOT NULL DEFAULT 0"),
         ("recurring_templates", "emoji", "VARCHAR(10)"),
+        ("ticket_comments", "updated_at", "DATETIME"),
     ]
     for table, column, col_def in column_migrations:
         if not await _column_exists(conn, table, column):

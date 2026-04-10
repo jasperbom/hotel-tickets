@@ -27,7 +27,7 @@ const PRIORITY_LABELS: Record<Priority, string> = {
 };
 
 const CATEGORY_LABELS: Record<Category, string> = {
-  technical: "Technisch",
+  technical: "TD",
   housekeeping: "Huishouding",
   reception: "Receptie",
 };

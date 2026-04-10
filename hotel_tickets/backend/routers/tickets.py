@@ -1,7 +1,10 @@
 import json
+import os
+import uuid as uuid_mod
 from datetime import datetime, timezone
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, case
 from pydantic import BaseModel, field_validator
@@ -15,6 +18,10 @@ from .settings import get_ticket_base_url
 
 import logging
 logger = logging.getLogger(__name__)
+
+UPLOAD_DIR = os.environ.get("UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads"))
+MAX_PHOTO_SIZE = 10 * 1024 * 1024  # 10 MB
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "image/gif"}
 
 router = APIRouter(prefix="/tickets", tags=["tickets"])
 
@@ -82,12 +89,17 @@ class TicketOut(BaseModel):
         return v
 
 
+class CommentUpdate(BaseModel):
+    body: str
+
+
 class CommentOut(BaseModel):
     id: str
     ticket_id: str
     author_id: str
     body: str
     created_at: datetime
+    updated_at: datetime | None = None
 
     model_config = {"from_attributes": True}
 
@@ -133,7 +145,10 @@ async def list_tickets(
     if priority:
         filters.append(Ticket.priority == priority)
     if assigned_to:
-        filters.append(Ticket.assigned_to == assigned_to)
+        if assigned_to == "me":
+            filters.append(Ticket.assigned_to == user.ha_user_id)
+        else:
+            filters.append(Ticket.assigned_to == assigned_to)
     if location_id:
         filters.append(Ticket.location_id == location_id)
 
@@ -328,3 +343,129 @@ async def add_comment(
     db.add(comment)
     await db.flush()
     return comment
+
+
+@router.patch("/{ticket_id}/comments/{comment_id}", response_model=CommentOut)
+async def update_comment(
+    ticket_id: str,
+    comment_id: str,
+    body: CommentUpdate,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    comment = await db.get(TicketComment, comment_id)
+    if not comment or comment.ticket_id != ticket_id:
+        raise HTTPException(status_code=404, detail="Commentaar niet gevonden")
+    if comment.author_id != user.ha_user_id:
+        raise HTTPException(status_code=403, detail="Je kunt alleen je eigen commentaar bewerken")
+    comment.body = body.body
+    comment.updated_at = datetime.now(timezone.utc)
+    await db.flush()
+    return comment
+
+
+@router.delete("/{ticket_id}/comments/{comment_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_comment(
+    ticket_id: str,
+    comment_id: str,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    comment = await db.get(TicketComment, comment_id)
+    if not comment or comment.ticket_id != ticket_id:
+        raise HTTPException(status_code=404, detail="Commentaar niet gevonden")
+    if comment.author_id != user.ha_user_id and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Je kunt alleen je eigen commentaar verwijderen")
+    await db.delete(comment)
+
+
+# --- Foto's ---
+
+@router.post("/{ticket_id}/photos")
+async def upload_photo(
+    ticket_id: str,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    """Upload een foto bij een ticket."""
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    if file.content_type not in ALLOWED_TYPES:
+        raise HTTPException(status_code=400, detail="Alleen afbeeldingen (JPEG, PNG, WebP, GIF) zijn toegestaan")
+
+    content = await file.read()
+    if len(content) > MAX_PHOTO_SIZE:
+        raise HTTPException(status_code=400, detail="Bestand te groot (max 10 MB)")
+
+    ticket_dir = os.path.join(UPLOAD_DIR, ticket_id)
+    os.makedirs(ticket_dir, exist_ok=True)
+
+    ext = file.filename.rsplit(".", 1)[-1].lower() if file.filename and "." in file.filename else "jpg"
+    if ext not in ("jpg", "jpeg", "png", "webp", "gif"):
+        ext = "jpg"
+    filename = f"{uuid_mod.uuid4().hex}.{ext}"
+    filepath = os.path.join(ticket_dir, filename)
+
+    with open(filepath, "wb") as f:
+        f.write(content)
+
+    return {"filename": filename, "size": len(content), "content_type": file.content_type}
+
+
+@router.get("/{ticket_id}/photos")
+async def list_photos(
+    ticket_id: str,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Lijst alle foto's bij een ticket."""
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+
+    ticket_dir = os.path.join(UPLOAD_DIR, ticket_id)
+    if not os.path.isdir(ticket_dir):
+        return []
+
+    photos = []
+    for fname in sorted(os.listdir(ticket_dir)):
+        if fname.lower().endswith((".jpg", ".jpeg", ".png", ".webp", ".gif")):
+            photos.append({"filename": fname})
+    return photos
+
+
+@router.get("/{ticket_id}/photos/{filename}")
+async def get_photo(
+    ticket_id: str,
+    filename: str,
+    user: RequireUser,
+):
+    """Serveer een specifieke foto."""
+    # Voorkom path traversal
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Ongeldige bestandsnaam")
+    filepath = os.path.join(UPLOAD_DIR, ticket_id, filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="Foto niet gevonden")
+    return FileResponse(filepath)
+
+
+@router.delete("/{ticket_id}/photos/{filename}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_photo(
+    ticket_id: str,
+    filename: str,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Verwijder een foto."""
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Ongeldige bestandsnaam")
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    filepath = os.path.join(UPLOAD_DIR, ticket_id, filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(status_code=404, detail="Foto niet gevonden")
+    os.remove(filepath)
