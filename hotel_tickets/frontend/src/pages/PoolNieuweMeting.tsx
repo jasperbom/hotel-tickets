@@ -37,12 +37,15 @@ export default function PoolNieuweMeting() {
     gemeten_door: "",
   });
   const [prevLog, setPrevLog] = useState<PoolLog | null>(null);
+  const [prevWatermeter, setPrevWatermeter] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
-    poolApi.list({ pool_id: poolId, limit: "1" }).then((r) => {
+    poolApi.list({ pool_id: poolId, limit: "50" }).then((r) => {
       setPrevLog(r.data.length > 0 ? r.data[0] : null);
+      const withWater = r.data.find((l) => l.watermeter !== null);
+      setPrevWatermeter(withWater?.watermeter ?? null);
     });
   }, [poolId]);
 
@@ -69,7 +72,6 @@ export default function PoolNieuweMeting() {
   const gebondenChloor = tbc !== null && vbcUit !== null ? Math.round((tbc - vbcUit) * 100) / 100 : null;
 
   const watermeter = values.watermeter !== undefined && values.watermeter !== "" ? Number(values.watermeter) : null;
-  const prevWatermeter = prevLog?.watermeter ?? null;
   const verbruik = watermeter !== null && prevWatermeter !== null ? Math.round((watermeter - prevWatermeter) * 10) / 10 : null;
 
   const isAfter17 = now.getHours() >= 17;
