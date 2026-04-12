@@ -74,6 +74,19 @@ function StatusCard({ pool }: { pool: PoolStatus }) {
       ) : (
         <p className="text-gray-400 italic">Nog geen metingen</p>
       )}
+
+      {/* Nieuwe meting knop */}
+      <div className="mt-4 pt-3 border-t border-gray-100">
+        <button
+          onClick={(e) => {
+            e.stopPropagation();
+            navigate(`/pools/nieuw?pool=${pool.pool_id}`);
+          }}
+          className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+        >
+          + Nieuwe meting
+        </button>
+      </div>
     </div>
   );
 }

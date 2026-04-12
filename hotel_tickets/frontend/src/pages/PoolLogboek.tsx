@@ -38,7 +38,7 @@ export default function PoolLogboek() {
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Logboek</h1>
         <button
-          onClick={() => navigate("/pools/nieuw")}
+          onClick={() => navigate(`/pools/nieuw${pool ? `?pool=${pool}` : ""}`)}
           className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
         >
           + Nieuwe meting

@@ -1,6 +1,6 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { poolApi, type PoolId } from "../api/client";
+import { useEffect, useState } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { poolApi, type PoolId, type PoolLog } from "../api/client";
 
 const FIELDS: { key: string; label: string; type: "number" | "text" | "checkbox"; step?: string }[] = [
   { key: "water_temp", label: "Water temperatuur (°C)", type: "number", step: "0.1" },
@@ -25,8 +25,12 @@ const FIELDS: { key: string; label: string; type: "number" | "text" | "checkbox"
 
 export default function PoolNieuweMeting() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const initialPool = (["wellness", "zwembad"].includes(searchParams.get("pool") || "")
+    ? searchParams.get("pool")
+    : "wellness") as PoolId;
   const now = new Date();
-  const [poolId, setPoolId] = useState<PoolId>("wellness");
+  const [poolId, setPoolId] = useState<PoolId>(initialPool);
   const [datum, setDatum] = useState(now.toISOString().slice(0, 10));
   const [tijd, setTijd] = useState(now.toTimeString().slice(0, 5));
   const [values, setValues] = useState<Record<string, any>>({
@@ -35,8 +39,15 @@ export default function PoolNieuweMeting() {
     reiniging: false,
     gemeten_door: "",
   });
+  const [prevLog, setPrevLog] = useState<PoolLog | null>(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    poolApi.list({ pool_id: poolId, limit: "1" }).then((r) => {
+      setPrevLog(r.data.length > 0 ? r.data[0] : null);
+    });
+  }, [poolId]);
 
   function set(key: string, val: any) {
     setValues((v) => ({ ...v, [key]: val }));
@@ -77,17 +88,24 @@ export default function PoolNieuweMeting() {
     }
   }
 
+  function getPlaceholder(key: string): string {
+    if (!prevLog) return "";
+    const val = prevLog[key as keyof PoolLog];
+    if (val === null || val === undefined) return "";
+    return String(val);
+  }
+
   return (
     <div className="max-w-2xl">
-      <h1 className="text-2xl font-bold mb-6">Nieuwe meting</h1>
+      <h1 className="text-xl font-bold mb-4">Nieuwe meting</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      <form onSubmit={handleSubmit} className="space-y-3">
         {/* Bad selectie + datum/tijd */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-3 gap-2">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Bad</label>
+            <label className="block text-xs font-medium text-gray-600 mb-0.5">Bad</label>
             <select
-              className="w-full border rounded-lg px-3 py-2"
+              className="w-full border rounded-lg px-2 py-1.5 text-sm"
               value={poolId}
               onChange={(e) => setPoolId(e.target.value as PoolId)}
             >
@@ -96,20 +114,20 @@ export default function PoolNieuweMeting() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Datum</label>
+            <label className="block text-xs font-medium text-gray-600 mb-0.5">Datum</label>
             <input
               type="date"
-              className="w-full border rounded-lg px-3 py-2"
+              className="w-full border rounded-lg px-2 py-1.5 text-sm"
               value={datum}
               onChange={(e) => setDatum(e.target.value)}
               required
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Tijd</label>
+            <label className="block text-xs font-medium text-gray-600 mb-0.5">Tijd</label>
             <input
               type="time"
-              className="w-full border rounded-lg px-3 py-2"
+              className="w-full border rounded-lg px-2 py-1.5 text-sm"
               value={tijd}
               onChange={(e) => setTijd(e.target.value)}
               required
@@ -117,11 +135,11 @@ export default function PoolNieuweMeting() {
           </div>
         </div>
 
-        {/* Meetvelden */}
-        <div className="grid grid-cols-2 gap-3">
+        {/* Meetvelden in 3-koloms grid */}
+        <div className="grid grid-cols-3 gap-x-3 gap-y-2">
           {FIELDS.map((f) =>
             f.type === "checkbox" ? (
-              <label key={f.key} className="flex items-center gap-2 py-2">
+              <label key={f.key} className="flex items-center gap-2 py-1">
                 <input
                   type="checkbox"
                   checked={!!values[f.key]}
@@ -129,15 +147,21 @@ export default function PoolNieuweMeting() {
                   className="w-4 h-4"
                 />
                 <span className="text-sm">{f.label}</span>
+                {prevLog && (
+                  <span className="text-xs text-gray-400">
+                    (vorige: {prevLog[f.key as keyof PoolLog] ? "Ja" : "Nee"})
+                  </span>
+                )}
               </label>
             ) : (
-              <div key={f.key}>
-                <label className="block text-sm font-medium text-gray-700 mb-1">{f.label}</label>
+              <div key={f.key} className={f.key === "notitie" ? "col-span-3" : ""}>
+                <label className="block text-xs font-medium text-gray-600 mb-0.5">{f.label}</label>
                 <input
                   type={f.type}
                   step={f.step}
-                  className="w-full border rounded-lg px-3 py-2 text-sm"
+                  className="w-full border rounded-lg px-2 py-1.5 text-sm"
                   value={values[f.key] ?? ""}
+                  placeholder={getPlaceholder(f.key)}
                   onChange={(e) => set(f.key, e.target.value)}
                 />
               </div>
@@ -147,7 +171,7 @@ export default function PoolNieuweMeting() {
 
         {error && <p className="text-red-600 text-sm">{error}</p>}
 
-        <div className="flex gap-3 pt-2">
+        <div className="flex gap-3 pt-1">
           <button
             type="submit"
             disabled={saving}
