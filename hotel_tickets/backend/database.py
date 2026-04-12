@@ -66,10 +66,14 @@ async def _run_migrations(conn):
     # Reset custom emoji's van recurring templates naar NULL (altijd 🔁 gebruiken)
     await conn.exec_driver_sql("UPDATE recurring_templates SET emoji = NULL WHERE emoji IS NOT NULL")
 
-    # Migreer filterspoeling van boolean (0/1) naar string (NULL/X/L/R)
-    if await _column_exists(conn, "pool_logs", "filterspoeling"):
-        await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling = 'X' WHERE filterspoeling = '1' OR filterspoeling = 1")
-        await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling = NULL WHERE filterspoeling = '0' OR filterspoeling = 0")
+    # Migreer filterspoeling van boolean (0/1) naar nullable string (NULL/X/L/R)
+    # De oude kolom is NOT NULL, dus we maken een nieuwe nullable kolom
+    if not await _column_exists(conn, "pool_logs", "filterspoeling_str"):
+        if await _column_exists(conn, "pool_logs", "filterspoeling"):
+            logger.info("Migratie: pool_logs.filterspoeling boolean → string")
+            await conn.exec_driver_sql("ALTER TABLE pool_logs ADD COLUMN filterspoeling_str VARCHAR(10)")
+            await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling_str = 'X' WHERE filterspoeling = 1 OR filterspoeling = '1'")
+            await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling_str = NULL WHERE filterspoeling = 0 OR filterspoeling = '0' OR filterspoeling_str IS NULL")
 
     # Seed pool_configs als de tabel leeg is
     result = await conn.exec_driver_sql("SELECT COUNT(*) FROM pool_configs")

@@ -121,7 +121,7 @@ class PoolLog(Base):
     vbc_automaat: Mapped[float | None] = mapped_column()
     watermeter: Mapped[float | None] = mapped_column()
     verbruik: Mapped[float | None] = mapped_column()
-    filterspoeling: Mapped[str | None] = mapped_column(String(10))
+    filterspoeling: Mapped[str | None] = mapped_column("filterspoeling_str", String(10))
     bezoekers: Mapped[int | None] = mapped_column(Integer)
     reiniging: Mapped[bool] = mapped_column(Boolean, default=False)
     flow: Mapped[float | None] = mapped_column()
