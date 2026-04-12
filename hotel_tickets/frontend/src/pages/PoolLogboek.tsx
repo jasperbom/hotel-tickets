@@ -13,6 +13,7 @@ export default function PoolLogboek() {
   const navigate = useNavigate();
   const [logs, setLogs] = useState<PoolLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [exporting, setExporting] = useState(false);
 
   const pool = searchParams.get("pool") || "";
   const datumVan = searchParams.get("datum_van") || "";
@@ -26,6 +27,25 @@ export default function PoolLogboek() {
     poolApi.list(params).then((r) => { setLogs(r.data); setLoading(false); });
   }, [pool, datumVan, datumTot]);
 
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const params: Record<string, string> = {};
+      if (pool) params.pool_id = pool;
+      if (datumVan) params.datum_van = datumVan;
+      if (datumTot) params.datum_tot = datumTot;
+      const r = await poolApi.exportCsv(params);
+      const url = URL.createObjectURL(r.data);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `zwembad_logboek${pool ? "_" + pool : ""}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function setFilter(key: string, val: string) {
     const p = new URLSearchParams(searchParams);
     if (val) p.set(key, val);
@@ -37,12 +57,21 @@ export default function PoolLogboek() {
     <div>
       <div className="flex items-center justify-between mb-4">
         <h1 className="text-2xl font-bold">Logboek</h1>
-        <button
-          onClick={() => navigate(`/pools/nieuw${pool ? `?pool=${pool}` : ""}`)}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
-        >
-          + Nieuwe meting
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+          >
+            {exporting ? "Exporteren..." : "Export CSV"}
+          </button>
+          <button
+            onClick={() => navigate(`/pools/nieuw${pool ? `?pool=${pool}` : ""}`)}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+          >
+            + Nieuwe meting
+          </button>
+        </div>
       </div>
 
       {/* Filters */}

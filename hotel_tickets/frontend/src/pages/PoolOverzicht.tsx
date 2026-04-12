@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { poolApi, type PoolStatus, type PoolLog } from "../api/client";
+import { poolApi, type PoolStatus } from "../api/client";
 
 /** Kleurcodering conform BAL-normen */
 function valClass(val: number | null, low: number, high: number): string {
@@ -91,74 +91,9 @@ function StatusCard({ pool }: { pool: PoolStatus }) {
   );
 }
 
-function ImportPanel({ onDone }: { onDone: () => void }) {
-  const [poolId, setPoolId] = useState<string>("wellness");
-  const [file, setFile] = useState<File | null>(null);
-  const [importing, setImporting] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-
-  async function handleImport() {
-    if (!file) return;
-    setImporting(true);
-    setResult(null);
-    try {
-      const res = await poolApi.importCsv(file, poolId);
-      setResult(`${res.data.imported} metingen geïmporteerd!`);
-      onDone();
-    } catch {
-      setResult("Import mislukt — controleer het CSV-formaat.");
-    }
-    setImporting(false);
-  }
-
-  return (
-    <div className="bg-white rounded-2xl shadow p-5">
-      <h2 className="text-lg font-bold mb-3">CSV importeren</h2>
-      <p className="text-sm text-gray-500 mb-4">
-        Importeer historische metingen uit een CSV-bestand (;-gescheiden, met header: Datum;Tijd;...).
-      </p>
-      <div className="flex gap-3 items-end flex-wrap">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Bad</label>
-          <select
-            className="border rounded-lg px-3 py-2 text-sm"
-            value={poolId}
-            onChange={(e) => setPoolId(e.target.value)}
-          >
-            <option value="wellness">Wellness</option>
-            <option value="zwembad">Zwembad</option>
-          </select>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">CSV-bestand</label>
-          <input
-            type="file"
-            accept=".csv,.txt"
-            className="text-sm"
-            onChange={(e) => setFile(e.target.files?.[0] || null)}
-          />
-        </div>
-        <button
-          onClick={handleImport}
-          disabled={!file || importing}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-        >
-          {importing ? "Importeren..." : "Importeren"}
-        </button>
-      </div>
-      {result && (
-        <p className={`mt-3 text-sm ${result.includes("mislukt") ? "text-red-600" : "text-green-700"}`}>
-          {result}
-        </p>
-      )}
-    </div>
-  );
-}
-
 export default function PoolOverzicht() {
   const [status, setStatus] = useState<PoolStatus[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showImport, setShowImport] = useState(false);
 
   function loadStatus() {
     poolApi.status().then((r) => { setStatus(r.data); setLoading(false); });
@@ -172,19 +107,7 @@ export default function PoolOverzicht() {
     <div>
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">Zwembaden overzicht</h1>
-        <button
-          onClick={() => setShowImport(!showImport)}
-          className="text-sm text-blue-600 hover:underline"
-        >
-          {showImport ? "Sluiten" : "CSV importeren"}
-        </button>
       </div>
-
-      {showImport && (
-        <div className="mb-6">
-          <ImportPanel onDone={loadStatus} />
-        </div>
-      )}
 
       <div className="grid md:grid-cols-2 gap-6">
         {status.map((p) => (

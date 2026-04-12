@@ -7,6 +7,7 @@ from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -206,6 +207,66 @@ async def delete_log(log_id: str, db: AsyncSession = Depends(get_db)):
     if not row:
         raise HTTPException(404, "Log niet gevonden")
     await db.delete(row)
+
+
+@router.get("/export/csv")
+async def export_csv(
+    pool_id: Optional[str] = Query(None),
+    datum_van: Optional[str] = Query(None),
+    datum_tot: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Exporteer metingen als CSV (;-gescheiden, round-trip compatible met import)."""
+    q = select(PoolLog).order_by(PoolLog.datum.desc(), PoolLog.tijd.desc())
+    if pool_id:
+        q = q.where(PoolLog.pool_id == pool_id)
+    if datum_van:
+        q = q.where(PoolLog.datum >= datum_van)
+    if datum_tot:
+        q = q.where(PoolLog.datum <= datum_tot)
+    rows = await db.execute(q)
+    logs = rows.scalars().all()
+
+    output = io.StringIO()
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow([
+        "Bad", "Datum", "Tijd", "Doorzicht", "Water temperatuur", "pH",
+        "VBC in", "VBC uit", "TBC", "GBC", "pH automaat", "VBC automaat",
+        "Watermeter", "Verbruik", "Filterspoeling", "Aantal bezoekers",
+        "Reiniging", "Flow", "Chemicalien", "Gemeten door", "Notitie",
+    ])
+    for log in logs:
+        writer.writerow([
+            log.pool_id.value if isinstance(log.pool_id, PoolId) else log.pool_id,
+            log.datum,
+            log.tijd,
+            log.doorzicht or "",
+            log.water_temp if log.water_temp is not None else "",
+            log.ph if log.ph is not None else "",
+            log.vbc_in if log.vbc_in is not None else "",
+            log.vbc_uit if log.vbc_uit is not None else "",
+            log.tbc if log.tbc is not None else "",
+            log.gbc if log.gbc is not None else "",
+            log.ph_automaat if log.ph_automaat is not None else "",
+            log.vbc_automaat if log.vbc_automaat is not None else "",
+            log.watermeter if log.watermeter is not None else "",
+            log.verbruik if log.verbruik is not None else "",
+            log.filterspoeling or "",
+            log.bezoekers if log.bezoekers is not None else "",
+            "X" if log.reiniging else "",
+            log.flow if log.flow is not None else "",
+            log.chemicalien or "",
+            log.gemeten_door,
+            log.notitie or "",
+        ])
+
+    filename = f"zwembad_logboek{'_' + pool_id if pool_id else ''}.csv"
+    content = output.getvalue().encode("utf-8-sig")
+    return StreamingResponse(
+        io.BytesIO(content),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"},
+    )
 
 
 @router.post("/import", status_code=201)

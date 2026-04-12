@@ -310,6 +310,8 @@ export const poolApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  exportCsv: (params?: Record<string, string>) =>
+    api.get("/pools/export/csv", { params, responseType: "blob" }),
 };
 
 export const reportApi = {
