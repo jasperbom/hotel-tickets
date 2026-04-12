@@ -306,12 +306,14 @@ export const poolApi = {
   importCsv: (file: File, poolId: string) => {
     const form = new FormData();
     form.append("file", file);
-    return api.post<{ imported: number }>(`/pools/import?pool_id=${poolId}`, form, {
+    return api.post<{ imported: number; skipped: number }>(`/pools/import?pool_id=${poolId}`, form, {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
   exportCsv: (params?: Record<string, string>) =>
     api.get("/pools/export/csv", { params, responseType: "blob" }),
+  resetLogs: (poolId?: string) =>
+    api.delete<{ deleted: number }>(`/pools/logs${poolId ? `?pool_id=${poolId}` : ""}`),
 };
 
 export const reportApi = {
