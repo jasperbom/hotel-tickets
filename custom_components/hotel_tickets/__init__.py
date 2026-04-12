@@ -14,6 +14,7 @@ DOMAIN = "hotel_tickets"
 _LOGGER = logging.getLogger(__name__)
 
 ADDON_URL = "http://62246620-hotel-tickets:8080"
+ADDON_INGRESS_BASE = "/hassio/ingress/hotel_tickets"
 CARD_URL = "/hotel_tickets/hotel-ticket-card.js"
 CARD_FILE = Path(__file__).parent / "hotel-ticket-card.js"
 
@@ -90,6 +91,33 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
         hass.services.async_register(DOMAIN, "create_ticket", handle_create_ticket)
 
+    # --- navigate service ---
+    if not hass.services.has_service(DOMAIN, "navigate"):
+        async def handle_navigate(call: ServiceCall) -> None:
+            target = call.data.get("target", "")
+            path = call.data.get("path", "/")
+            title = call.data.get("title", "Hotel Tickets")
+            message = call.data.get("message", "Tik om te openen")
+
+            if not target:
+                raise HomeAssistantError("'target' is verplicht (bijv. mobile_app_iphone_jan)")
+
+            # Bouw de deep link URL
+            path = path.lstrip("/")
+            url = f"{ADDON_INGRESS_BASE}/#{path}"
+
+            try:
+                await hass.services.async_call(
+                    "notify",
+                    target,
+                    {"title": title, "message": message, "data": {"url": url}},
+                )
+                _LOGGER.info("Navigatie push verstuurd naar %s: %s", target, url)
+            except Exception as exc:
+                raise HomeAssistantError(f"Navigatie push mislukt: {exc}") from exc
+
+        hass.services.async_register(DOMAIN, "navigate", handle_navigate)
+
     # --- NFC tag listener ---
     async def handle_tag_scanned(event: Event) -> None:
         tag_id: str | None = event.data.get("tag_id")
@@ -142,5 +170,7 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     if not hass.data[DOMAIN]:
         if hass.services.has_service(DOMAIN, "create_ticket"):
             hass.services.async_remove(DOMAIN, "create_ticket")
+        if hass.services.has_service(DOMAIN, "navigate"):
+            hass.services.async_remove(DOMAIN, "navigate")
 
     return True
