@@ -6,7 +6,6 @@ type FieldDef = { key: string; label: string; type: "number" | "text"; step?: st
 
 const WAARDES: FieldDef[] = [
   { key: "water_temp", label: "Water temperatuur (°C)", type: "number", step: "0.1" },
-  { key: "doorzicht", label: "Doorzicht", type: "text" },
   { key: "ph", label: "pH", type: "number", step: "0.01" },
   { key: "vbc_in", label: "VBC in", type: "number", step: "0.01" },
   { key: "vbc_uit", label: "VBC uit", type: "number", step: "0.01" },
@@ -187,7 +186,21 @@ export default function PoolNieuweMeting() {
         <section>
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Waardes</h2>
           <div className="grid grid-cols-3 gap-x-3 gap-y-2">
-            {WAARDES.map(renderField)}
+            {renderField(WAARDES[0])}
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-0.5">Doorzicht</label>
+              <select
+                className="w-full border rounded-lg px-2 py-1.5 text-sm"
+                value={values.doorzicht || ""}
+                onChange={(e) => set("doorzicht", e.target.value)}
+              >
+                <option value="">—</option>
+                <option value="Helder">Helder</option>
+                <option value="Wazig">Wazig</option>
+                <option value="Troebel">Troebel</option>
+              </select>
+            </div>
+            {WAARDES.slice(1).map(renderField)}
             {/* Gebonden chloor – berekend */}
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-0.5">Gebonden chloor</label>

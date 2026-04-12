@@ -27,7 +27,6 @@ type FieldDef = {
 
 const EDITABLE_FIELDS: FieldDef[] = [
   { key: "water_temp", label: "Water temperatuur (°C)", type: "number", step: "0.1" },
-  { key: "doorzicht", label: "Doorzicht", type: "text" },
   { key: "ph", label: "pH", type: "number", step: "0.01", valRange: [7.0, 7.6] },
   { key: "vbc_in", label: "VBC in", type: "number", step: "0.01", valRange: [0.5, 1.5] },
   { key: "vbc_uit", label: "VBC uit", type: "number", step: "0.01", valRange: [0.5, 1.5] },
@@ -68,6 +67,7 @@ export default function PoolLogDetail() {
     }
     vals.datum = log.datum;
     vals.tijd = log.tijd;
+    vals.doorzicht = log.doorzicht ?? "";
     vals.filterspoeling = log.filterspoeling;
     setEditValues(vals);
     setEditing(true);
@@ -97,6 +97,7 @@ export default function PoolLogDetail() {
       }
     }
 
+    payload.doorzicht = editValues.doorzicht || null;
     payload.filterspoeling = editValues.filterspoeling || null;
 
     try {
@@ -147,7 +148,32 @@ export default function PoolLogDetail() {
         {editing ? (
           /* Bewerkformulier */
           <div className="space-y-2">
-            {EDITABLE_FIELDS.map((f) => (
+            {/* Water temp */}
+            <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+              <label className="text-gray-500 text-sm">{EDITABLE_FIELDS[0].label}</label>
+              <input
+                type={EDITABLE_FIELDS[0].type}
+                step={EDITABLE_FIELDS[0].step}
+                className="border rounded-lg px-2 py-1 text-sm w-40 text-right"
+                value={editValues[EDITABLE_FIELDS[0].key] ?? ""}
+                onChange={(e) => setVal(EDITABLE_FIELDS[0].key, e.target.value)}
+              />
+            </div>
+            {/* Doorzicht selector */}
+            <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+              <label className="text-gray-500 text-sm">Doorzicht</label>
+              <select
+                className="border rounded-lg px-2 py-1 text-sm w-40 text-right"
+                value={editValues.doorzicht || ""}
+                onChange={(e) => setVal("doorzicht", e.target.value)}
+              >
+                <option value="">—</option>
+                <option value="Helder">Helder</option>
+                <option value="Wazig">Wazig</option>
+                <option value="Troebel">Troebel</option>
+              </select>
+            </div>
+            {EDITABLE_FIELDS.slice(1).map((f) => (
               <div key={f.key} className="flex items-center justify-between py-1.5 border-b border-gray-100">
                 <label className="text-gray-500 text-sm">{f.label}</label>
                 <input
