@@ -3,6 +3,7 @@ Zwembaden logboek — CRUD + BAL-compliance status.
 """
 import csv
 import io
+import zipfile
 from datetime import date
 from typing import Optional
 
@@ -209,35 +210,21 @@ async def delete_log(log_id: str, db: AsyncSession = Depends(get_db)):
     await db.delete(row)
 
 
-@router.get("/export/csv")
-async def export_csv(
-    pool_id: Optional[str] = Query(None),
-    datum_van: Optional[str] = Query(None),
-    datum_tot: Optional[str] = Query(None),
-    db: AsyncSession = Depends(get_db),
-):
-    """Exporteer metingen als CSV (;-gescheiden, round-trip compatible met import)."""
-    q = select(PoolLog).order_by(PoolLog.datum.desc(), PoolLog.tijd.desc())
-    if pool_id:
-        q = q.where(PoolLog.pool_id == pool_id)
-    if datum_van:
-        q = q.where(PoolLog.datum >= datum_van)
-    if datum_tot:
-        q = q.where(PoolLog.datum <= datum_tot)
-    rows = await db.execute(q)
-    logs = rows.scalars().all()
+CSV_HEADER = [
+    "Datum", "Tijd", "Doorzicht", "Water temperatuur", "pH",
+    "VBC in", "VBC uit", "TBC", "GBC", "pH automaat", "VBC automaat",
+    "Watermeter", "Verbruik", "Filterspoeling", "Aantal bezoekers",
+    "Reiniging", "Flow", "Chemicalien", "Gemeten door", "Notitie",
+]
 
+
+def _write_csv(logs: list[PoolLog]) -> bytes:
+    """Schrijf een lijst PoolLog-rijen naar CSV-bytes (;-gescheiden, UTF-8-sig)."""
     output = io.StringIO()
     writer = csv.writer(output, delimiter=";")
-    writer.writerow([
-        "Bad", "Datum", "Tijd", "Doorzicht", "Water temperatuur", "pH",
-        "VBC in", "VBC uit", "TBC", "GBC", "pH automaat", "VBC automaat",
-        "Watermeter", "Verbruik", "Filterspoeling", "Aantal bezoekers",
-        "Reiniging", "Flow", "Chemicalien", "Gemeten door", "Notitie",
-    ])
+    writer.writerow(CSV_HEADER)
     for log in logs:
         writer.writerow([
-            log.pool_id.value if isinstance(log.pool_id, PoolId) else log.pool_id,
             log.datum,
             log.tijd,
             log.doorzicht or "",
@@ -259,13 +246,47 @@ async def export_csv(
             log.gemeten_door,
             log.notitie or "",
         ])
+    return output.getvalue().encode("utf-8-sig")
 
-    filename = f"zwembad_logboek{'_' + pool_id if pool_id else ''}.csv"
-    content = output.getvalue().encode("utf-8-sig")
+
+@router.get("/export/csv")
+async def export_csv(
+    pool_id: Optional[str] = Query(None),
+    datum_van: Optional[str] = Query(None),
+    datum_tot: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Exporteer metingen als CSV per bad. Zonder pool_id: ZIP met los bestand per bad."""
+    def _build_query(pid: str):
+        q = select(PoolLog).where(PoolLog.pool_id == pid)
+        q = q.order_by(PoolLog.datum.desc(), PoolLog.tijd.desc())
+        if datum_van:
+            q = q.where(PoolLog.datum >= datum_van)
+        if datum_tot:
+            q = q.where(PoolLog.datum <= datum_tot)
+        return q
+
+    if pool_id:
+        rows = await db.execute(_build_query(pool_id))
+        content = _write_csv(rows.scalars().all())
+        return StreamingResponse(
+            io.BytesIO(content),
+            media_type="text/csv",
+            headers={"Content-Disposition": f"attachment; filename=logboek_{pool_id}.csv"},
+        )
+
+    # Geen pool_id: ZIP met een CSV per bad
+    zip_buf = io.BytesIO()
+    with zipfile.ZipFile(zip_buf, "w", zipfile.ZIP_DEFLATED) as zf:
+        for pid in PoolId:
+            rows = await db.execute(_build_query(pid.value))
+            csv_bytes = _write_csv(rows.scalars().all())
+            zf.writestr(f"logboek_{pid.value}.csv", csv_bytes)
+    zip_buf.seek(0)
     return StreamingResponse(
-        io.BytesIO(content),
-        media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename={filename}"},
+        zip_buf,
+        media_type="application/zip",
+        headers={"Content-Disposition": "attachment; filename=logboek_export.zip"},
     )
 
 

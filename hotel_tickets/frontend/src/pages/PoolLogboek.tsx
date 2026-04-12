@@ -35,10 +35,11 @@ export default function PoolLogboek() {
       if (datumVan) params.datum_van = datumVan;
       if (datumTot) params.datum_tot = datumTot;
       const r = await poolApi.exportCsv(params);
+      const filename = pool ? `logboek_${pool}.csv` : "logboek_export.zip";
       const url = URL.createObjectURL(r.data);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `zwembad_logboek${pool ? "_" + pool : ""}.csv`;
+      a.download = filename;
       a.click();
       URL.revokeObjectURL(url);
     } finally {
