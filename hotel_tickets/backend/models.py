@@ -98,6 +98,49 @@ class RecurringTemplate(Base):
     tickets: Mapped[list[Ticket]] = relationship("Ticket", back_populates="recurring_template")
 
 
+class PoolId(str, PyEnum):
+    wellness = "wellness"
+    zwembad = "zwembad"
+
+
+class PoolLog(Base):
+    __tablename__ = "pool_logs"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    pool_id: Mapped[PoolId] = mapped_column(Enum(PoolId), nullable=False)
+    datum: Mapped[str] = mapped_column(String(10), nullable=False)  # YYYY-MM-DD
+    tijd: Mapped[str] = mapped_column(String(5), nullable=False)    # HH:MM
+    doorzicht: Mapped[str | None] = mapped_column(String(50))
+    water_temp: Mapped[float | None] = mapped_column()
+    ph: Mapped[float | None] = mapped_column()
+    vbc_in: Mapped[float | None] = mapped_column()
+    vbc_uit: Mapped[float | None] = mapped_column()
+    tbc: Mapped[float | None] = mapped_column()
+    gbc: Mapped[float | None] = mapped_column()
+    ph_automaat: Mapped[float | None] = mapped_column()
+    vbc_automaat: Mapped[float | None] = mapped_column()
+    watermeter: Mapped[float | None] = mapped_column()
+    verbruik: Mapped[float | None] = mapped_column()
+    filterspoeling: Mapped[str | None] = mapped_column("filterspoeling_str", String(10))
+    bezoekers: Mapped[int | None] = mapped_column(Integer)
+    reiniging: Mapped[bool] = mapped_column(Boolean, default=False)
+    flow: Mapped[float | None] = mapped_column()
+    chemicalien: Mapped[str | None] = mapped_column(Text)
+    gemeten_door: Mapped[str] = mapped_column(String(255), nullable=False)
+    notitie: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class PoolConfig(Base):
+    __tablename__ = "pool_configs"
+
+    pool_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    filter_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
+    filter_nfc_tag_id_r: Mapped[str | None] = mapped_column(String(255))  # zwembad rechter filter
+
+
 class SystemSetting(Base):
     __tablename__ = "system_settings"
 
