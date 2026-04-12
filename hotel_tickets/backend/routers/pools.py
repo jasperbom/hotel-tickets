@@ -44,6 +44,8 @@ class PoolLogCreate(BaseModel):
 
 
 class PoolLogUpdate(BaseModel):
+    datum: Optional[str] = None
+    tijd: Optional[str] = None
     doorzicht: Optional[str] = None
     water_temp: Optional[float] = None
     ph: Optional[float] = None
@@ -221,51 +223,86 @@ async def import_csv(file: UploadFile = File(...), pool_id: str = Query(...), db
         raise HTTPException(400, "Geen geldige header gevonden (verwacht: Datum;Tijd;...)")
 
     reader = csv.DictReader(lines[header_idx:], delimiter=";")
+
+    def safe_float(row, key):
+        v = (row.get(key) or "").strip()
+        if not v or v == "-":
+            return None
+        try:
+            return float(v)
+        except ValueError:
+            return None
+
+    def safe_int(row, key):
+        v = safe_float(row, key)
+        return int(v) if v is not None else None
+
     count = 0
+    filter_rows: list[tuple[str, str]] = []  # (datum, filterspoeling_val)
+
     for row in reader:
         datum = (row.get("Datum") or "").strip()
         tijd = (row.get("Tijd") or "").strip()
-        if not datum or not tijd or datum == "-":
+        if not datum or datum == "-":
             continue
 
-        def safe_float(key):
-            v = (row.get(key) or "").strip()
-            if not v or v == "-":
-                return None
-            try:
-                return float(v)
-            except ValueError:
-                return None
+        filterspoeling_val = (row.get("Filterspoeling") or "").strip().upper()
+        filterspoeling_val = filterspoeling_val if filterspoeling_val in ("X", "L", "R") else None
 
-        def safe_int(key):
-            v = safe_float(key)
-            return int(v) if v is not None else None
+        # Filter-only row: has datum but no tijd
+        if not tijd:
+            if filterspoeling_val:
+                filter_rows.append((datum, filterspoeling_val))
+            continue
 
         log = PoolLog(
             pool_id=pool_id,
             datum=datum,
             tijd=tijd,
             doorzicht=(row.get("Doorzicht") or "").strip() or None,
-            water_temp=safe_float("Water temperatuur"),
-            ph=safe_float("pH"),
-            vbc_in=safe_float("VBC in"),
-            vbc_uit=safe_float("VBC uit"),
-            tbc=safe_float("TBC"),
-            gbc=safe_float("GBC"),
-            ph_automaat=safe_float("pH automaat"),
-            vbc_automaat=safe_float("VBC automaat"),
-            watermeter=safe_float("Watermeter"),
-            verbruik=safe_float("Verbruik"),
-            filterspoeling=(lambda v: v if v in ("X", "L", "R") else None)((row.get("Filterspoeling") or "").strip().upper()),
-            bezoekers=safe_int("Aantal bezoekers"),
+            water_temp=safe_float(row, "Water temperatuur"),
+            ph=safe_float(row, "pH"),
+            vbc_in=safe_float(row, "VBC in"),
+            vbc_uit=safe_float(row, "VBC uit"),
+            tbc=safe_float(row, "TBC"),
+            gbc=safe_float(row, "GBC"),
+            ph_automaat=safe_float(row, "pH automaat"),
+            vbc_automaat=safe_float(row, "VBC automaat"),
+            watermeter=safe_float(row, "Watermeter"),
+            verbruik=safe_float(row, "Verbruik"),
+            filterspoeling=filterspoeling_val,
+            bezoekers=safe_int(row, "Aantal bezoekers"),
             reiniging=(row.get("Reiniging") or "").strip().upper() == "X",
-            flow=safe_float("Flow"),
+            flow=safe_float(row, "Flow"),
             chemicalien=(row.get("Chemicalien") or "").strip() or None,
             gemeten_door=(row.get("Gemeten door") or "").strip() or "onbekend",
             notitie=(row.get("Notitie") or "").strip() or None,
         )
         db.add(log)
         count += 1
+
+    await db.flush()
+
+    # Merge filter-only rows into the latest measurement on the same date
+    for f_datum, fs_val in filter_rows:
+        result = await db.execute(
+            select(PoolLog).where(
+                and_(PoolLog.pool_id == pool_id, PoolLog.datum == f_datum)
+            ).order_by(PoolLog.tijd.desc()).limit(1)
+        )
+        target = result.scalar_one_or_none()
+        if target:
+            target.filterspoeling = fs_val
+        else:
+            # No measurement for this date — create minimal entry
+            db.add(PoolLog(
+                pool_id=pool_id,
+                datum=f_datum,
+                tijd="00:00",
+                filterspoeling=fs_val,
+                gemeten_door="import",
+            ))
+            count += 1
 
     await db.flush()
     return {"imported": count, "pool_id": pool_id}
