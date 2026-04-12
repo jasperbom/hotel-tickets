@@ -78,44 +78,52 @@ export default function PoolLogboek() {
         <p className="text-gray-400">Geen metingen gevonden.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm bg-white rounded-xl shadow">
+          <table className="w-full text-sm bg-white rounded-xl shadow border-separate border-spacing-0">
             <thead>
-              <tr className="bg-gray-100 text-left">
-                <th className="px-3 py-2">Bad</th>
-                <th className="px-3 py-2">Datum</th>
-                <th className="px-3 py-2">Tijd</th>
-                <th className="px-3 py-2">Temp</th>
-                <th className="px-3 py-2">pH</th>
-                <th className="px-3 py-2">VBC in</th>
-                <th className="px-3 py-2">VBC uit</th>
-                <th className="px-3 py-2">GBC</th>
-                <th className="px-3 py-2">pH aut.</th>
-                <th className="px-3 py-2">VBC aut.</th>
-                <th className="px-3 py-2">Flow</th>
-                <th className="px-3 py-2">Bezoekers</th>
-                <th className="px-3 py-2">Gemeten door</th>
-                <th className="px-3 py-2">Notitie</th>
+              <tr className="bg-gray-100 text-left text-xs text-gray-500 uppercase tracking-wide">
+                <th className="px-3 py-2.5 rounded-tl-xl">Bad</th>
+                <th className="px-3 py-2.5">Datum</th>
+                <th className="px-3 py-2.5">Tijd</th>
+                <th className="px-3 py-2.5 border-l border-gray-200">Temp</th>
+                <th className="px-3 py-2.5">Doorzicht</th>
+                <th className="px-3 py-2.5">pH</th>
+                <th className="px-3 py-2.5">VBC in</th>
+                <th className="px-3 py-2.5">VBC uit</th>
+                <th className="px-3 py-2.5">TBC</th>
+                <th className="px-3 py-2.5">Geb. chloor</th>
+                <th className="px-3 py-2.5 border-l border-gray-200">pH aut.</th>
+                <th className="px-3 py-2.5">VBC aut.</th>
+                <th className="px-3 py-2.5">Watermeter</th>
+                <th className="px-3 py-2.5">Verbruik</th>
+                <th className="px-3 py-2.5">Flow</th>
+                <th className="px-3 py-2.5 border-l border-gray-200">Bezoekers</th>
+                <th className="px-3 py-2.5">Gemeten door</th>
+                <th className="px-3 py-2.5 rounded-tr-xl">Notitie</th>
               </tr>
             </thead>
             <tbody>
-              {logs.map((l) => (
+              {logs.map((l, i) => (
                 <tr
                   key={l.id}
-                  className="border-t hover:bg-gray-50 cursor-pointer"
+                  className={`border-t border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors ${i % 2 === 1 ? "bg-gray-50" : ""}`}
                   onClick={() => navigate(`/pools/log/${l.id}`)}
                 >
-                  <td className="px-3 py-2 capitalize">{l.pool_id}</td>
-                  <td className="px-3 py-2">{l.datum}</td>
+                  <td className="px-3 py-2 capitalize font-medium">{l.pool_id}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{l.datum}</td>
                   <td className="px-3 py-2">{l.tijd}</td>
-                  <td className="px-3 py-2">{l.water_temp ?? "-"}</td>
+                  <td className="px-3 py-2 border-l border-gray-100">{l.water_temp ?? "-"}</td>
+                  <td className="px-3 py-2">{l.doorzicht ?? "-"}</td>
                   <td className={`px-3 py-2 ${valClass(l.ph, 7.0, 7.6)}`}>{l.ph ?? "-"}</td>
                   <td className={`px-3 py-2 ${valClass(l.vbc_in, 0.5, 1.5)}`}>{l.vbc_in ?? "-"}</td>
                   <td className={`px-3 py-2 ${valClass(l.vbc_uit, 0.5, 1.5)}`}>{l.vbc_uit ?? "-"}</td>
+                  <td className="px-3 py-2">{l.tbc ?? "-"}</td>
                   <td className={`px-3 py-2 ${valClass(l.gbc, 0, 0.6)}`}>{l.gbc ?? "-"}</td>
-                  <td className={`px-3 py-2 ${valClass(l.ph_automaat, 7.0, 7.6)}`}>{l.ph_automaat ?? "-"}</td>
+                  <td className={`px-3 py-2 border-l border-gray-100 ${valClass(l.ph_automaat, 7.0, 7.6)}`}>{l.ph_automaat ?? "-"}</td>
                   <td className={`px-3 py-2 ${valClass(l.vbc_automaat, 0.5, 1.5)}`}>{l.vbc_automaat ?? "-"}</td>
+                  <td className="px-3 py-2">{l.watermeter ?? "-"}</td>
+                  <td className="px-3 py-2">{l.verbruik ?? "-"}</td>
                   <td className="px-3 py-2">{l.flow ?? "-"}</td>
-                  <td className="px-3 py-2">{l.bezoekers ?? "-"}</td>
+                  <td className="px-3 py-2 border-l border-gray-100">{l.bezoekers ?? "-"}</td>
                   <td className="px-3 py-2">{l.gemeten_door}</td>
                   <td className="px-3 py-2 max-w-[200px] truncate">{l.notitie || "-"}</td>
                 </tr>
