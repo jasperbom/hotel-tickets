@@ -12,7 +12,7 @@ from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
-from ..models import PoolLog, PoolId
+from ..models import PoolLog, PoolId, PoolConfig
 
 router = APIRouter(prefix="/pools", tags=["pools"])
 
@@ -34,7 +34,7 @@ class PoolLogCreate(BaseModel):
     vbc_automaat: Optional[float] = None
     watermeter: Optional[float] = None
     verbruik: Optional[float] = None
-    filterspoeling: bool = False
+    filterspoeling: Optional[str] = None
     bezoekers: Optional[int] = None
     reiniging: bool = False
     flow: Optional[float] = None
@@ -55,7 +55,7 @@ class PoolLogUpdate(BaseModel):
     vbc_automaat: Optional[float] = None
     watermeter: Optional[float] = None
     verbruik: Optional[float] = None
-    filterspoeling: Optional[bool] = None
+    filterspoeling: Optional[str] = None
     bezoekers: Optional[int] = None
     reiniging: Optional[bool] = None
     flow: Optional[float] = None
@@ -256,7 +256,7 @@ async def import_csv(file: UploadFile = File(...), pool_id: str = Query(...), db
             vbc_automaat=safe_float("VBC automaat"),
             watermeter=safe_float("Watermeter"),
             verbruik=safe_float("Verbruik"),
-            filterspoeling=(row.get("Filterspoeling") or "").strip().upper() == "X",
+            filterspoeling=(lambda v: v if v in ("X", "L", "R") else None)((row.get("Filterspoeling") or "").strip().upper()),
             bezoekers=safe_int("Aantal bezoekers"),
             reiniging=(row.get("Reiniging") or "").strip().upper() == "X",
             flow=safe_float("Flow"),
@@ -269,3 +269,39 @@ async def import_csv(file: UploadFile = File(...), pool_id: str = Query(...), db
 
     await db.flush()
     return {"imported": count, "pool_id": pool_id}
+
+
+# --- Pool configuratie ---
+
+class PoolConfigOut(BaseModel):
+    pool_id: str
+    label: str
+    filter_nfc_tag_id: Optional[str] = None
+    filter_nfc_tag_id_r: Optional[str] = None
+
+    class Config:
+        from_attributes = True
+
+
+class PoolConfigUpdate(BaseModel):
+    label: Optional[str] = None
+    filter_nfc_tag_id: Optional[str] = None
+    filter_nfc_tag_id_r: Optional[str] = None
+
+
+@router.get("/config", response_model=list[PoolConfigOut])
+async def list_configs(db: AsyncSession = Depends(get_db)):
+    rows = await db.execute(select(PoolConfig))
+    return [r for r in rows.scalars().all()]
+
+
+@router.patch("/config/{pool_id}", response_model=PoolConfigOut)
+async def update_config(pool_id: str, data: PoolConfigUpdate, db: AsyncSession = Depends(get_db)):
+    row = await db.get(PoolConfig, pool_id)
+    if not row:
+        raise HTTPException(404, "Pool config niet gevonden")
+    for key, val in data.model_dump(exclude_unset=True).items():
+        setattr(row, key, val)
+    await db.flush()
+    await db.refresh(row)
+    return row

@@ -97,7 +97,7 @@ export default function PoolLogDetail() {
       }
     }
 
-    payload.filterspoeling = !!editValues.filterspoeling;
+    payload.filterspoeling = editValues.filterspoeling || null;
 
     try {
       const r = await poolApi.update(id, payload as any);
@@ -162,12 +162,21 @@ export default function PoolLogDetail() {
 
             <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
               <label className="text-gray-500 text-sm">Filterspoeling</label>
-              <input
-                type="checkbox"
-                checked={!!editValues.filterspoeling}
-                onChange={(e) => setVal("filterspoeling", e.target.checked)}
-                className="w-4 h-4"
-              />
+              <select
+                className="border rounded-lg px-2 py-1 text-sm w-40 text-right"
+                value={editValues.filterspoeling || ""}
+                onChange={(e) => setVal("filterspoeling", e.target.value || null)}
+              >
+                <option value="">Nee</option>
+                {log?.pool_id === "zwembad" ? (
+                  <>
+                    <option value="L">Links (L)</option>
+                    <option value="R">Rechts (R)</option>
+                  </>
+                ) : (
+                  <option value="X">Ja</option>
+                )}
+              </select>
             </div>
 
             {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
@@ -203,7 +212,7 @@ export default function PoolLogDetail() {
             <Row label="Watermeter" value={log.watermeter} />
             <Row label="Verbruik" value={log.verbruik} />
             <Row label="Flow" value={log.flow} />
-            <Row label="Filterspoeling" value={log.filterspoeling ? "Ja" : "Nee"} />
+            <Row label="Filterspoeling" value={log.filterspoeling || "Nee"} />
             <Row label="Aantal zwemmers" value={log.bezoekers} />
             <Row label="Gemeten door" value={log.gemeten_door} />
             {log.notitie && (

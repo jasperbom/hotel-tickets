@@ -13,6 +13,7 @@ import PoolOverzicht from "./pages/PoolOverzicht";
 import PoolLogboek from "./pages/PoolLogboek";
 import PoolNieuweMeting from "./pages/PoolNieuweMeting";
 import PoolLogDetail from "./pages/PoolLogDetail";
+import PoolInstellingen from "./pages/PoolInstellingen";
 import { userApi, type UserRole } from "./api/client";
 
 // --- Module configuratie ---
@@ -60,6 +61,7 @@ const MODULES: ModuleConfig[] = [
       { to: "/pools", label: "Overzicht", icon: "📋", end: true, restricted: false },
       { to: "/pools/logboek", label: "Logboek", icon: "📖", restricted: false },
       { to: "/pools/nieuw", label: "Nieuwe meting", icon: "➕", restricted: false },
+      { to: "/pools/instellingen", label: "Instellingen", icon: "⚙️", restricted: "adminOrSupervisor" },
     ],
   },
 ];
@@ -154,7 +156,7 @@ export default function App() {
         {activeModule && (
           <nav className="bg-hotel-900 text-white shadow-lg relative z-50">
             <div className="px-4">
-              <div className="flex items-center gap-1 h-14 overflow-x-auto">
+              <div className="flex items-center gap-1 h-14">
                 {/* Mobile hamburger menu */}
                 <div className="md:hidden relative" ref={menuRef}>
                   <button
@@ -222,7 +224,7 @@ export default function App() {
                   {activeModule.navTitle}
                 </span>
                 {/* Desktop navigatie links */}
-                <div className="hidden md:flex items-center gap-1">
+                <div className="hidden md:flex items-center gap-1 overflow-x-auto">
                   {visibleNavItems.map((item) => (
                     <NavLink
                       key={item.to}
@@ -265,6 +267,7 @@ export default function App() {
               <Route path="/pools/logboek" element={<PoolLogboek />} />
               <Route path="/pools/nieuw" element={<PoolNieuweMeting />} />
               <Route path="/pools/log/:id" element={<PoolLogDetail />} />
+              <Route path="/pools/instellingen" element={<PoolInstellingen />} />
             </Routes>
           </main>
         ) : (

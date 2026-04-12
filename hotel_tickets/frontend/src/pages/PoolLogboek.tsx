@@ -124,7 +124,7 @@ export default function PoolLogboek() {
                   <td className="px-3 py-2">{l.watermeter ?? "-"}</td>
                   <td className="px-3 py-2">{l.verbruik ?? "-"}</td>
                   <td className="px-3 py-2">{l.flow ?? "-"}</td>
-                  <td className="px-3 py-2">{l.filterspoeling ? "Ja" : "Nee"}</td>
+                  <td className="px-3 py-2">{l.filterspoeling || "-"}</td>
                   <td className="px-3 py-2 border-l border-gray-100">{l.bezoekers ?? "-"}</td>
                   <td className="px-3 py-2">{l.gemeten_door}</td>
                   <td className="px-3 py-2 max-w-[200px] truncate">{l.notitie || "-"}</td>

@@ -110,8 +110,8 @@ export default function PoolNieuweMeting() {
     payload.gemeten_door = values.gemeten_door?.trim() || null;
     payload.notitie = values.notitie || null;
 
-    // Checkbox velden
-    payload.filterspoeling = !!values.filterspoeling;
+    // Filterspoeling
+    payload.filterspoeling = values.filterspoeling || null;
     payload.reiniging = false;
     payload.chemicalien = null;
 
@@ -210,15 +210,24 @@ export default function PoolNieuweMeting() {
                 {verbruik !== null ? verbruik : <span className="text-gray-400">vorige − huidige</span>}
               </div>
             </div>
-            <label className="flex items-center gap-2 py-1">
-              <input
-                type="checkbox"
-                checked={!!values.filterspoeling}
-                onChange={(e) => set("filterspoeling", e.target.checked)}
-                className="w-4 h-4"
-              />
-              <span className="text-sm">Filterspoeling</span>
-            </label>
+            <div>
+              <label className="block text-xs font-medium text-gray-600 mb-0.5">Filterspoeling</label>
+              <select
+                className="w-full border rounded-lg px-2 py-1.5 text-sm"
+                value={values.filterspoeling || ""}
+                onChange={(e) => set("filterspoeling", e.target.value || null)}
+              >
+                <option value="">Nee</option>
+                {poolId === "zwembad" ? (
+                  <>
+                    <option value="L">Links (L)</option>
+                    <option value="R">Rechts (R)</option>
+                  </>
+                ) : (
+                  <option value="X">Ja</option>
+                )}
+              </select>
+            </div>
           </div>
         </section>
 

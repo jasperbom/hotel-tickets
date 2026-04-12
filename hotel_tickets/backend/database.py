@@ -65,3 +65,16 @@ async def _run_migrations(conn):
 
     # Reset custom emoji's van recurring templates naar NULL (altijd 🔁 gebruiken)
     await conn.exec_driver_sql("UPDATE recurring_templates SET emoji = NULL WHERE emoji IS NOT NULL")
+
+    # Migreer filterspoeling van boolean (0/1) naar string (NULL/X/L/R)
+    if await _column_exists(conn, "pool_logs", "filterspoeling"):
+        await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling = 'X' WHERE filterspoeling = '1' OR filterspoeling = 1")
+        await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling = NULL WHERE filterspoeling = '0' OR filterspoeling = 0")
+
+    # Seed pool_configs als de tabel leeg is
+    result = await conn.exec_driver_sql("SELECT COUNT(*) FROM pool_configs")
+    count = result.scalar()
+    if count == 0:
+        await conn.exec_driver_sql(
+            "INSERT INTO pool_configs (pool_id, label) VALUES ('wellness', 'Wellness'), ('zwembad', 'Zwembad')"
+        )

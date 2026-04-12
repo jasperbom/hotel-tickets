@@ -267,7 +267,7 @@ export interface PoolLog {
   vbc_automaat: number | null;
   watermeter: number | null;
   verbruik: number | null;
-  filterspoeling: boolean;
+  filterspoeling: string | null;
   bezoekers: number | null;
   reiniging: boolean;
   flow: number | null;
@@ -287,6 +287,13 @@ export interface PoolStatus {
   latest: PoolLog | null;
 }
 
+export interface PoolConfigItem {
+  pool_id: string;
+  label: string;
+  filter_nfc_tag_id: string | null;
+  filter_nfc_tag_id_r: string | null;
+}
+
 export const poolApi = {
   status: () => api.get<PoolStatus[]>("/pools/status"),
   list: (params?: Record<string, string>) => api.get<PoolLog[]>("/pools/logs", { params }),
@@ -294,6 +301,8 @@ export const poolApi = {
   get: (id: string) => api.get<PoolLog>(`/pools/logs/${id}`),
   update: (id: string, data: Partial<PoolLog>) => api.patch<PoolLog>(`/pools/logs/${id}`, data),
   remove: (id: string) => api.delete(`/pools/logs/${id}`),
+  getConfigs: () => api.get<PoolConfigItem[]>("/pools/config"),
+  updateConfig: (poolId: string, data: Partial<PoolConfigItem>) => api.patch<PoolConfigItem>(`/pools/config/${poolId}`, data),
   importCsv: (file: File, poolId: string) => {
     const form = new FormData();
     form.append("file", file);

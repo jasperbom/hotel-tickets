@@ -121,7 +121,7 @@ class PoolLog(Base):
     vbc_automaat: Mapped[float | None] = mapped_column()
     watermeter: Mapped[float | None] = mapped_column()
     verbruik: Mapped[float | None] = mapped_column()
-    filterspoeling: Mapped[bool] = mapped_column(Boolean, default=False)
+    filterspoeling: Mapped[str | None] = mapped_column(String(10))
     bezoekers: Mapped[int | None] = mapped_column(Integer)
     reiniging: Mapped[bool] = mapped_column(Boolean, default=False)
     flow: Mapped[float | None] = mapped_column()
@@ -130,6 +130,15 @@ class PoolLog(Base):
     notitie: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class PoolConfig(Base):
+    __tablename__ = "pool_configs"
+
+    pool_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    label: Mapped[str] = mapped_column(String(100), nullable=False)
+    filter_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
+    filter_nfc_tag_id_r: Mapped[str | None] = mapped_column(String(255))  # zwembad rechter filter
 
 
 class SystemSetting(Base):
