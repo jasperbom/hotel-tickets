@@ -250,7 +250,7 @@ export default function App() {
 
         {/* Inhoud */}
         {activeModule ? (
-          <main className="flex-1 px-4 py-6 max-w-5xl w-full mx-auto">
+          <main className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/pools/logboek" ? "" : "max-w-5xl"}`}>
             <Routes>
               {/* Taken module */}
               <Route path="/" element={<MijnOverzicht />} />
