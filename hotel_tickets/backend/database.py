@@ -75,6 +75,12 @@ async def _run_migrations(conn):
             await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling_str = 'X' WHERE filterspoeling = 1 OR filterspoeling = '1'")
             await conn.exec_driver_sql("UPDATE pool_logs SET filterspoeling_str = NULL WHERE filterspoeling = 0 OR filterspoeling = '0' OR filterspoeling_str IS NULL")
 
+    # Verwijder de oude boolean filterspoeling kolom (NOT NULL, blokkeert nieuwe inserts)
+    if await _column_exists(conn, "pool_logs", "filterspoeling_str"):
+        if await _column_exists(conn, "pool_logs", "filterspoeling"):
+            logger.info("Migratie: oude pool_logs.filterspoeling kolom verwijderen")
+            await conn.exec_driver_sql("ALTER TABLE pool_logs DROP COLUMN filterspoeling")
+
     # Seed pool_configs als de tabel leeg is
     result = await conn.exec_driver_sql("SELECT COUNT(*) FROM pool_configs")
     count = result.scalar()
