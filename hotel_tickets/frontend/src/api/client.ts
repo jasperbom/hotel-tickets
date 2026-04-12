@@ -247,6 +247,62 @@ export const systemSettingsApi = {
   update: (data: Partial<SystemSettings>) => api.patch<SystemSettings>("/settings/system", data),
 };
 
+// --- Zwembaden types ---
+
+export type PoolId = "wellness" | "zwembad";
+
+export interface PoolLog {
+  id: string;
+  pool_id: PoolId;
+  datum: string;
+  tijd: string;
+  doorzicht: string | null;
+  water_temp: number | null;
+  ph: number | null;
+  vbc_in: number | null;
+  vbc_uit: number | null;
+  tbc: number | null;
+  gbc: number | null;
+  ph_automaat: number | null;
+  vbc_automaat: number | null;
+  watermeter: number | null;
+  verbruik: number | null;
+  filterspoeling: boolean;
+  bezoekers: number | null;
+  reiniging: boolean;
+  flow: number | null;
+  chemicalien: string | null;
+  gemeten_door: string;
+  notitie: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface PoolStatus {
+  pool_id: string;
+  label: string;
+  today: string;
+  measurements_today: number;
+  compliant: boolean;
+  latest: PoolLog | null;
+}
+
+export const poolApi = {
+  status: () => api.get<PoolStatus[]>("/pools/status"),
+  list: (params?: Record<string, string>) => api.get<PoolLog[]>("/pools/logs", { params }),
+  create: (data: Partial<PoolLog>) => api.post<PoolLog>("/pools/logs", data),
+  get: (id: string) => api.get<PoolLog>(`/pools/logs/${id}`),
+  update: (id: string, data: Partial<PoolLog>) => api.patch<PoolLog>(`/pools/logs/${id}`, data),
+  remove: (id: string) => api.delete(`/pools/logs/${id}`),
+  importCsv: (file: File, poolId: string) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<{ imported: number }>(`/pools/import?pool_id=${poolId}`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+};
+
 export const reportApi = {
   summary: (params?: Record<string, string>) => api.get<ReportSummary>("/reports/summary", { params }),
   timeline: (params?: Record<string, string>) => api.get<TimelinePoint[]>("/reports/timeline", { params }),

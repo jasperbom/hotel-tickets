@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { Routes, Route, NavLink, useNavigate } from "react-router-dom";
+import { Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom";
 import MijnOverzicht from "./pages/MijnOverzicht";
 import Dashboard from "./pages/Dashboard";
 import TicketList from "./pages/TicketList";
@@ -9,28 +9,67 @@ import RecurringTasks from "./pages/RecurringTasks";
 import RecurringTaskDetail from "./pages/RecurringTaskDetail";
 import Reports from "./pages/Reports";
 import Settings from "./pages/Settings";
+import PoolOverzicht from "./pages/PoolOverzicht";
+import PoolLogboek from "./pages/PoolLogboek";
+import PoolNieuweMeting from "./pages/PoolNieuweMeting";
+import PoolLogDetail from "./pages/PoolLogDetail";
 import { userApi, type UserRole } from "./api/client";
 
-const NAV_ITEMS = [
-  { to: "/", label: "Mijn overzicht", icon: "👤", end: true, restricted: false },
-  { to: "/tickets", label: "Tickets", icon: "🎫", restricted: false },
-  { to: "/dashboard", label: "Dashboard", icon: "⊞", restricted: false },
-  { to: "/recurring", label: "Herhalend", icon: "🔄", restricted: false },
-  { to: "/reports", label: "Rapportage", icon: "📊", restricted: "adminOrSupervisor" },
-  { to: "/settings", label: "Instellingen", icon: "⚙️", restricted: "settings" },
-] as const;
+// --- Module configuratie ---
 
-const MODULES = [
-  { id: "taken", label: "Taken", icon: "✅" },
-] as const;
+interface NavItem {
+  to: string;
+  label: string;
+  icon: string;
+  end?: boolean;
+  restricted: false | "adminOrSupervisor" | "settings";
+}
 
-type ModuleId = typeof MODULES[number]["id"] | null;
+interface ModuleConfig {
+  id: string;
+  label: string;
+  icon: string;
+  defaultPath: string;
+  navTitle: string;
+  navItems: NavItem[];
+}
+
+const MODULES: ModuleConfig[] = [
+  {
+    id: "taken",
+    label: "Taken",
+    icon: "✅",
+    defaultPath: "/",
+    navTitle: "🎫 Hotel Tickets",
+    navItems: [
+      { to: "/", label: "Mijn overzicht", icon: "👤", end: true, restricted: false },
+      { to: "/tickets", label: "Tickets", icon: "🎫", restricted: false },
+      { to: "/dashboard", label: "Dashboard", icon: "⊞", restricted: false },
+      { to: "/recurring", label: "Herhalend", icon: "🔄", restricted: false },
+      { to: "/reports", label: "Rapportage", icon: "📊", restricted: "adminOrSupervisor" },
+      { to: "/settings", label: "Instellingen", icon: "⚙️", restricted: "settings" },
+    ],
+  },
+  {
+    id: "zwembaden",
+    label: "Zwembaden",
+    icon: "🏊",
+    defaultPath: "/pools",
+    navTitle: "🏊 Zwembaden",
+    navItems: [
+      { to: "/pools", label: "Overzicht", icon: "📋", end: true, restricted: false },
+      { to: "/pools/logboek", label: "Logboek", icon: "📖", restricted: false },
+      { to: "/pools/nieuw", label: "Nieuwe meting", icon: "➕", restricted: false },
+    ],
+  },
+];
 
 export default function App() {
   const [currentUser, setCurrentUser] = useState<UserRole | null>(null);
   const [hasAdmin, setHasAdmin] = useState(true);
-  const [activeModule, setActiveModule] = useState<ModuleId>(null);
+  const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   useEffect(() => {
     Promise.all([userApi.me(), userApi.list()])
@@ -41,18 +80,31 @@ export default function App() {
       .catch(() => {});
   }, []);
 
+  // Detecteer actieve module op basis van URL bij laden
+  useEffect(() => {
+    if (!activeModuleId) {
+      if (location.pathname.startsWith("/pools")) {
+        setActiveModuleId("zwembaden");
+      } else if (location.pathname !== "") {
+        setActiveModuleId("taken");
+      }
+    }
+  }, []);
+
   const isAdminOrSupervisor =
     currentUser?.role === "admin" || currentUser?.role === "supervisor";
 
-  const visibleItems = NAV_ITEMS.filter((item) => {
+  const activeModule = MODULES.find((m) => m.id === activeModuleId) || null;
+
+  const visibleNavItems = (activeModule?.navItems || []).filter((item) => {
     if (item.restricted === "adminOrSupervisor") return isAdminOrSupervisor;
     if (item.restricted === "settings") return isAdminOrSupervisor || !hasAdmin;
     return true;
   });
 
-  function handleModuleClick(id: ModuleId) {
-    setActiveModule(id);
-    navigate("/");
+  function handleModuleClick(mod: ModuleConfig) {
+    setActiveModuleId(mod.id);
+    navigate(mod.defaultPath);
   }
 
   return (
@@ -62,10 +114,10 @@ export default function App() {
         {MODULES.map((mod) => (
           <button
             key={mod.id}
-            onClick={() => handleModuleClick(mod.id)}
+            onClick={() => handleModuleClick(mod)}
             title={mod.label}
             className={`flex flex-col items-center gap-1 w-12 py-3 rounded-xl text-xs font-medium transition-colors ${
-              activeModule === mod.id
+              activeModuleId === mod.id
                 ? "bg-white/20 text-white"
                 : "text-white/60 hover:text-white hover:bg-white/10"
             }`}
@@ -83,12 +135,14 @@ export default function App() {
           <nav className="bg-hotel-900 text-white shadow-lg">
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 overflow-x-auto">
-                <span className="font-bold text-lg mr-3 text-white shrink-0">🎫 Hotel Tickets</span>
-                {visibleItems.map((item) => (
+                <span className="font-bold text-lg mr-3 text-white shrink-0">
+                  {activeModule.navTitle}
+                </span>
+                {visibleNavItems.map((item) => (
                   <NavLink
                     key={item.to}
                     to={item.to}
-                    end={"end" in item ? item.end : undefined}
+                    end={item.end}
                     className={({ isActive }) =>
                       `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
                         isActive
@@ -110,6 +164,7 @@ export default function App() {
         {activeModule ? (
           <main className="flex-1 px-4 py-6 max-w-5xl w-full mx-auto">
             <Routes>
+              {/* Taken module */}
               <Route path="/" element={<MijnOverzicht />} />
               <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/tickets" element={<TicketList />} />
@@ -119,6 +174,11 @@ export default function App() {
               <Route path="/recurring" element={<RecurringTasks />} />
               <Route path="/reports" element={<Reports />} />
               <Route path="/settings" element={<Settings />} />
+              {/* Zwembaden module */}
+              <Route path="/pools" element={<PoolOverzicht />} />
+              <Route path="/pools/logboek" element={<PoolLogboek />} />
+              <Route path="/pools/nieuw" element={<PoolNieuweMeting />} />
+              <Route path="/pools/log/:id" element={<PoolLogDetail />} />
             </Routes>
           </main>
         ) : (
