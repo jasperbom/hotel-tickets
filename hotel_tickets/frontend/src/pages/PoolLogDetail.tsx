@@ -68,6 +68,7 @@ export default function PoolLogDetail() {
     }
     vals.datum = log.datum;
     vals.tijd = log.tijd;
+    vals.filterspoeling = log.filterspoeling;
     setEditValues(vals);
     setEditing(true);
     setError("");
@@ -95,6 +96,8 @@ export default function PoolLogDetail() {
         payload[f.key] = v || null;
       }
     }
+
+    payload.filterspoeling = !!editValues.filterspoeling;
 
     try {
       const r = await poolApi.update(id, payload as any);
@@ -157,6 +160,16 @@ export default function PoolLogDetail() {
               </div>
             ))}
 
+            <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
+              <label className="text-gray-500 text-sm">Filterspoeling</label>
+              <input
+                type="checkbox"
+                checked={!!editValues.filterspoeling}
+                onChange={(e) => setVal("filterspoeling", e.target.checked)}
+                className="w-4 h-4"
+              />
+            </div>
+
             {error && <p className="text-red-600 text-sm mt-2">{error}</p>}
 
             <div className="flex gap-2 pt-3">
@@ -190,6 +203,7 @@ export default function PoolLogDetail() {
             <Row label="Watermeter" value={log.watermeter} />
             <Row label="Verbruik" value={log.verbruik} />
             <Row label="Flow" value={log.flow} />
+            <Row label="Filterspoeling" value={log.filterspoeling ? "Ja" : "Nee"} />
             <Row label="Aantal zwemmers" value={log.bezoekers} />
             <Row label="Gemeten door" value={log.gemeten_door} />
             {log.notitie && (

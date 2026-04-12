@@ -110,8 +110,8 @@ export default function PoolNieuweMeting() {
     payload.gemeten_door = values.gemeten_door?.trim() || null;
     payload.notitie = values.notitie || null;
 
-    // Niet-getoonde velden op standaard
-    payload.filterspoeling = false;
+    // Checkbox velden
+    payload.filterspoeling = !!values.filterspoeling;
     payload.reiniging = false;
     payload.chemicalien = null;
 
@@ -210,6 +210,15 @@ export default function PoolNieuweMeting() {
                 {verbruik !== null ? verbruik : <span className="text-gray-400">vorige − huidige</span>}
               </div>
             </div>
+            <label className="flex items-center gap-2 py-1">
+              <input
+                type="checkbox"
+                checked={!!values.filterspoeling}
+                onChange={(e) => set("filterspoeling", e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm">Filterspoeling</span>
+            </label>
           </div>
         </section>
 
