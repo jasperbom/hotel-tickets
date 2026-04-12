@@ -152,7 +152,7 @@ export default function App() {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top navigatie */}
         {activeModule && (
-          <nav className="bg-hotel-900 text-white shadow-lg">
+          <nav className="bg-hotel-900 text-white shadow-lg relative z-50">
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 overflow-x-auto">
                 {/* Mobile hamburger menu */}
