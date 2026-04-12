@@ -299,6 +299,7 @@ async def import_csv(file: UploadFile = File(...), pool_id: str = Query(...), db
         return int(v) if v is not None else None
 
     count = 0
+    skipped = 0
     filter_rows: list[tuple[str, str]] = []  # (datum, filterspoeling_val)
 
     for row in reader:
@@ -314,6 +315,16 @@ async def import_csv(file: UploadFile = File(...), pool_id: str = Query(...), db
         if not tijd:
             if filterspoeling_val:
                 filter_rows.append((datum, filterspoeling_val))
+            continue
+
+        # Deduplicatie: skip als meting met zelfde pool+datum+tijd al bestaat
+        existing = await db.execute(
+            select(PoolLog.id).where(
+                and_(PoolLog.pool_id == pool_id, PoolLog.datum == datum, PoolLog.tijd == tijd)
+            ).limit(1)
+        )
+        if existing.scalar_one_or_none() is not None:
+            skipped += 1
             continue
 
         log = PoolLog(
@@ -366,7 +377,25 @@ async def import_csv(file: UploadFile = File(...), pool_id: str = Query(...), db
             count += 1
 
     await db.flush()
-    return {"imported": count, "pool_id": pool_id}
+    return {"imported": count, "skipped": skipped, "pool_id": pool_id}
+
+
+@router.delete("/logs", status_code=200)
+async def reset_logs(
+    pool_id: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Verwijder alle metingen, optioneel gefilterd op bad."""
+    q = select(PoolLog)
+    if pool_id:
+        q = q.where(PoolLog.pool_id == pool_id)
+    rows = await db.execute(q)
+    logs = rows.scalars().all()
+    count = len(logs)
+    for log in logs:
+        await db.delete(log)
+    await db.flush()
+    return {"deleted": count}
 
 
 # --- Pool configuratie ---

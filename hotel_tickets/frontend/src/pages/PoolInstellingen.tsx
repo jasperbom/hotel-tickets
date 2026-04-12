@@ -13,7 +13,10 @@ function ImportPanel() {
     setResult(null);
     try {
       const res = await poolApi.importCsv(file, poolId);
-      setResult(`${res.data.imported} metingen geïmporteerd!`);
+      const { imported, skipped } = res.data;
+      const parts = [`${imported} metingen geïmporteerd`];
+      if (skipped > 0) parts.push(`${skipped} duplicaten overgeslagen`);
+      setResult(parts.join(", ") + ".");
     } catch {
       setResult("Import mislukt — controleer het CSV-formaat.");
     }
@@ -25,6 +28,7 @@ function ImportPanel() {
       <h2 className="text-lg font-bold mb-3">CSV importeren</h2>
       <p className="text-sm text-gray-500 mb-4">
         Importeer historische metingen uit een CSV-bestand (;-gescheiden, met header: Datum;Tijd;...).
+        Bestaande metingen (zelfde bad, datum en tijd) worden overgeslagen.
       </p>
       <div className="flex gap-3 items-end flex-wrap">
         <div>
@@ -57,6 +61,79 @@ function ImportPanel() {
       </div>
       {result && (
         <p className={`mt-3 text-sm ${result.includes("mislukt") ? "text-red-600" : "text-green-700"}`}>
+          {result}
+        </p>
+      )}
+    </div>
+  );
+}
+
+function ResetPanel() {
+  const [poolId, setPoolId] = useState<string>("");
+  const [confirming, setConfirming] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function handleReset() {
+    setDeleting(true);
+    setResult(null);
+    try {
+      const res = await poolApi.resetLogs(poolId || undefined);
+      setResult(`${res.data.deleted} metingen verwijderd.`);
+      setConfirming(false);
+    } catch {
+      setResult("Reset mislukt.");
+    }
+    setDeleting(false);
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-5 border border-red-200">
+      <h2 className="text-lg font-bold mb-3 text-red-700">Logboek resetten</h2>
+      <p className="text-sm text-gray-500 mb-4">
+        Verwijder alle metingen uit het logboek. Dit kan niet ongedaan gemaakt worden.
+      </p>
+      <div className="flex gap-3 items-end flex-wrap">
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">Bad</label>
+          <select
+            className="border rounded-lg px-3 py-2 text-sm"
+            value={poolId}
+            onChange={(e) => { setPoolId(e.target.value); setConfirming(false); }}
+          >
+            <option value="">Alle baden</option>
+            <option value="wellness">Wellness</option>
+            <option value="zwembad">Zwembad</option>
+          </select>
+        </div>
+        {!confirming ? (
+          <button
+            onClick={() => setConfirming(true)}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700"
+          >
+            Resetten
+          </button>
+        ) : (
+          <div className="flex gap-2 items-center">
+            <span className="text-red-600 text-sm font-medium">Weet je het zeker?</span>
+            <button
+              onClick={handleReset}
+              disabled={deleting}
+              className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+            >
+              {deleting ? "Verwijderen..." : "Ja, verwijder alles"}
+            </button>
+            <button
+              onClick={() => setConfirming(false)}
+              className="border px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+            >
+              Annuleren
+            </button>
+          </div>
+        )}
+      </div>
+      {result && (
+        <p className={`mt-3 text-sm ${result.includes("mislukt") ? "text-red-600" : "text-orange-600"}`}>
           {result}
         </p>
       )}
@@ -181,6 +258,10 @@ export default function PoolInstellingen() {
 
       <div className="mt-8">
         <ImportPanel />
+      </div>
+
+      <div className="mt-8">
+        <ResetPanel />
       </div>
     </div>
   );
