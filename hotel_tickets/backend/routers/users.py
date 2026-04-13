@@ -3,7 +3,7 @@ from datetime import date, datetime, timedelta, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, func, case
+from sqlalchemy import select, and_, or_, func, case
 from pydantic import BaseModel
 from croniter import croniter
 
@@ -95,26 +95,29 @@ async def get_my_overview(
     )
     available = avail_result.scalars().all()
 
-    # Urgente tickets: alle open urgente tickets in mijn afdeling
-    urgent_filters = [Ticket.status != Status.closed, Ticket.priority == "urgent"]
-    if dept and not user.is_admin:
-        urgent_filters.append(Ticket.category == dept)
+    # Urgente tickets: altijd alle urgente tickets, ongeacht afdeling
     urgent_result = await db.execute(
-        select(Ticket).where(and_(*urgent_filters)).order_by(Ticket.created_at.desc()).limit(20)
+        select(Ticket).where(
+            and_(Ticket.status != Status.closed, Ticket.priority == "urgent")
+        ).order_by(Ticket.created_at.desc()).limit(20)
     )
     urgent_tickets = urgent_result.scalars().all()
 
-    # Tellingen voor mijn afdeling (of alles)
-    count_filters = [Ticket.status != Status.closed]
+    # Tellingen: eigen afdeling + toegewezen aan mij (voor niet-admins)
     if dept and not user.is_admin:
-        count_filters.append(Ticket.category == dept)
-
-    total_open = await db.scalar(select(func.count()).where(and_(*count_filters)))
+        dept_or_mine = or_(Ticket.category == dept, Ticket.assigned_to == uid)
+        total_open = await db.scalar(
+            select(func.count()).where(and_(Ticket.status != Status.closed, dept_or_mine))
+        )
+    else:
+        total_open = await db.scalar(
+            select(func.count()).where(Ticket.status != Status.closed)
+        )
     my_open = await db.scalar(
         select(func.count()).where(and_(Ticket.assigned_to == uid, Ticket.status != Status.closed))
     )
     urgent_count = await db.scalar(
-        select(func.count()).where(and_(Ticket.status == Status.open, Ticket.priority == "urgent", *count_filters[1:]))
+        select(func.count()).where(and_(Ticket.status == Status.open, Ticket.priority == "urgent"))
     )
 
     # Herhalende taken: vandaag gepland + aankomende

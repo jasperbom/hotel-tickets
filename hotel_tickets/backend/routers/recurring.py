@@ -122,7 +122,10 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
 
 @router.get("/", response_model=list[TemplateOut])
 async def list_templates(user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(RecurringTemplate).order_by(RecurringTemplate.title))
+    stmt = select(RecurringTemplate)
+    if not user.is_admin and user.department:
+        stmt = stmt.where(RecurringTemplate.category == user.department)
+    result = await db.execute(stmt.order_by(RecurringTemplate.title))
     templates = result.scalars().all()
     return [_template_with_next_run(t) for t in templates]
 
@@ -149,6 +152,8 @@ async def get_template(template_id: str, user: RequireUser, db: AsyncSession = D
     template = await db.get(RecurringTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
+    if not user.is_admin and user.department and template.category != user.department:
+        raise HTTPException(status_code=403, detail="Geen toegang tot dit sjabloon")
     return _template_with_next_run(template)
 
 
