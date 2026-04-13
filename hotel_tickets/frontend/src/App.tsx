@@ -118,6 +118,18 @@ export default function App() {
 
   const activeModule = MODULES.find((m) => m.id === activeModuleId) || null;
 
+  // Bepaal het icoon van de actieve pagina voor het kruispunt-vak
+  const activePageIcon = (() => {
+    const items = activeModule?.navItems || [];
+    // Sorteer op langste pad eerst (meest specifiek)
+    for (const item of [...items].sort((a, b) => b.to.length - a.to.length)) {
+      if (item.end ? location.pathname === item.to : location.pathname.startsWith(item.to)) {
+        return item.icon;
+      }
+    }
+    return activeModule?.icon || "";
+  })();
+
   const visibleNavItems = (activeModule?.navItems || []).filter((item) => {
     if (item.restricted === "adminOrSupervisor") return isAdminOrSupervisor;
     if (item.restricted === "settings") return isAdminOrSupervisor || !hasAdmin;
@@ -132,7 +144,14 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Desktop zijbalk — verborgen op mobile */}
-      <aside className="hidden md:flex w-16 bg-gray-900 flex-col items-center pt-4 gap-2 shrink-0">
+      <aside className="hidden md:flex w-16 bg-gray-900 flex-col items-center shrink-0">
+        {/* Kruispunt-vak: icoon van actieve pagina */}
+        {activeModule && (
+          <div className="flex items-center justify-center w-full h-14 text-2xl shrink-0">
+            {activePageIcon}
+          </div>
+        )}
+        <div className="flex flex-col items-center gap-2 pt-2 w-full">
         {MODULES.map((mod) => (
           <button
             key={mod.id}
@@ -148,6 +167,7 @@ export default function App() {
             <span className="leading-tight text-center truncate w-full px-0.5">{mod.label}</span>
           </button>
         ))}
+        </div>
       </aside>
 
       {/* Rechter kolom: topnav + inhoud */}
@@ -223,7 +243,7 @@ export default function App() {
                 <span className="font-bold text-lg mr-3 text-white shrink-0">
                   {activeModule.navTitle}
                 </span>
-                {/* Desktop navigatie links */}
+                {/* Desktop navigatie links (iconen staan in kruispunt-vak) */}
                 <div className="hidden md:flex items-center gap-1 overflow-x-auto">
                   {visibleNavItems.map((item) => (
                     <NavLink
@@ -231,14 +251,13 @@ export default function App() {
                       to={item.to}
                       end={item.end}
                       className={({ isActive }) =>
-                        `flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
+                        `flex items-center px-3 py-1.5 rounded-lg text-sm transition-colors shrink-0 ${
                           isActive
                             ? "bg-white/20 text-white"
                             : "text-white/70 hover:text-white hover:bg-white/10"
                         }`
                       }
                     >
-                      <span>{item.icon}</span>
                       <span>{item.label}</span>
                     </NavLink>
                   ))}
