@@ -41,7 +41,7 @@ const MODULES: ModuleConfig[] = [
     label: "Taken",
     icon: "✅",
     defaultPath: "/",
-    navTitle: "Hotel Tickets",
+    navTitle: "Taken",
     navItems: [
       { to: "/", label: "Mijn overzicht", icon: "👤", end: true, restricted: false },
       { to: "/tickets", label: "Tickets", icon: "🎫", restricted: false },
