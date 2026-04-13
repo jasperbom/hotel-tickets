@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, case
+from sqlalchemy import select, and_, or_, case
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
@@ -123,7 +123,10 @@ def _visible_filter(user: CurrentUser):
     if user.is_admin:
         return None  # Ziet alles
     if user.department:
-        return Ticket.category == user.department
+        return or_(
+            Ticket.category == user.department,
+            Ticket.assigned_to == user.ha_user_id,
+        )
     return None
 
 
