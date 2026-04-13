@@ -32,7 +32,7 @@ export default function PoolNieuweMeting() {
   const [datum, setDatum] = useState(now.toISOString().slice(0, 10));
   const [tijd, setTijd] = useState(now.toTimeString().slice(0, 5));
   const [values, setValues] = useState<Record<string, any>>({
-    doorzicht: "Helder",
+    doorzicht: "",
     gemeten_door: "",
   });
   const [prevLog, setPrevLog] = useState<PoolLog | null>(null);
@@ -74,6 +74,20 @@ export default function PoolNieuweMeting() {
   const verbruik = watermeter !== null && prevWatermeter !== null ? Math.round((watermeter - prevWatermeter) * 10) / 10 : null;
 
   const isAfter17 = now.getHours() >= 17;
+
+  const hasValue = (v: any) => v !== undefined && v !== null && v !== "";
+  const isFormComplete =
+    !!tijd &&
+    hasValue(values.water_temp) &&
+    hasValue(values.doorzicht) &&
+    hasValue(values.ph) &&
+    hasValue(values.ph_automaat) &&
+    hasValue(values.vbc_in) &&
+    hasValue(values.vbc_uit) &&
+    hasValue(values.vbc_automaat) &&
+    hasValue(values.tbc) &&
+    hasValue(values.flow) &&
+    (!isAfter17 || hasValue(values.bezoekers));
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -289,7 +303,7 @@ export default function PoolNieuweMeting() {
         <div className="flex gap-3 pt-1">
           <button
             type="submit"
-            disabled={saving}
+            disabled={saving || !isFormComplete}
             className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
           >
             {saving ? "Opslaan..." : "Opslaan"}
