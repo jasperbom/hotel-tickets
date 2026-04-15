@@ -21,6 +21,39 @@ const AUTOMATEN: FieldDef[] = [
 
 const ALL_INPUT_FIELDS = [...WAARDES, ...AUTOMATEN];
 
+const DRAFT_STORAGE_KEY = "pool-nieuwe-meting-draft-v1";
+
+type Draft = {
+  poolId: PoolId;
+  datum: string;
+  tijd: string;
+  values: Record<string, any>;
+};
+
+function loadDraft(): Draft | null {
+  try {
+    const raw = localStorage.getItem(DRAFT_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== "object") return null;
+    return parsed as Draft;
+  } catch {
+    return null;
+  }
+}
+
+function saveDraft(draft: Draft) {
+  try {
+    localStorage.setItem(DRAFT_STORAGE_KEY, JSON.stringify(draft));
+  } catch {}
+}
+
+function clearDraft() {
+  try {
+    localStorage.removeItem(DRAFT_STORAGE_KEY);
+  } catch {}
+}
+
 export default function PoolNieuweMeting() {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -28,13 +61,16 @@ export default function PoolNieuweMeting() {
     ? searchParams.get("pool")
     : "wellness") as PoolId;
   const now = new Date();
-  const [poolId, setPoolId] = useState<PoolId>(initialPool);
-  const [datum, setDatum] = useState(now.toISOString().slice(0, 10));
-  const [tijd, setTijd] = useState(now.toTimeString().slice(0, 5));
-  const [values, setValues] = useState<Record<string, any>>({
-    doorzicht: "",
-    gemeten_door: "",
-  });
+  const draft = loadDraft();
+  const [poolId, setPoolId] = useState<PoolId>(draft?.poolId ?? initialPool);
+  const [datum, setDatum] = useState(draft?.datum ?? now.toISOString().slice(0, 10));
+  const [tijd, setTijd] = useState(draft?.tijd ?? now.toTimeString().slice(0, 5));
+  const [values, setValues] = useState<Record<string, any>>(
+    draft?.values ?? {
+      doorzicht: "",
+      gemeten_door: "",
+    }
+  );
   const [prevLog, setPrevLog] = useState<PoolLog | null>(null);
   const [prevWatermeter, setPrevWatermeter] = useState<number | null>(null);
   const [saving, setSaving] = useState(false);
@@ -53,6 +89,12 @@ export default function PoolNieuweMeting() {
       setValues((v) => v.gemeten_door ? v : { ...v, gemeten_door: r.data.display_name });
     }).catch(() => {});
   }, []);
+
+  // Bewaar concept in localStorage zodat ingevulde waardes niet verloren gaan
+  // als de telefoon/tab tussentijds gesloten wordt.
+  useEffect(() => {
+    saveDraft({ poolId, datum, tijd, values });
+  }, [poolId, datum, tijd, values]);
 
   function set(key: string, val: any) {
     setValues((v) => ({ ...v, [key]: val }));
@@ -130,6 +172,7 @@ export default function PoolNieuweMeting() {
 
     try {
       await poolApi.create(payload as any);
+      clearDraft();
       navigate("/pools/logboek?pool=" + poolId);
     } catch {
       setError("Opslaan mislukt");
@@ -310,7 +353,10 @@ export default function PoolNieuweMeting() {
           </button>
           <button
             type="button"
-            onClick={() => navigate(-1)}
+            onClick={() => {
+              clearDraft();
+              navigate(-1);
+            }}
             className="border px-6 py-2 rounded-lg hover:bg-gray-50"
           >
             Annuleren
