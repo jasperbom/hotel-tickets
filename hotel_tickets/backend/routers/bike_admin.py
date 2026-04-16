@@ -225,6 +225,18 @@ def _build_export_excel(reservations: list[dict]) -> bytes:
     return buf.read()
 
 
+async def _get_or_create_default_type(db: AsyncSession) -> BikeType:
+    """Geeft het eerste bestaande fietstype terug, of maakt een standaard-type aan."""
+    result = await db.execute(select(BikeType).limit(1))
+    existing = result.scalar_one_or_none()
+    if existing:
+        return existing
+    default_type = BikeType(name="Standaard", price_per_day=0.0)
+    db.add(default_type)
+    await db.flush()
+    return default_type
+
+
 @router.post("/import-excel")
 async def import_excel(
     user: RequireUser,
@@ -241,7 +253,7 @@ async def import_excel(
     # Parse synchroon in thread (openpyxl is niet async)
     parsed, errors = await asyncio.to_thread(_parse_excel, contents)
 
-    # Bouw bike_number → Bike lookup
+    # Bouw bike_number → Bike lookup (bestaande fietsen)
     bikes_result = await db.execute(select(Bike))
     bike_lookup: dict[str, Bike] = {b.number: b for b in bikes_result.scalars().all()}
 
@@ -255,6 +267,9 @@ async def import_excel(
         for row in existing_result
     }
 
+    # Standaard fietstype (voor automatisch aangemaakte fietsen)
+    default_type: BikeType | None = None
+
     # Haal huidige max ID op voor counter
     max_id_result = await db.execute(select(func.max(BikeReservation.id)))
     last_id = max_id_result.scalar() or 0
@@ -262,13 +277,28 @@ async def import_excel(
 
     imported = 0
     skipped_dup = 0
-    skipped_no_bike = 0
+    bikes_created = 0
 
     for entry in parsed:
-        bike = bike_lookup.get(entry["bike_number"])
+        bike_number = entry["bike_number"]
+        bike = bike_lookup.get(bike_number)
+
+        # Fiets bestaat niet → automatisch aanmaken
         if not bike:
-            skipped_no_bike += 1
-            continue
+            if default_type is None:
+                default_type = await _get_or_create_default_type(db)
+            bike = Bike(
+                number=bike_number,
+                name=f"Fiets {bike_number}",
+                type_id=default_type.id,
+                is_reserve=False,
+                status="available",
+                total_rental_days=0,
+            )
+            db.add(bike)
+            await db.flush()  # krijg bike.id
+            bike_lookup[bike_number] = bike
+            bikes_created += 1
 
         dedup_key = (bike.id, entry["start_date"], entry["end_date"])
         if dedup_key in existing_keys:
@@ -307,9 +337,10 @@ async def import_excel(
     return {
         "ok": True,
         "imported": imported,
-        "skipped": skipped_dup + skipped_no_bike,
+        "skipped": skipped_dup,
         "skipped_duplicates": skipped_dup,
-        "skipped_no_bike": skipped_no_bike,
+        "skipped_no_bike": 0,
+        "bikes_created": bikes_created,
         "errors": errors[:10],
     }
 
