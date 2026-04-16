@@ -475,7 +475,11 @@ function FietsenZichtbaarheidPanel() {
 function FietsenExcelPanel() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [importing, setImporting] = useState(false);
-  const [importResult, setImportResult] = useState<{ ok: boolean; imported: number; skipped: number; errors: string[] } | null>(null);
+  const [exporting, setExporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    ok: boolean; imported: number; skipped: number;
+    skipped_duplicates: number; skipped_no_bike: number; errors: string[];
+  } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
   async function handleUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -494,34 +498,70 @@ function FietsenExcelPanel() {
     }
   }
 
-  async function resetImport() {
-    if (!window.confirm("Import-vlag resetten zodat je opnieuw kunt importeren?")) return;
+  async function handleExport() {
+    setExporting(true);
     try {
-      await bikeAdminApi.resetImport();
-      setImportResult(null); setImportError(null);
-      alert("Reset gelukt.");
-    } catch { setImportError("Reset mislukt"); }
+      await bikeAdminApi.exportExcel();
+    } catch {
+      setImportError("Export mislukt");
+    } finally {
+      setExporting(false);
+    }
   }
 
   return (
-    <Section title="Historische data importeren (Excel)">
-      <p className="text-sm text-gray-500">Upload een Excel-bestand in het Fietsverhuur-formaat om historische reserveringen te importeren. Kan slechts één keer; gebruik reset om opnieuw te importeren.</p>
-      <div className="flex flex-wrap gap-3 items-center">
-        <input ref={fileInputRef} type="file" accept=".xlsx" onChange={handleUpload} className="hidden" id="excel-upload" />
-        <label htmlFor="excel-upload" className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${importing ? "opacity-50 pointer-events-none" : ""}`}>
-          {importing ? "Importeren..." : "📂 Excel uploaden"}
-        </label>
-        <button onClick={resetImport} className="text-sm text-gray-400 hover:text-red-600 underline">Reset import-vlag</button>
-      </div>
-      {importResult && (
-        <div className="bg-green-50 rounded-lg p-3 text-sm text-green-800">
-          ✓ <strong>{importResult.imported}</strong> reserveringen geïmporteerd, <strong>{importResult.skipped}</strong> overgeslagen.
-          {importResult.errors.length > 0 && (
-            <ul className="mt-2 text-xs text-orange-700 space-y-0.5">{importResult.errors.map((e, i) => <li key={i}>⚠ {e}</li>)}</ul>
+    <Section title="Excel import & export">
+      <div className="space-y-4">
+        {/* Import */}
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-1">Importeren</p>
+          <p className="text-sm text-gray-500 mb-3">
+            Upload een Excel-bestand in het Fietsverhuur-formaat. Bestaande reserveringen (zelfde fiets + datums)
+            worden automatisch overgeslagen — je kunt het bestand meerdere keren uploaden.
+          </p>
+          <div className="flex flex-wrap gap-3 items-center">
+            <input ref={fileInputRef} type="file" accept=".xlsx" onChange={handleUpload} className="hidden" id="excel-upload" />
+            <label
+              htmlFor="excel-upload"
+              className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${importing ? "opacity-50 pointer-events-none" : ""}`}
+            >
+              {importing ? "Importeren..." : "📂 Excel uploaden"}
+            </label>
+          </div>
+          {importResult && (
+            <div className="mt-3 bg-green-50 rounded-lg p-3 text-sm text-green-800">
+              <p>✓ <strong>{importResult.imported}</strong> reserveringen geïmporteerd.</p>
+              {importResult.skipped > 0 && (
+                <p className="text-xs text-gray-500 mt-1">
+                  Overgeslagen: {importResult.skipped_duplicates} duplicaten
+                  {importResult.skipped_no_bike > 0 && `, ${importResult.skipped_no_bike} onbekende fietsnummers`}.
+                </p>
+              )}
+              {importResult.errors.length > 0 && (
+                <ul className="mt-2 text-xs text-orange-700 space-y-0.5">
+                  {importResult.errors.map((e, i) => <li key={i}>⚠ {e}</li>)}
+                </ul>
+              )}
+            </div>
           )}
+          {importError && <p className="mt-2 text-sm text-red-600">{importError}</p>}
         </div>
-      )}
-      {importError && <p className="text-sm text-red-600">{importError}</p>}
+
+        {/* Divider */}
+        <div className="border-t border-gray-100 pt-4">
+          <p className="text-sm font-medium text-gray-700 mb-1">Exporteren</p>
+          <p className="text-sm text-gray-500 mb-3">
+            Download alle reserveringen (verleden + toekomst) als Excel-bestand.
+          </p>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 transition-colors"
+          >
+            {exporting ? "Exporteren..." : "⬇ Exporteren als Excel"}
+          </button>
+        </div>
+      </div>
     </Section>
   );
 }
