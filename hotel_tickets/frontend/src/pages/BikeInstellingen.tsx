@@ -1,5 +1,5 @@
-import { useEffect, useState } from "react";
-import { bikesModuleApi, type BikesModuleRoles } from "../api/client";
+import { useEffect, useRef, useState } from "react";
+import { bikesModuleApi, bikeAdminApi, type BikesModuleRoles } from "../api/client";
 
 const ROLES_OPTIONS: { value: BikesModuleRoles; label: string; description: string }[] = [
   {
@@ -25,6 +25,14 @@ export default function BikeInstellingen() {
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
+  // Excel import state
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [importing, setImporting] = useState(false);
+  const [importResult, setImportResult] = useState<{
+    ok: boolean; imported: number; skipped: number; errors: string[];
+  } | null>(null);
+  const [importError, setImportError] = useState<string | null>(null);
+
   useEffect(() => {
     bikesModuleApi
       .getSetting()
@@ -42,6 +50,36 @@ export default function BikeInstellingen() {
       setTimeout(() => setSaved(false), 3000);
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleExcelUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setImporting(true);
+    setImportResult(null);
+    setImportError(null);
+    try {
+      const r = await bikeAdminApi.importExcel(file);
+      setImportResult(r.data);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setImportError(msg || "Import mislukt");
+    } finally {
+      setImporting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  async function resetImport() {
+    if (!window.confirm("Import-vlag resetten zodat je opnieuw kunt importeren?")) return;
+    try {
+      await bikeAdminApi.resetImport();
+      setImportResult(null);
+      setImportError(null);
+      alert("Reset gelukt. Je kunt nu opnieuw importeren.");
+    } catch {
+      setImportError("Reset mislukt");
     }
   }
 
@@ -86,6 +124,52 @@ export default function BikeInstellingen() {
           </div>
           {saving && <p className="text-sm text-gray-400 mt-2">Opslaan...</p>}
           {saved && <p className="text-sm text-green-600 mt-2">✓ Instelling opgeslagen</p>}
+        </div>
+
+        {/* Excel import */}
+        <div className="border-t pt-5">
+          <h2 className="font-bold text-base mb-1">Historische data importeren</h2>
+          <p className="text-sm text-gray-500 mb-4">
+            Upload een Excel-bestand in het Fietsverhuur-formaat om historische reserveringen te importeren.
+            Dit kan slechts één keer; gebruik de reset-knop om opnieuw te importeren.
+          </p>
+          <div className="flex flex-wrap gap-3 items-center">
+            <input
+              ref={fileInputRef}
+              type="file"
+              accept=".xlsx"
+              onChange={handleExcelUpload}
+              className="hidden"
+              id="excel-upload"
+            />
+            <label
+              htmlFor="excel-upload"
+              className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${importing ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
+            >
+              {importing ? "Importeren..." : "📂 Excel uploaden"}
+            </label>
+            <button
+              onClick={resetImport}
+              className="text-sm text-gray-500 hover:text-red-600 underline"
+            >
+              Reset import-vlag
+            </button>
+          </div>
+
+          {importResult && (
+            <div className="mt-3 bg-green-50 rounded-lg p-3 text-sm text-green-800">
+              ✓ Import klaar — <strong>{importResult.imported}</strong> reserveringen geïmporteerd,{" "}
+              <strong>{importResult.skipped}</strong> overgeslagen (fiets niet gevonden).
+              {importResult.errors.length > 0 && (
+                <ul className="mt-2 text-xs text-orange-700 space-y-0.5">
+                  {importResult.errors.map((e, i) => <li key={i}>⚠ {e}</li>)}
+                </ul>
+              )}
+            </div>
+          )}
+          {importError && (
+            <p className="mt-3 text-sm text-red-600">{importError}</p>
+          )}
         </div>
 
         {/* Info */}
