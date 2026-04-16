@@ -505,4 +505,6 @@ export const bikeAdminApi = {
   },
   rebalance: () =>
     api.post<{ ok: boolean; changed: number; total_future: number }>("/bike-admin/rebalance"),
+  resetDatabase: () =>
+    api.delete<{ ok: boolean; message: string }>("/bike-admin/reset"),
 };

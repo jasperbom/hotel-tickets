@@ -571,6 +571,66 @@ function FietsenExcelPanel() {
   );
 }
 
+function FietsenResetPanel() {
+  const [confirming, setConfirming] = useState(false);
+  const [resetting, setResetting] = useState(false);
+  const [result, setResult] = useState<{ ok: boolean; text: string } | null>(null);
+
+  async function handleReset() {
+    setResetting(true);
+    setResult(null);
+    try {
+      const res = await bikeAdminApi.resetDatabase();
+      setResult({ ok: true, text: res.data.message });
+      setConfirming(false);
+    } catch {
+      setResult({ ok: false, text: "Reset mislukt. Probeer het opnieuw." });
+    } finally {
+      setResetting(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-5 border border-red-200 space-y-4">
+      <h2 className="font-bold text-base text-red-700">Database resetten</h2>
+      <p className="text-sm text-gray-500">
+        Verwijdert <strong>alle</strong> fietsdata: reserveringen, fietsen en fietstypes.
+        Dit kan <strong>niet</strong> ongedaan worden gemaakt.
+      </p>
+      {!confirming ? (
+        <button
+          onClick={() => setConfirming(true)}
+          className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700"
+        >
+          🗑 Database resetten
+        </button>
+      ) : (
+        <div className="flex flex-wrap gap-2 items-center">
+          <span className="text-red-600 text-sm font-medium">Weet je het zeker? Dit verwijdert alles.</span>
+          <button
+            onClick={handleReset}
+            disabled={resetting}
+            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+          >
+            {resetting ? "Verwijderen..." : "Ja, alles verwijderen"}
+          </button>
+          <button
+            onClick={() => setConfirming(false)}
+            className="border px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+          >
+            Annuleren
+          </button>
+        </div>
+      )}
+      {result && (
+        <p className={`text-sm ${result.ok ? "text-orange-600" : "text-red-600"}`}>
+          {result.ok ? "✓ " : "✗ "}{result.text}
+        </p>
+      )}
+    </div>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // HOOFD COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
@@ -629,6 +689,7 @@ export default function Instellingen() {
         <div className="space-y-5">
           <FietsenZichtbaarheidPanel />
           {isAdmin && <FietsenExcelPanel />}
+          {me?.role === "admin" && <FietsenResetPanel />}
         </div>
       )}
     </div>
