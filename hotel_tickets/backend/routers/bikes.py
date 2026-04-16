@@ -4,6 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_
+from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..models import (
@@ -76,6 +77,7 @@ async def _get_available_bikes(
     """Geef fietsen van het juiste type terug die vrij zijn in de datumrange, gesorteerd op verhuurdagen (rotatie)."""
     result = await db.execute(
         select(Bike)
+        .options(selectinload(Bike.bike_type))
         .where(Bike.type_id == type_id, Bike.status == BikeStatus.available)
         .order_by(Bike.total_rental_days.asc())
     )
@@ -105,7 +107,9 @@ async def _get_available_bikes(
 
 @router.get("/types")
 async def list_bike_types(user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(BikeType).order_by(BikeType.name))
+    result = await db.execute(
+        select(BikeType).options(selectinload(BikeType.bikes)).order_by(BikeType.name)
+    )
     types = result.scalars().all()
     return [
         {
@@ -141,7 +145,9 @@ async def update_bike_type(type_id: int, data: BikeTypeUpdate, user: RequireUser
 
 @router.delete("/types/{type_id}")
 async def delete_bike_type(type_id: int, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(BikeType).where(BikeType.id == type_id))
+    result = await db.execute(
+        select(BikeType).options(selectinload(BikeType.bikes)).where(BikeType.id == type_id)
+    )
     bt = result.scalar_one_or_none()
     if not bt:
         raise HTTPException(404, "Fietstype niet gevonden")
@@ -155,7 +161,9 @@ async def delete_bike_type(type_id: int, user: RequireUser, db: AsyncSession = D
 
 @router.get("")
 async def list_bikes(user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Bike).order_by(Bike.number))
+    result = await db.execute(
+        select(Bike).options(selectinload(Bike.bike_type)).order_by(Bike.number)
+    )
     bikes = result.scalars().all()
     return [_bike_dict(b) for b in bikes]
 
@@ -179,13 +187,19 @@ async def create_bike(data: BikeCreate, user: RequireUser, db: AsyncSession = De
     )
     db.add(bike)
     await db.flush()
-    await db.refresh(bike)
+    # Herlaad met relationship zodat _bike_dict bike.bike_type kan lezen
+    result2 = await db.execute(
+        select(Bike).options(selectinload(Bike.bike_type)).where(Bike.id == bike.id)
+    )
+    bike = result2.scalar_one()
     return _bike_dict(bike)
 
 
 @router.put("/{bike_id}")
 async def update_bike(bike_id: int, data: BikeUpdate, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Bike).where(Bike.id == bike_id))
+    result = await db.execute(
+        select(Bike).options(selectinload(Bike.bike_type)).where(Bike.id == bike_id)
+    )
     bike = result.scalar_one_or_none()
     if not bike:
         raise HTTPException(404, "Fiets niet gevonden")
