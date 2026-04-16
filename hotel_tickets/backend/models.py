@@ -226,6 +226,8 @@ class BikeReservation(Base):
     bike_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("bike_types.id"), nullable=False)
     status: Mapped[BikeReservationStatus] = mapped_column(Enum(BikeReservationStatus), default=BikeReservationStatus.active, nullable=False)
     notes: Mapped[str | None] = mapped_column(Text)
+    key_given_at: Mapped[datetime | None] = mapped_column(DateTime)
+    key_returned_at: Mapped[datetime | None] = mapped_column(DateTime)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     bike_type: Mapped["BikeType"] = relationship("BikeType", back_populates="bike_reservations")

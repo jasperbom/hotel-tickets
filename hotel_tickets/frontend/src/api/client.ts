@@ -363,6 +363,8 @@ export interface BikeReservation {
   total_price: number | null;
   status: BikeReservationStatus;
   notes: string | null;
+  key_given_at: string | null;
+  key_returned_at: string | null;
   bikes: { id: number; number: string; name: string }[];
   created_at: string | null;
 }
@@ -444,7 +446,7 @@ export const bikeReservationApi = {
     notes?: string;
   }) => api.post<BikeReservation>("/bike-reservations", data),
   get: (id: number) => api.get<BikeReservation>(`/bike-reservations/${id}`),
-  update: (id: number, data: Partial<BikeReservation>) =>
+  update: (id: number, data: Partial<BikeReservation> & { key_given?: boolean; key_returned?: boolean }) =>
     api.put<BikeReservation>(`/bike-reservations/${id}`, data),
   cancel: (id: number) => api.delete(`/bike-reservations/${id}`),
 };
@@ -503,8 +505,10 @@ export const bikeAdminApi = {
     a.click();
     URL.revokeObjectURL(url);
   },
-  rebalance: () =>
-    api.post<{ ok: boolean; changed: number; total_future: number }>("/bike-admin/rebalance"),
+  rebalance: (dryRun?: boolean) =>
+    api.post<{ ok: boolean; changed: number; total_future: number; dry_run: boolean }>(
+      `/bike-admin/rebalance${dryRun ? "?dry_run=true" : ""}`
+    ),
   resetDatabase: () =>
     api.delete<{ ok: boolean; message: string }>("/bike-admin/reset"),
 };
