@@ -286,14 +286,24 @@ function BalansTab({
   bikes: Bike[];
   onRebalance: () => void;
 }) {
-  const [preview, setPreview] = useState<{ changed: number; total_future: number } | null>(null);
+  const [previewMeta, setPreviewMeta] = useState<{ changed: number; total_future: number } | null>(null);
+  const [projectedDays, setProjectedDays] = useState<Record<number, number> | null>(null);
   const [previewing, setPreviewing] = useState(false);
   const [rebalancing, setRebalancing] = useState(false);
   const [result, setResult] = useState<{ changed: number; total_future: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const activeBikes = bikes.filter((b) => b.status !== "retired");
-  const maxDays = Math.max(...activeBikes.map((b) => b.total_rental_days), 1);
+
+  // Als preview actief is, gebruik geprojecteerde waarden voor schaalberekening
+  const displayDays = (b: Bike) =>
+    projectedDays ? (projectedDays[b.id] ?? b.total_rental_days) : b.total_rental_days;
+
+  const maxDays = Math.max(...activeBikes.map((b) => Math.max(b.total_rental_days, displayDays(b))), 1);
+
+  const avgDays = activeBikes.length > 0
+    ? Math.round(activeBikes.reduce((s, b) => s + b.total_rental_days, 0) / activeBikes.length)
+    : 0;
 
   // Groepeer op type
   const groups = new Map<string, { typeName: string; bikes: Bike[] }>();
@@ -305,11 +315,15 @@ function BalansTab({
 
   async function loadPreview() {
     setPreviewing(true);
-    setPreview(null);
+    setPreviewMeta(null);
+    setProjectedDays(null);
     setError(null);
     try {
       const res = await bikeAdminApi.rebalance(true);
-      setPreview({ changed: res.data.changed, total_future: res.data.total_future });
+      setPreviewMeta({ changed: res.data.changed, total_future: res.data.total_future });
+      if (res.data.projected_days) {
+        setProjectedDays(res.data.projected_days);
+      }
     } catch {
       setError("Preview mislukt");
     } finally {
@@ -325,7 +339,8 @@ function BalansTab({
     try {
       const res = await bikeAdminApi.rebalance(false);
       setResult({ changed: res.data.changed, total_future: res.data.total_future });
-      setPreview(null);
+      setPreviewMeta(null);
+      setProjectedDays(null);
       onRebalance();
     } catch {
       setError("Herbalanceren mislukt");
@@ -334,18 +349,15 @@ function BalansTab({
     }
   }
 
-  const avgDays = activeBikes.length > 0
-    ? Math.round(activeBikes.reduce((s, b) => s + b.total_rental_days, 0) / activeBikes.length)
-    : 0;
-
   return (
     <div className="space-y-4">
-      {/* Samenvatting */}
       <div className="bg-white rounded-2xl shadow p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-bold text-lg">Gebruiksbalans fietsen</h2>
-            <p className="text-sm text-gray-500">Gemiddeld: <span className="font-semibold text-gray-700">{avgDays} verhuurdagen</span> per fiets</p>
+            <p className="text-sm text-gray-500">
+              Gemiddeld: <span className="font-semibold text-gray-700">{avgDays} verhuurdagen</span> per fiets
+            </p>
           </div>
           <div className="flex gap-2">
             <button
@@ -365,13 +377,14 @@ function BalansTab({
           </div>
         </div>
 
-        {preview && (
+        {previewMeta && (
           <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-sm text-purple-800">
-            🔍 <strong>Preview:</strong> {preview.total_future === 0
+            🔍 <strong>Preview:</strong>{" "}
+            {previewMeta.total_future === 0
               ? "Geen toekomstige reserveringen om te herbalanceren."
-              : preview.changed === 0
-              ? `${preview.total_future} toekomstige reserveringen — al optimaal verdeeld, geen wijzigingen nodig.`
-              : `${preview.changed} van ${preview.total_future} toekomstige reserveringen worden opnieuw verdeeld.`}
+              : previewMeta.changed === 0
+              ? `${previewMeta.total_future} toekomstige reserveringen — al optimaal verdeeld.`
+              : `${previewMeta.changed} van ${previewMeta.total_future} toekomstige reserveringen worden opnieuw verdeeld. De staafdiagrammen tonen de nieuwe verdeling.`}
           </div>
         )}
 
@@ -383,17 +396,35 @@ function BalansTab({
 
         {error && <p className="text-red-600 text-sm mb-3">{error}</p>}
 
+        {/* Legenda preview */}
+        {projectedDays && (
+          <div className="flex items-center gap-4 text-xs text-gray-500 mb-3 p-2 bg-gray-50 rounded-lg">
+            <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-gray-300" /> Huidige verdeling</div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-purple-500" /> Na herbalancering</div>
+          </div>
+        )}
+
         {/* Balans per type */}
         {[...groups.values()].map((group) => (
           <div key={group.typeName} className="mb-6">
             <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{group.typeName}</p>
             <div className="space-y-2">
               {group.bikes.sort((a, b) => b.total_rental_days - a.total_rental_days).map((b) => {
-                const pct = maxDays > 0 ? (b.total_rental_days / maxDays) * 100 : 0;
-                const isAboveAvg = b.total_rental_days > avgDays;
-                const barColor = b.status === "maintenance"
+                const currentDays = b.total_rental_days;
+                const projected = projectedDays ? (projectedDays[b.id] ?? currentDays) : null;
+                const shownDays = projected ?? currentDays;
+                const delta = projected !== null ? projected - currentDays : 0;
+
+                const currentPct = maxDays > 0 ? (currentDays / maxDays) * 100 : 0;
+                const projectedPct = maxDays > 0 ? (shownDays / maxDays) * 100 : 0;
+
+                const isAboveAvg = shownDays > avgDays;
+                const barColor = projectedDays
+                  ? "bg-purple-500"
+                  : b.status === "maintenance"
                   ? "bg-orange-400"
                   : isAboveAvg ? "bg-blue-500" : "bg-green-500";
+
                 return (
                   <div key={b.id} className="flex items-center gap-3">
                     <div className="w-20 shrink-0 text-sm">
@@ -401,19 +432,32 @@ function BalansTab({
                       {b.is_reserve && <span className="ml-1 text-xs text-gray-400">(R)</span>}
                       {b.status === "maintenance" && <span className="ml-1 text-xs text-orange-500">🔧</span>}
                     </div>
-                    <div className="flex-1 bg-gray-100 rounded-full h-4 relative overflow-hidden">
+                    <div className="flex-1 bg-gray-100 rounded-full relative overflow-hidden" style={{ height: projectedDays ? 20 : 16 }}>
+                      {/* Huidige balk (grijs, achtergrond bij preview) */}
+                      {projectedDays && (
+                        <div
+                          className="absolute top-0 bottom-0 bg-gray-300 rounded-full"
+                          style={{ width: `${Math.max(currentPct, 2)}%` }}
+                        />
+                      )}
+                      {/* Geprojecteerde of huidige gekleurde balk */}
                       <div
-                        className={`h-full rounded-full transition-all ${barColor}`}
-                        style={{ width: `${Math.max(pct, 2)}%` }}
+                        className={`absolute top-0 bottom-0 rounded-full transition-all duration-500 ${barColor}`}
+                        style={{ width: `${Math.max(projectedPct, 2)}%`, opacity: projectedDays ? 0.85 : 1 }}
                       />
                       {/* Gemiddelde indicator */}
                       <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-gray-400 opacity-60"
+                        className="absolute top-0 bottom-0 w-0.5 bg-gray-500 opacity-50"
                         style={{ left: `${(avgDays / maxDays) * 100}%` }}
                       />
                     </div>
-                    <div className="w-16 text-right text-sm font-medium text-gray-700">
-                      {b.total_rental_days}d
+                    <div className="w-20 text-right text-sm font-medium text-gray-700 flex items-center justify-end gap-1">
+                      <span>{shownDays}d</span>
+                      {projectedDays && delta !== 0 && (
+                        <span className={`text-xs font-semibold ${delta > 0 ? "text-orange-500" : "text-green-600"}`}>
+                          {delta > 0 ? `+${delta}` : delta}
+                        </span>
+                      )}
                     </div>
                   </div>
                 );
@@ -422,11 +466,20 @@ function BalansTab({
           </div>
         ))}
 
-        <div className="flex items-center gap-4 text-xs text-gray-500 pt-2 border-t">
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500" /> Boven gemiddelde</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-500" /> Onder gemiddelde</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-400" /> In onderhoud</div>
-          <div className="flex items-center gap-1.5"><div className="w-0.5 h-4 bg-gray-400" /> Gemiddelde</div>
+        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-2 border-t">
+          {!projectedDays && (
+            <>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500" /> Boven gemiddelde</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-500" /> Onder gemiddelde</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-400" /> In onderhoud</div>
+            </>
+          )}
+          <div className="flex items-center gap-1.5"><div className="w-0.5 h-4 bg-gray-500 opacity-50" /> Gemiddelde</div>
+          {projectedDays && (
+            <button onClick={() => { setProjectedDays(null); setPreviewMeta(null); }} className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline">
+              Preview wissen
+            </button>
+          )}
         </div>
       </div>
     </div>

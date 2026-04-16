@@ -553,7 +553,16 @@ async def rebalance_bikes(
             changed += 1
 
     if dry_run:
+        # Sla de geprojecteerde verdeling op per fiets voordat we terugrollen
+        projected_days = {b.id: b.total_rental_days for b in all_bikes}
         await db.rollback()
+        return {
+            "ok": True,
+            "changed": changed,
+            "total_future": len(future_res),
+            "dry_run": dry_run,
+            "projected_days": projected_days,
+        }
     else:
         await db.commit()
     return {"ok": True, "changed": changed, "total_future": len(future_res), "dry_run": dry_run}
