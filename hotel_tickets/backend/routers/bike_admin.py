@@ -15,9 +15,10 @@ from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
 from ..database import get_db
+from sqlalchemy import delete as sa_delete
 from ..models import (
     Bike, BikeType, BikeReservation, BikeReservationBike,
-    BikeReservationStatus, BikeStatus, SystemSetting,
+    BikeReservationStatus, BikeStatus, SystemSetting, BikeMaintenanceRecord, BikeLog,
 )
 from ..auth import RequireUser
 
@@ -548,3 +549,26 @@ async def rebalance_bikes(user: RequireUser, db: AsyncSession = Depends(get_db))
 
     await db.commit()
     return {"ok": True, "changed": changed, "total_future": len(future_res)}
+
+
+# ── Database reset ─────────────────────────────────────────────────────────────
+
+@router.delete("/reset")
+async def reset_bikes_database(
+    current_user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Verwijdert alle fietsdata: reserveringen, fietsen en fietstypes. Alleen voor admins."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de fietsendatabase resetten.")
+
+    # Verwijder in volgorde van afhankelijkheden
+    await db.execute(sa_delete(BikeLog))
+    await db.execute(sa_delete(BikeMaintenanceRecord))
+    await db.execute(sa_delete(BikeReservationBike))
+    await db.execute(sa_delete(BikeReservation))
+    await db.execute(sa_delete(Bike))
+    await db.execute(sa_delete(BikeType))
+    await db.commit()
+
+    return {"ok": True, "message": "Alle fietsdata is verwijderd."}
