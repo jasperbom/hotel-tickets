@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bikeApi, bikeMaintenanceApi, type Bike, type BikeType, type BikeMaintenanceConflict } from "../api/client";
+import { bikeApi, bikeAdminApi, bikeMaintenanceApi, type Bike, type BikeType, type BikeMaintenanceConflict } from "../api/client";
 
 type Tab = "fietsen" | "types" | "onderhoud";
 
@@ -176,6 +176,8 @@ export default function BikeBeheer() {
   const [types, setTypes] = useState<BikeType[]>([]);
   const [loading, setLoading] = useState(true);
   const [maintenanceBike, setMaintenanceBike] = useState<Bike | null>(null);
+  const [rebalancing, setRebalancing] = useState(false);
+  const [rebalanceResult, setRebalanceResult] = useState<{ changed: number; total_future: number } | null>(null);
 
   // Nieuw fiets form
   const [newBike, setNewBike] = useState({ number: "", name: "", type_id: 0, is_reserve: false });
@@ -229,6 +231,21 @@ export default function BikeBeheer() {
     }
   }
 
+  async function handleRebalance() {
+    if (!window.confirm("Toekomstige reserveringen herbalanceren? Dit herverdeelt de fietsen op basis van het aantal verhuurddagen.")) return;
+    setRebalancing(true);
+    setRebalanceResult(null);
+    try {
+      const res = await bikeAdminApi.rebalance();
+      setRebalanceResult({ changed: res.data.changed, total_future: res.data.total_future });
+      load();
+    } catch {
+      setError("Herbalanceren mislukt");
+    } finally {
+      setRebalancing(false);
+    }
+  }
+
   async function resolveMaintenanceBike(bike: Bike) {
     if (!window.confirm(`Onderhoud van fiets #${bike.number} afronden?`)) return;
     try {
@@ -245,7 +262,21 @@ export default function BikeBeheer() {
 
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-6">Fietsbeheer</h1>
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold">Fietsbeheer</h1>
+        <button
+          onClick={handleRebalance}
+          disabled={rebalancing}
+          className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
+        >
+          {rebalancing ? "Bezig..." : "⚖️ Herbalanceer"}
+        </button>
+      </div>
+      {rebalanceResult && (
+        <div className="mb-4 p-3 bg-purple-50 border border-purple-200 rounded-xl text-sm text-purple-800">
+          ✓ Herbalancering klaar: {rebalanceResult.changed} van {rebalanceResult.total_future} toekomstige reserveringen opnieuw verdeeld.
+        </div>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
