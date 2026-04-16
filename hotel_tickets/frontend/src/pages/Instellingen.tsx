@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi,
+  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
 } from "../api/client";
 
-type Tab = "systeem" | "zwembaden" | "fietsen";
+type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl";
 
 // ── Gedeelde hulpcomponent ─────────────────────────────────────────────────────
 
@@ -632,6 +632,122 @@ function FietsenResetPanel() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// HUISSTIJL
+// ══════════════════════════════════════════════════════════════════════════════
+
+function HuisstijlPanel() {
+  const [color, setColor] = useState("#1e3a5f");
+  const [logo, setLogo] = useState<string | null>(null);
+  const [savingColor, setSavingColor] = useState(false);
+  const [savedColor, setSavedColor] = useState(false);
+  const [logoUploading, setLogoUploading] = useState(false);
+  const [logoMsg, setLogoMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    brandingApi.get().then((r) => {
+      if (r.data.brand_color) setColor(r.data.brand_color);
+      setLogo(r.data.brand_logo);
+    }).catch(() => {});
+  }, []);
+
+  async function saveColor() {
+    setSavingColor(true); setSavedColor(false);
+    try {
+      await brandingApi.update({ brand_color: color });
+      setSavedColor(true);
+      setTimeout(() => { setSavedColor(false); window.location.reload(); }, 1200);
+    } finally { setSavingColor(false); }
+  }
+
+  async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setLogoUploading(true); setLogoMsg(null);
+    try {
+      const r = await brandingApi.uploadLogo(file);
+      setLogo(r.data.brand_logo);
+      setLogoMsg({ type: "ok", text: "Logo opgeslagen." });
+      setTimeout(() => { setLogoMsg(null); window.location.reload(); }, 1200);
+    } catch {
+      setLogoMsg({ type: "err", text: "Upload mislukt. Maximaal 500 KB, PNG/JPEG." });
+    } finally {
+      setLogoUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  }
+
+  return (
+    <div className="space-y-5">
+      <Section title="Merkkleur">
+        <p className="text-sm text-gray-500">
+          Stel de primaire kleur in die wordt gebruikt voor de navigatiebalk en zijbalk.
+        </p>
+        <div className="flex items-center gap-3">
+          <input
+            type="color"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            className="w-10 h-10 rounded cursor-pointer border border-gray-200"
+          />
+          <input
+            type="text"
+            value={color}
+            onChange={(e) => setColor(e.target.value)}
+            placeholder="#1e3a5f"
+            className="border rounded-lg px-3 py-2 text-sm font-mono w-32 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+          <div className="flex-1 h-10 rounded-lg border border-gray-200" style={{ backgroundColor: color }} />
+        </div>
+        <div className="flex items-center gap-3">
+          <button
+            onClick={saveColor}
+            disabled={savingColor}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+          >
+            {savingColor ? "Opslaan..." : "Opslaan"}
+          </button>
+          {savedColor && <span className="text-sm text-green-600">✓ Opgeslagen</span>}
+        </div>
+      </Section>
+
+      <Section title="Logo">
+        <p className="text-sm text-gray-500">
+          Upload een logo (PNG of JPEG, max 500 KB). Het logo verschijnt links bovenin en dient op mobiel als menu-knop.
+        </p>
+        {logo && (
+          <div className="flex items-center gap-4">
+            <img src={logo} alt="Huidig logo" className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-gray-50 p-1" />
+            <span className="text-sm text-gray-500">Huidig logo</span>
+          </div>
+        )}
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            onChange={handleLogoUpload}
+            className="hidden"
+            id="logo-upload"
+          />
+          <label
+            htmlFor="logo-upload"
+            className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${logoUploading ? "opacity-50 pointer-events-none" : ""}`}
+          >
+            {logoUploading ? "Uploaden..." : "📂 Logo uploaden"}
+          </label>
+        </div>
+        {logoMsg && (
+          <p className={`text-sm ${logoMsg.type === "ok" ? "text-green-700" : "text-red-600"}`}>
+            {logoMsg.type === "ok" ? "✓ " : "✗ "}{logoMsg.text}
+          </p>
+        )}
+      </Section>
+    </div>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // HOOFD COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -649,6 +765,7 @@ export default function Instellingen() {
     { id: "systeem", label: "Systeem", icon: "🏠" },
     { id: "zwembaden", label: "Zwembaden", icon: "🏊" },
     { id: "fietsen", label: "Fietsen", icon: "🚲" },
+    { id: "huisstijl", label: "Huisstijl", icon: "🎨" },
   ];
 
   return (
@@ -691,6 +808,11 @@ export default function Instellingen() {
           {isAdmin && <FietsenExcelPanel />}
           {me?.role === "admin" && <FietsenResetPanel />}
         </div>
+      )}
+
+      {tab === "huisstijl" && isAdmin && <HuisstijlPanel />}
+      {tab === "huisstijl" && !isAdmin && (
+        <p className="text-sm text-gray-500">Alleen admins kunnen de huisstijl aanpassen.</p>
       )}
     </div>
   );

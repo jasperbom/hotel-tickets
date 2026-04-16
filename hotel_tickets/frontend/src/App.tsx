@@ -21,7 +21,7 @@ import BikeReserveringDetail from "./pages/BikeReserveringDetail";
 import BikeBeheer from "./pages/BikeBeheer";
 import BikeInstellingen from "./pages/BikeInstellingen";
 import Instellingen from "./pages/Instellingen";
-import { userApi, bikesModuleApi, type UserRole, type BikesModuleRoles } from "./api/client";
+import { userApi, bikesModuleApi, brandingApi, type UserRole, type BikesModuleRoles } from "./api/client";
 
 // --- Module configuratie ---
 
@@ -89,16 +89,24 @@ export default function App() {
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [bikesModuleRoles, setBikesModuleRoles] = useState<BikesModuleRoles>("all");
+  const [brandColor, setBrandColor] = useState<string | null>(null);
+  const [brandLogo, setBrandLogo] = useState<string | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    Promise.all([userApi.me(), userApi.list(), bikesModuleApi.getSetting()])
-      .then(([meRes, listRes, bikesRes]) => {
+    Promise.all([userApi.me(), userApi.list(), bikesModuleApi.getSetting(), brandingApi.get()])
+      .then(([meRes, listRes, bikesRes, brandingRes]) => {
         setCurrentUser(meRes.data);
         setHasAdmin(listRes.data.some((u) => u.role === "admin"));
         setBikesModuleRoles(bikesRes.data.bikes_module_roles);
+        if (brandingRes.data.brand_color) {
+          setBrandColor(brandingRes.data.brand_color);
+        }
+        if (brandingRes.data.brand_logo) {
+          setBrandLogo(brandingRes.data.brand_logo);
+        }
       })
       .catch(() => {});
   }, []);
@@ -174,13 +182,18 @@ export default function App() {
   return (
     <div className="flex min-h-screen bg-gray-50">
       {/* Desktop zijbalk — verborgen op mobile */}
-      <aside className="hidden md:flex w-16 bg-gray-900 flex-col items-center shrink-0">
-        {/* Kruispunt-vak: icoon van actieve pagina */}
-        {activeModule && (
-          <div className="flex items-center justify-center w-full h-14 text-2xl shrink-0">
-            {activeModule.icon}
-          </div>
-        )}
+      <aside
+        className="hidden md:flex w-16 flex-col items-center shrink-0"
+        style={{ backgroundColor: brandColor ?? "#111827" }}
+      >
+        {/* Logo bovenin zijbalk */}
+        <div className="flex items-center justify-center w-full h-14 shrink-0">
+          {brandLogo ? (
+            <img src={brandLogo} alt="Logo" className="w-8 h-8 object-contain rounded" />
+          ) : (
+            <span className="text-2xl font-bold text-white/80 select-none">S</span>
+          )}
+        </div>
         <div className="flex flex-col items-center gap-2 pt-2 w-full flex-1">
         {visibleModules.map((mod) => (
           <button
@@ -220,7 +233,7 @@ export default function App() {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top navigatie */}
         {(activeModule || isOnInstellingen) && (
-          <nav className="bg-hotel-900 text-white shadow-lg relative z-50">
+          <nav className="text-white shadow-lg relative z-50" style={{ backgroundColor: brandColor ?? "#1e3a5f" }}>
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 min-w-0">
                 {/* Modulewisselaar knop (mobiel: toont dropdown, desktop: verborgen want zijbalk) */}
@@ -228,11 +241,15 @@ export default function App() {
                   <button
                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                     title="Modules"
-                    className={`flex items-center justify-center w-9 h-9 -ml-1 rounded-lg transition-colors text-xl ${
+                    className={`flex items-center justify-center w-9 h-9 -ml-1 rounded-lg transition-colors ${
                       mobileMenuOpen ? "bg-white/20" : "hover:bg-white/10"
                     }`}
                   >
-                    {activeModule?.icon ?? "⚙️"}
+                    {brandLogo ? (
+                      <img src={brandLogo} alt="Menu" className="w-6 h-6 object-contain rounded" />
+                    ) : (
+                      <span className="text-xl font-bold text-white select-none">S</span>
+                    )}
                   </button>
 
                   {/* Module-dropdown */}

@@ -248,6 +248,24 @@ export const systemSettingsApi = {
   update: (data: Partial<SystemSettings>) => api.patch<SystemSettings>("/settings/system", data),
 };
 
+export interface BrandingSettings {
+  brand_color: string | null;
+  brand_logo: string | null;
+}
+
+export const brandingApi = {
+  get: () => api.get<BrandingSettings>("/settings/branding"),
+  update: (data: { brand_color?: string | null }) =>
+    api.patch<BrandingSettings>("/settings/branding", data),
+  uploadLogo: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post<BrandingSettings>("/settings/branding/logo", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+};
+
 // --- Zwembaden types ---
 
 export type PoolId = "wellness" | "zwembad";
