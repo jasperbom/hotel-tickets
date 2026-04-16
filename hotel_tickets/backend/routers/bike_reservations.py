@@ -10,6 +10,7 @@ from ..database import get_db
 from ..models import (
     Bike, BikeType, BikeReservation, BikeReservationBike,
     BikeReservationStatus, SystemSetting,
+    Ticket, Category, Status, Priority,
 )
 
 def _reservation_options():
@@ -64,6 +65,7 @@ def _reservation_dict(res: BikeReservation) -> dict:
         "notes": res.notes,
         "key_given_at": res.key_given_at.isoformat() if res.key_given_at else None,
         "key_returned_at": res.key_returned_at.isoformat() if res.key_returned_at else None,
+        "key_ticket_id": res.key_ticket_id,
         "bikes": [
             {"id": rb.bike.id, "number": rb.bike.number, "name": rb.bike.name}
             for rb in res.reservation_bikes
@@ -192,9 +194,49 @@ async def update_reservation(
         except ValueError:
             raise HTTPException(400, f"Ongeldige status: {data.status}")
     if data.key_given is not None:
+        was_given = res.key_given_at is not None
         res.key_given_at = datetime.now(timezone.utc) if data.key_given else None
+
+        if data.key_given and not was_given:
+            # Automatisch receptie-ticket aanmaken voor sleutelterugave
+            bike_numbers = ", ".join(f"#{rb.bike.number}" for rb in res.reservation_bikes)
+            desc_parts = [f"Fietsen: {bike_numbers}. Verhuurperiode: {res.start_date} t/m {res.end_date}."]
+            if res.guest_room:
+                desc_parts.append(f"Kamer: {res.guest_room}.")
+            ticket = Ticket(
+                title=f"Fietssleutel terugkrijgen – {res.guest_name}",
+                description=" ".join(desc_parts),
+                category=Category.reception,
+                priority=Priority.medium,
+                created_by="system",
+                status=Status.open,
+            )
+            db.add(ticket)
+            await db.flush()
+            res.key_ticket_id = ticket.id
+        elif not data.key_given and res.key_ticket_id:
+            # Uitgifte teruggedraaid: verwijder het openstaande ticket
+            existing = await db.get(Ticket, res.key_ticket_id)
+            if existing and existing.status == Status.open:
+                await db.delete(existing)
+            res.key_ticket_id = None
+
     if data.key_returned is not None:
         res.key_returned_at = datetime.now(timezone.utc) if data.key_returned else None
+        if res.key_ticket_id:
+            existing = await db.get(Ticket, res.key_ticket_id)
+            if existing:
+                if data.key_returned:
+                    # Sleutel terug: ticket automatisch sluiten
+                    existing.status = Status.closed
+                    existing.closed_by = "system"
+                    existing.closed_at = datetime.now(timezone.utc)
+                else:
+                    # Terugdraaien: ticket heropenen
+                    existing.status = Status.open
+                    existing.closed_by = None
+                    existing.closed_at = None
+
     return _reservation_dict(res)
 
 

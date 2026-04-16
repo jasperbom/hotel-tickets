@@ -59,6 +59,7 @@ async def _run_migrations(conn):
         ("tickets", "photos", "TEXT"),
         ("bike_reservations", "key_given_at", "DATETIME"),
         ("bike_reservations", "key_returned_at", "DATETIME"),
+        ("bike_reservations", "key_ticket_id", "VARCHAR(36)"),
     ]
     for table, column, col_def in column_migrations:
         if not await _column_exists(conn, table, column):
