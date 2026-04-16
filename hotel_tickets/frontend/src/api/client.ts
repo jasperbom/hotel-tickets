@@ -462,8 +462,10 @@ export const bikeMaintenanceApi = {
   }) => api.post<{ ok: boolean; maintenance_record_id: number; ticket_id: string; moved_reservations: object[]; cancelled_reservations: object[] }>("/bike-maintenance/start", data),
   resolve: (bikeId: number) =>
     api.post<{ ok: boolean }>("/bike-maintenance/resolve", { bike_id: bikeId }),
-  checkConflicts: (bikeId: number, startDate: string) =>
-    api.get<BikeMaintenanceConflict[]>(`/bike-maintenance/conflicts/${bikeId}`, { params: { start_date: startDate } }),
+  checkConflicts: (bikeId: number, startDate: string, expectedEndDate?: string) =>
+    api.get<BikeMaintenanceConflict[]>(`/bike-maintenance/conflicts/${bikeId}`, {
+      params: { start_date: startDate, ...(expectedEndDate ? { expected_end_date: expectedEndDate } : {}) },
+    }),
   history: (bikeId: number) =>
     api.get<BikeMaintenanceRecord[]>(`/bike-maintenance/history/${bikeId}`),
 };
@@ -506,7 +508,7 @@ export const bikeAdminApi = {
     URL.revokeObjectURL(url);
   },
   rebalance: (dryRun?: boolean) =>
-    api.post<{ ok: boolean; changed: number; total_future: number; dry_run: boolean }>(
+    api.post<{ ok: boolean; changed: number; total_future: number; dry_run: boolean; projected_days?: Record<number, number> }>(
       `/bike-admin/rebalance${dryRun ? "?dry_run=true" : ""}`
     ),
   resetDatabase: () =>
