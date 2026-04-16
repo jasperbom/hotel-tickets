@@ -228,6 +228,7 @@ class BikeReservation(Base):
     notes: Mapped[str | None] = mapped_column(Text)
     key_given_at: Mapped[datetime | None] = mapped_column(DateTime)
     key_returned_at: Mapped[datetime | None] = mapped_column(DateTime)
+    key_ticket_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     bike_type: Mapped["BikeType"] = relationship("BikeType", back_populates="bike_reservations")
