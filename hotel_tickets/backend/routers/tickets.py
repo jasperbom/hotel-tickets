@@ -11,7 +11,7 @@ from sqlalchemy import select, and_, or_, case
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
-from ..models import Ticket, TicketComment, Category, Status, Priority, Role, UserRole
+from ..models import Ticket, TicketComment, Category, Status, Priority, Role, UserRole, BikeReservation
 from ..auth import RequireUser, CurrentUser
 from ..services.notifications import notify_ticket_assigned, notify_ticket_created, notify_urgent_ticket
 from ..services.ha_entities import sync_ticket_sensors
@@ -254,9 +254,19 @@ async def update_ticket(
     if body.status == Status.closed and not ticket.closed_at:
         ticket.closed_at = datetime.now(timezone.utc)
         ticket.closed_by = user.ha_user_id
+        # Sync: als dit een sleutelticket is, registreer sleutelterugave op de reservering
+        res_result = await db.execute(select(BikeReservation).where(BikeReservation.key_ticket_id == ticket_id))
+        linked_res = res_result.scalar_one_or_none()
+        if linked_res and not linked_res.key_returned_at:
+            linked_res.key_returned_at = datetime.now(timezone.utc)
     elif body.status and body.status != Status.closed:
         ticket.closed_at = None
         ticket.closed_by = None
+        # Sync: heropen → sleutelterugave wissen
+        res_result = await db.execute(select(BikeReservation).where(BikeReservation.key_ticket_id == ticket_id))
+        linked_res = res_result.scalar_one_or_none()
+        if linked_res and linked_res.key_returned_at:
+            linked_res.key_returned_at = None
 
     ticket.updated_at = datetime.now(timezone.utc)
 

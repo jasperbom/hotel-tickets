@@ -207,7 +207,7 @@ async def update_reservation(
                 title=f"Fietssleutel terugkrijgen – {res.guest_name}",
                 description=" ".join(desc_parts),
                 category=Category.reception,
-                priority=Priority.medium,
+                priority=Priority.high,
                 created_by="system",
                 status=Status.open,
             )
