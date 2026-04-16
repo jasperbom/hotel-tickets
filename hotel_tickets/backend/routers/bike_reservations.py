@@ -198,11 +198,12 @@ async def update_reservation(
         # Als de sleutel wordt uitgegeven op de laatste verhuurdag en er nog geen ticket is,
         # maak het ticket direct aan (de dagelijkse scheduler heeft dan al gedraaid)
         if data.key_given and res.end_date == date.today() and not res.key_ticket_id and not res.key_returned_at:
+            bike_numbers = ", ".join(f"#{rb.bike.number}" for rb in res.reservation_bikes)
             desc_parts = [f"Verhuurperiode eindigt vandaag ({res.end_date})."]
             if res.guest_room:
                 desc_parts.append(f"Kamer: {res.guest_room}.")
             key_ticket = Ticket(
-                title=f"Fietssleutel terugkrijgen – {res.guest_name}",
+                title=f"Fietssleutel terugkrijgen – {res.guest_name} ({bike_numbers})",
                 description=" ".join(desc_parts),
                 category=Category.reception,
                 priority=Priority.high,

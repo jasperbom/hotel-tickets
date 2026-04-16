@@ -193,13 +193,16 @@ async def _bike_key_return_job() -> None:
     """
     from datetime import date
     from sqlalchemy import select, and_
+    from sqlalchemy.orm import selectinload
     from .database import AsyncSessionLocal
-    from .models import Ticket, BikeReservation, BikeReservationStatus, Category, Priority, Status
+    from .models import Ticket, BikeReservation, BikeReservationBike, BikeReservationStatus, Category, Priority, Status
 
     async with AsyncSessionLocal() as db:
         today = date.today()
         result = await db.execute(
-            select(BikeReservation).where(
+            select(BikeReservation)
+            .options(selectinload(BikeReservation.reservation_bikes).selectinload(BikeReservationBike.bike))
+            .where(
                 and_(
                     BikeReservation.end_date == today,
                     BikeReservation.status == BikeReservationStatus.active,
@@ -210,11 +213,12 @@ async def _bike_key_return_job() -> None:
         )
         reservations = result.scalars().all()
         for res in reservations:
+            bike_numbers = ", ".join(f"#{rb.bike.number}" for rb in res.reservation_bikes)
             desc_parts = [f"Verhuurperiode eindigt vandaag ({today})."]
             if res.guest_room:
                 desc_parts.append(f"Kamer: {res.guest_room}.")
             ticket = Ticket(
-                title=f"Fietssleutel terugkrijgen – {res.guest_name}",
+                title=f"Fietssleutel terugkrijgen – {res.guest_name} ({bike_numbers})",
                 description=" ".join(desc_parts),
                 category=Category.reception,
                 priority=Priority.high,
