@@ -183,7 +183,7 @@ export default function App() {
     <div className="flex min-h-screen bg-gray-50">
       {/* Desktop zijbalk — verborgen op mobile */}
       <aside
-        className="hidden md:flex w-16 flex-col items-center shrink-0"
+        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-screen"
         style={{ backgroundColor: brandColor ?? "#111827" }}
       >
         {/* Logo bovenin zijbalk */}
@@ -233,7 +233,7 @@ export default function App() {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top navigatie */}
         {(activeModule || isOnInstellingen) && (
-          <nav className="text-white shadow-lg relative z-50" style={{ backgroundColor: brandColor ?? "#1e3a5f" }}>
+          <nav className="text-white shadow-lg sticky top-0 z-50" style={{ backgroundColor: brandColor ?? "#1e3a5f" }}>
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 min-w-0">
                 {/* Modulewisselaar knop (mobiel: toont dropdown, desktop: verborgen want zijbalk) */}
