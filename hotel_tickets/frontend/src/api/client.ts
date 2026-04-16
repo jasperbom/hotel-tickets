@@ -471,3 +471,16 @@ export const bikesModuleApi = {
   updateSetting: (roles: BikesModuleRoles) =>
     api.patch<{ bikes_module_roles: BikesModuleRoles }>("/settings/bikes-module", { bikes_module_roles: roles }),
 };
+
+export const bikeAdminApi = {
+  importExcel: (file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<{ ok: boolean; imported: number; skipped: number; errors: string[] }>(
+      "/bike-admin/import-excel",
+      form,
+      { headers: { "Content-Type": "multipart/form-data" } }
+    );
+  },
+  resetImport: () => api.delete<{ ok: boolean }>("/bike-admin/import-excel"),
+};
