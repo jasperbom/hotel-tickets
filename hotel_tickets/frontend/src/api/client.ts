@@ -503,4 +503,6 @@ export const bikeAdminApi = {
     a.click();
     URL.revokeObjectURL(url);
   },
+  rebalance: () =>
+    api.post<{ ok: boolean; changed: number; total_future: number }>("/bike-admin/rebalance"),
 };
