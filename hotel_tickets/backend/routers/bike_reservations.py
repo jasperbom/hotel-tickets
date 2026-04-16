@@ -10,7 +10,7 @@ from ..database import get_db
 from ..models import (
     Bike, BikeType, BikeReservation, BikeReservationBike,
     BikeReservationStatus, SystemSetting,
-    Ticket, Status,
+    Ticket, Category, Priority, Status,
 )
 
 def _reservation_options():
@@ -195,6 +195,23 @@ async def update_reservation(
             raise HTTPException(400, f"Ongeldige status: {data.status}")
     if data.key_given is not None:
         res.key_given_at = datetime.now(timezone.utc) if data.key_given else None
+        # Als de sleutel wordt uitgegeven op de laatste verhuurdag en er nog geen ticket is,
+        # maak het ticket direct aan (de dagelijkse scheduler heeft dan al gedraaid)
+        if data.key_given and res.end_date == date.today() and not res.key_ticket_id and not res.key_returned_at:
+            desc_parts = [f"Verhuurperiode eindigt vandaag ({res.end_date})."]
+            if res.guest_room:
+                desc_parts.append(f"Kamer: {res.guest_room}.")
+            key_ticket = Ticket(
+                title=f"Fietssleutel terugkrijgen – {res.guest_name}",
+                description=" ".join(desc_parts),
+                category=Category.reception,
+                priority=Priority.high,
+                created_by="system",
+                status=Status.open,
+            )
+            db.add(key_ticket)
+            await db.flush()
+            res.key_ticket_id = key_ticket.id
 
     if data.key_returned is not None:
         res.key_returned_at = datetime.now(timezone.utc) if data.key_returned else None
