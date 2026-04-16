@@ -635,29 +635,69 @@ function FietsenResetPanel() {
 // HUISSTIJL
 // ══════════════════════════════════════════════════════════════════════════════
 
+function ColorRow({
+  label, value, onChange,
+}: { label: string; value: string; onChange: (v: string) => void }) {
+  return (
+    <div className="flex items-center gap-3">
+      <span className="text-sm text-gray-600 w-32 shrink-0">{label}</span>
+      <input
+        type="color"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-9 h-9 rounded cursor-pointer border border-gray-200 shrink-0"
+      />
+      <input
+        type="text"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="border rounded-lg px-3 py-1.5 text-sm font-mono w-28 focus:outline-none focus:ring-2 focus:ring-blue-300"
+      />
+      <div className="flex-1 h-9 rounded-lg border border-gray-200" style={{ backgroundColor: value }} />
+    </div>
+  );
+}
+
 function HuisstijlPanel() {
-  const [color, setColor] = useState("#1e3a5f");
+  const [brandColor, setBrandColor] = useState("#1e3a5f");
+  const [btnColor, setBtnColor] = useState("#2563eb");
+  const [bgColor, setBgColor] = useState("#f9fafb");
+  const [bgImage, setBgImage] = useState<string | null>(null);
   const [logo, setLogo] = useState<string | null>(null);
-  const [savingColor, setSavingColor] = useState(false);
-  const [savedColor, setSavedColor] = useState(false);
+
+  const [savingColors, setSavingColors] = useState(false);
+  const [savedColors, setSavedColors] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
   const [logoMsg, setLogoMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [bgUploading, setBgUploading] = useState(false);
+  const [bgMsg, setBgMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [bgMode, setBgMode] = useState<"color" | "image">("color");
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     brandingApi.get().then((r) => {
-      if (r.data.brand_color) setColor(r.data.brand_color);
-      setLogo(r.data.brand_logo);
+      const d = r.data;
+      if (d.brand_color) setBrandColor(d.brand_color);
+      if (d.btn_color) setBtnColor(d.btn_color);
+      if (d.bg_color) { setBgColor(d.bg_color); setBgMode("color"); }
+      if (d.bg_image) { setBgImage(d.bg_image); setBgMode("image"); }
+      setLogo(d.brand_logo);
     }).catch(() => {});
   }, []);
 
-  async function saveColor() {
-    setSavingColor(true); setSavedColor(false);
+  async function saveColors() {
+    setSavingColors(true); setSavedColors(false);
     try {
-      await brandingApi.update({ brand_color: color });
-      setSavedColor(true);
-      setTimeout(() => { setSavedColor(false); window.location.reload(); }, 1200);
-    } finally { setSavingColor(false); }
+      await brandingApi.update({
+        brand_color: brandColor,
+        btn_color: btnColor,
+        bg_color: bgMode === "color" ? bgColor : undefined,
+      });
+      setSavedColors(true);
+      setTimeout(() => { setSavedColors(false); window.location.reload(); }, 1200);
+    } finally { setSavingColors(false); }
   }
 
   async function handleLogoUpload(e: React.ChangeEvent<HTMLInputElement>) {
@@ -673,47 +713,133 @@ function HuisstijlPanel() {
       setLogoMsg({ type: "err", text: "Upload mislukt. Maximaal 500 KB, PNG/JPEG." });
     } finally {
       setLogoUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = "";
+      if (logoInputRef.current) logoInputRef.current.value = "";
     }
+  }
+
+  async function handleBgUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBgUploading(true); setBgMsg(null);
+    try {
+      const r = await brandingApi.uploadBackground(file);
+      setBgImage(r.data.bg_image);
+      setBgMode("image");
+      setBgMsg({ type: "ok", text: "Achtergrond opgeslagen." });
+      setTimeout(() => { setBgMsg(null); window.location.reload(); }, 1200);
+    } catch {
+      setBgMsg({ type: "err", text: "Upload mislukt. Maximaal 2 MB, PNG/JPEG." });
+    } finally {
+      setBgUploading(false);
+      if (bgInputRef.current) bgInputRef.current.value = "";
+    }
+  }
+
+  async function removeBgImage() {
+    setBgUploading(true); setBgMsg(null);
+    try {
+      await brandingApi.deleteBackground();
+      setBgImage(null);
+      setBgMode("color");
+      setBgMsg({ type: "ok", text: "Achtergrond verwijderd." });
+      setTimeout(() => { setBgMsg(null); window.location.reload(); }, 1200);
+    } catch {
+      setBgMsg({ type: "err", text: "Verwijderen mislukt." });
+    } finally { setBgUploading(false); }
   }
 
   return (
     <div className="space-y-5">
-      <Section title="Merkkleur">
-        <p className="text-sm text-gray-500">
-          Stel de primaire kleur in die wordt gebruikt voor de navigatiebalk en zijbalk.
+      {/* ── Kleuren ── */}
+      <Section title="Kleuren">
+        <p className="text-sm text-gray-500 mb-3">
+          Stel de kleuren in voor de navigatiebalk, knoppen en achtergrond.
         </p>
-        <div className="flex items-center gap-3">
-          <input
-            type="color"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            className="w-10 h-10 rounded cursor-pointer border border-gray-200"
-          />
-          <input
-            type="text"
-            value={color}
-            onChange={(e) => setColor(e.target.value)}
-            placeholder="#1e3a5f"
-            className="border rounded-lg px-3 py-2 text-sm font-mono w-32 focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
-          <div className="flex-1 h-10 rounded-lg border border-gray-200" style={{ backgroundColor: color }} />
+        <div className="space-y-3">
+          <ColorRow label="Navigatiebalk" value={brandColor} onChange={setBrandColor} />
+          <ColorRow label="Knoppen" value={btnColor} onChange={setBtnColor} />
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 pt-2">
           <button
-            onClick={saveColor}
-            disabled={savingColor}
+            onClick={saveColors}
+            disabled={savingColors}
             className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
           >
-            {savingColor ? "Opslaan..." : "Opslaan"}
+            {savingColors ? "Opslaan..." : "Kleuren opslaan"}
           </button>
-          {savedColor && <span className="text-sm text-green-600">✓ Opgeslagen</span>}
+          {savedColors && <span className="text-sm text-green-600">✓ Opgeslagen</span>}
         </div>
       </Section>
 
+      {/* ── Achtergrond ── */}
+      <Section title="Achtergrond">
+        <div className="flex gap-2 mb-4">
+          <button
+            onClick={() => setBgMode("color")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${bgMode === "color" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"}`}
+          >
+            Kleur
+          </button>
+          <button
+            onClick={() => setBgMode("image")}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${bgMode === "image" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"}`}
+          >
+            Afbeelding
+          </button>
+        </div>
+
+        {bgMode === "color" && (
+          <div className="space-y-3">
+            <ColorRow label="Achtergrondkleur" value={bgColor} onChange={setBgColor} />
+            <button
+              onClick={saveColors}
+              disabled={savingColors}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            >
+              {savingColors ? "Opslaan..." : "Opslaan"}
+            </button>
+          </div>
+        )}
+
+        {bgMode === "image" && (
+          <div className="space-y-3">
+            {bgImage && (
+              <div className="relative w-full h-28 rounded-lg overflow-hidden border border-gray-200">
+                <img src={bgImage} alt="Achtergrond" className="w-full h-full object-cover" />
+                <button
+                  onClick={removeBgImage}
+                  disabled={bgUploading}
+                  className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+                >
+                  Verwijderen
+                </button>
+              </div>
+            )}
+            <div className="flex flex-wrap items-center gap-3">
+              <input ref={bgInputRef} type="file" accept="image/png,image/jpeg,image/webp"
+                onChange={handleBgUpload} className="hidden" id="bg-upload" />
+              <label
+                htmlFor="bg-upload"
+                className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${bgUploading ? "opacity-50 pointer-events-none" : ""}`}
+              >
+                {bgUploading ? "Bezig..." : "📂 Achtergrond uploaden"}
+              </label>
+              <span className="text-xs text-gray-400">PNG, JPEG of WebP · max 2 MB</span>
+            </div>
+          </div>
+        )}
+
+        {bgMsg && (
+          <p className={`text-sm mt-2 ${bgMsg.type === "ok" ? "text-green-700" : "text-red-600"}`}>
+            {bgMsg.type === "ok" ? "✓ " : "✗ "}{bgMsg.text}
+          </p>
+        )}
+      </Section>
+
+      {/* ── Logo ── */}
       <Section title="Logo">
         <p className="text-sm text-gray-500">
-          Upload een logo (PNG of JPEG, max 500 KB). Het logo verschijnt links bovenin en dient op mobiel als menu-knop.
+          Upload een logo (PNG of JPEG, max 500 KB). Verschijnt links bovenin en is op mobiel de menu-knop.
         </p>
         {logo && (
           <div className="flex items-center gap-4">
@@ -722,20 +848,15 @@ function HuisstijlPanel() {
           </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
-          <input
-            ref={fileInputRef}
-            type="file"
-            accept="image/png,image/jpeg,image/webp"
-            onChange={handleLogoUpload}
-            className="hidden"
-            id="logo-upload"
-          />
+          <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp"
+            onChange={handleLogoUpload} className="hidden" id="logo-upload" />
           <label
             htmlFor="logo-upload"
             className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${logoUploading ? "opacity-50 pointer-events-none" : ""}`}
           >
             {logoUploading ? "Uploaden..." : "📂 Logo uploaden"}
           </label>
+          <span className="text-xs text-gray-400">PNG, JPEG of WebP · max 500 KB</span>
         </div>
         {logoMsg && (
           <p className={`text-sm ${logoMsg.type === "ok" ? "text-green-700" : "text-red-600"}`}>

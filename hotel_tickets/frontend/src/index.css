@@ -3,8 +3,27 @@
 @tailwind utilities;
 
 @layer base {
+  :root {
+    /* Blue palette defaults — overridden at runtime via JS when btn_color is set */
+    --blue-50:  #eff6ff;
+    --blue-100: #dbeafe;
+    --blue-200: #bfdbfe;
+    --blue-300: #93c5fd;
+    --blue-400: #60a5fa;
+    --blue-500: #3b82f6;
+    --blue-600: #2563eb;
+    --blue-700: #1d4ed8;
+    --blue-800: #1e40af;
+    --blue-900: #1e3799;
+  }
+
   body {
-    @apply bg-gray-50 text-gray-900 font-sans;
+    @apply text-gray-900 font-sans;
+    background-color: var(--app-bg, #f9fafb);
+    background-image: var(--app-bg-image, none);
+    background-size: cover;
+    background-position: center;
+    background-attachment: fixed;
   }
 }
 
