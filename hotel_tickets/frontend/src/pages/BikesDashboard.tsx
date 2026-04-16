@@ -67,10 +67,10 @@ function BikePopup({
     }
   }
 
-  async function loadConflicts(startDate: string) {
+  async function loadConflicts(startDate: string, endDate?: string) {
     setLoadingConflicts(true);
     try {
-      const r = await bikeMaintenanceApi.checkConflicts(bike.id, startDate);
+      const r = await bikeMaintenanceApi.checkConflicts(bike.id, startDate, endDate || undefined);
       setConflicts(r.data);
     } finally {
       setLoadingConflicts(false);
@@ -79,7 +79,7 @@ function BikePopup({
 
   function openMaintenance() {
     setView("maintenance");
-    loadConflicts(maintForm.start_date);
+    loadConflicts(maintForm.start_date, maintForm.expected_end_date || undefined);
   }
 
   async function submitMaintenance() {
@@ -240,7 +240,7 @@ function BikePopup({
                   value={maintForm.start_date}
                   onChange={(e) => {
                     setMaintForm((f) => ({ ...f, start_date: e.target.value }));
-                    loadConflicts(e.target.value);
+                    loadConflicts(e.target.value, maintForm.expected_end_date || undefined);
                   }}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 />
@@ -250,7 +250,10 @@ function BikePopup({
                 <input
                   type="date"
                   value={maintForm.expected_end_date}
-                  onChange={(e) => setMaintForm((f) => ({ ...f, expected_end_date: e.target.value }))}
+                  onChange={(e) => {
+                    setMaintForm((f) => ({ ...f, expected_end_date: e.target.value }));
+                    loadConflicts(maintForm.start_date, e.target.value || undefined);
+                  }}
                   className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
                 />
               </div>

@@ -81,7 +81,9 @@ async def start_maintenance(data: MaintenanceStart, user: RequireUser, db: Async
     if bike.status == BikeStatus.maintenance:
         raise HTTPException(400, "Fiets is al in onderhoud")
 
-    # Zoek conflicterende actieve reserveringen
+    # Zoek conflicterende actieve reserveringen die overlappen met de onderhoudsperiode.
+    # Overlap-voorwaarde: res_start <= maint_end  EN  res_end >= maint_start
+    maint_end = data.expected_end_date if data.expected_end_date else date(9999, 12, 31)
     conflicts_result = await db.execute(
         select(BikeReservation)
         .options(
@@ -92,6 +94,7 @@ async def start_maintenance(data: MaintenanceStart, user: RequireUser, db: Async
             BikeReservationBike.bike_id == data.bike_id,
             BikeReservation.status == BikeReservationStatus.active,
             BikeReservation.end_date >= data.start_date,
+            BikeReservation.start_date <= maint_end,
         )
     )
     conflicts = conflicts_result.scalars().all()
@@ -191,13 +194,21 @@ async def resolve_maintenance(data: MaintenanceResolve, user: RequireUser, db: A
 
 
 @router.get("/conflicts/{bike_id}")
-async def check_conflicts(bike_id: int, start_date: date, user: RequireUser, db: AsyncSession = Depends(get_db)):
+async def check_conflicts(
+    bike_id: int,
+    start_date: date,
+    expected_end_date: Optional[date] = None,
+    user: RequireUser = None,
+    db: AsyncSession = Depends(get_db),
+):
     """Preview welke reserveringen geraakt worden als deze fiets in onderhoud gaat."""
     result = await db.execute(select(Bike).where(Bike.id == bike_id))
     bike = result.scalar_one_or_none()
     if not bike:
         raise HTTPException(404, "Fiets niet gevonden")
 
+    # Overlap-voorwaarde: res_start <= maint_end  EN  res_end >= maint_start
+    maint_end = expected_end_date if expected_end_date else date(9999, 12, 31)
     conflicts_result = await db.execute(
         select(BikeReservation)
         .join(BikeReservationBike)
@@ -205,6 +216,7 @@ async def check_conflicts(bike_id: int, start_date: date, user: RequireUser, db:
             BikeReservationBike.bike_id == bike_id,
             BikeReservation.status == BikeReservationStatus.active,
             BikeReservation.end_date >= start_date,
+            BikeReservation.start_date <= maint_end,
         )
     )
     conflicts = conflicts_result.scalars().all()

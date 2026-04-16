@@ -36,10 +36,10 @@ function MaintenanceModal({
   useEffect(() => {
     setLoading(true);
     bikeMaintenanceApi
-      .checkConflicts(bike.id, form.start_date)
+      .checkConflicts(bike.id, form.start_date, form.expected_end_date || undefined)
       .then((r) => setConflicts(r.data))
       .finally(() => setLoading(false));
-  }, [bike.id, form.start_date]);
+  }, [bike.id, form.start_date, form.expected_end_date]);
 
   async function submit() {
     setSubmitting(true);

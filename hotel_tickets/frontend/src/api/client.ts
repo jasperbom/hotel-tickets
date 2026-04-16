@@ -462,8 +462,10 @@ export const bikeMaintenanceApi = {
   }) => api.post<{ ok: boolean; maintenance_record_id: number; ticket_id: string; moved_reservations: object[]; cancelled_reservations: object[] }>("/bike-maintenance/start", data),
   resolve: (bikeId: number) =>
     api.post<{ ok: boolean }>("/bike-maintenance/resolve", { bike_id: bikeId }),
-  checkConflicts: (bikeId: number, startDate: string) =>
-    api.get<BikeMaintenanceConflict[]>(`/bike-maintenance/conflicts/${bikeId}`, { params: { start_date: startDate } }),
+  checkConflicts: (bikeId: number, startDate: string, expectedEndDate?: string) =>
+    api.get<BikeMaintenanceConflict[]>(`/bike-maintenance/conflicts/${bikeId}`, {
+      params: { start_date: startDate, ...(expectedEndDate ? { expected_end_date: expectedEndDate } : {}) },
+    }),
   history: (bikeId: number) =>
     api.get<BikeMaintenanceRecord[]>(`/bike-maintenance/history/${bikeId}`),
 };
