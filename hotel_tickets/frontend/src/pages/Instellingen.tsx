@@ -478,7 +478,8 @@ function FietsenExcelPanel() {
   const [exporting, setExporting] = useState(false);
   const [importResult, setImportResult] = useState<{
     ok: boolean; imported: number; skipped: number;
-    skipped_duplicates: number; skipped_no_bike: number; errors: string[];
+    skipped_duplicates: number; skipped_no_bike: number;
+    bikes_created: number; errors: string[];
   } | null>(null);
   const [importError, setImportError] = useState<string | null>(null);
 
@@ -529,16 +530,20 @@ function FietsenExcelPanel() {
             </label>
           </div>
           {importResult && (
-            <div className="mt-3 bg-green-50 rounded-lg p-3 text-sm text-green-800">
+            <div className="mt-3 bg-green-50 rounded-lg p-3 text-sm text-green-800 space-y-1">
               <p>✓ <strong>{importResult.imported}</strong> reserveringen geïmporteerd.</p>
-              {importResult.skipped > 0 && (
-                <p className="text-xs text-gray-500 mt-1">
-                  Overgeslagen: {importResult.skipped_duplicates} duplicaten
-                  {importResult.skipped_no_bike > 0 && `, ${importResult.skipped_no_bike} onbekende fietsnummers`}.
+              {importResult.bikes_created > 0 && (
+                <p className="text-xs text-blue-700">
+                  🚲 {importResult.bikes_created} nieuwe fiets{importResult.bikes_created !== 1 ? "en" : ""} aangemaakt vanuit de Excel.
+                </p>
+              )}
+              {importResult.skipped_duplicates > 0 && (
+                <p className="text-xs text-gray-500">
+                  {importResult.skipped_duplicates} duplicaten overgeslagen.
                 </p>
               )}
               {importResult.errors.length > 0 && (
-                <ul className="mt-2 text-xs text-orange-700 space-y-0.5">
+                <ul className="mt-1 text-xs text-orange-700 space-y-0.5">
                   {importResult.errors.map((e, i) => <li key={i}>⚠ {e}</li>)}
                 </ul>
               )}

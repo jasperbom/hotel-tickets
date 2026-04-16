@@ -482,6 +482,7 @@ export const bikeAdminApi = {
       skipped: number;
       skipped_duplicates: number;
       skipped_no_bike: number;
+      bikes_created: number;
       errors: string[];
     }>(
       "/bike-admin/import-excel",
