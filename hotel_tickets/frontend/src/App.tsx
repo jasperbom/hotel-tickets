@@ -14,7 +14,13 @@ import PoolLogboek from "./pages/PoolLogboek";
 import PoolNieuweMeting from "./pages/PoolNieuweMeting";
 import PoolLogDetail from "./pages/PoolLogDetail";
 import PoolInstellingen from "./pages/PoolInstellingen";
-import { userApi, type UserRole } from "./api/client";
+import BikesDashboard from "./pages/BikesDashboard";
+import BikeReserveringen from "./pages/BikeReserveringen";
+import BikeNieuweReservering from "./pages/BikeNieuweReservering";
+import BikeReserveringDetail from "./pages/BikeReserveringDetail";
+import BikeBeheer from "./pages/BikeBeheer";
+import BikeInstellingen from "./pages/BikeInstellingen";
+import { userApi, bikesModuleApi, type UserRole, type BikesModuleRoles } from "./api/client";
 
 // --- Module configuratie ---
 
@@ -64,6 +70,19 @@ const MODULES: ModuleConfig[] = [
       { to: "/pools/instellingen", label: "Instellingen", icon: "⚙️", restricted: "adminOrSupervisor" },
     ],
   },
+  {
+    id: "fietsen",
+    label: "Fietsen",
+    icon: "🚲",
+    defaultPath: "/bikes",
+    navTitle: "Fietsen",
+    navItems: [
+      { to: "/bikes", label: "Dashboard", icon: "📋", end: true, restricted: false },
+      { to: "/bikes/reserveringen", label: "Reserveringen", icon: "📅", restricted: false },
+      { to: "/bikes/beheer", label: "Fietsbeheer", icon: "🔧", restricted: "adminOrSupervisor" },
+      { to: "/bikes/instellingen", label: "Instellingen", icon: "⚙️", restricted: "settings" },
+    ],
+  },
 ];
 
 export default function App() {
@@ -71,15 +90,17 @@ export default function App() {
   const [hasAdmin, setHasAdmin] = useState(true);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [bikesModuleRoles, setBikesModuleRoles] = useState<BikesModuleRoles>("all");
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
 
   useEffect(() => {
-    Promise.all([userApi.me(), userApi.list()])
-      .then(([meRes, listRes]) => {
+    Promise.all([userApi.me(), userApi.list(), bikesModuleApi.getSetting()])
+      .then(([meRes, listRes, bikesRes]) => {
         setCurrentUser(meRes.data);
         setHasAdmin(listRes.data.some((u) => u.role === "admin"));
+        setBikesModuleRoles(bikesRes.data.bikes_module_roles);
       })
       .catch(() => {});
   }, []);
@@ -89,6 +110,8 @@ export default function App() {
     if (!activeModuleId) {
       if (location.pathname.startsWith("/pools")) {
         setActiveModuleId("zwembaden");
+      } else if (location.pathname.startsWith("/bikes")) {
+        setActiveModuleId("fietsen");
       } else if (location.pathname !== "") {
         setActiveModuleId("taken");
       }
@@ -116,7 +139,18 @@ export default function App() {
   const isAdminOrSupervisor =
     currentUser?.role === "admin" || currentUser?.role === "supervisor";
 
-  const activeModule = MODULES.find((m) => m.id === activeModuleId) || null;
+  // Filter de fietsenmodule op basis van de instelling
+  const canSeeBikes =
+    bikesModuleRoles === "all" ||
+    (bikesModuleRoles === "reception" &&
+      (currentUser?.role === "reception" || isAdminOrSupervisor)) ||
+    (bikesModuleRoles === "admin_supervisor" && isAdminOrSupervisor);
+
+  const visibleModules = MODULES.filter(
+    (m) => m.id !== "fietsen" || canSeeBikes
+  );
+
+  const activeModule = visibleModules.find((m) => m.id === activeModuleId) || null;
 
   const visibleNavItems = (activeModule?.navItems || []).filter((item) => {
     if (item.restricted === "adminOrSupervisor") return isAdminOrSupervisor;
@@ -140,7 +174,7 @@ export default function App() {
           </div>
         )}
         <div className="flex flex-col items-center gap-2 pt-2 w-full">
-        {MODULES.map((mod) => (
+        {visibleModules.map((mod) => (
           <button
             key={mod.id}
             onClick={() => handleModuleClick(mod)}
@@ -188,7 +222,7 @@ export default function App() {
                       <div className="px-3 py-2 border-b border-white/10">
                         <span className="text-xs text-white/40 uppercase tracking-wide">Modules</span>
                         <div className="flex gap-2 mt-2">
-                          {MODULES.map((mod) => (
+                          {visibleModules.map((mod) => (
                             <button
                               key={mod.id}
                               onClick={() => handleModuleClick(mod)}
@@ -276,6 +310,13 @@ export default function App() {
               <Route path="/pools/nieuw" element={<PoolNieuweMeting />} />
               <Route path="/pools/log/:id" element={<PoolLogDetail />} />
               <Route path="/pools/instellingen" element={<PoolInstellingen />} />
+              {/* Fietsen module */}
+              <Route path="/bikes" element={<BikesDashboard />} />
+              <Route path="/bikes/reserveringen" element={<BikeReserveringen />} />
+              <Route path="/bikes/reserveringen/nieuw" element={<BikeNieuweReservering />} />
+              <Route path="/bikes/reserveringen/:id" element={<BikeReserveringDetail />} />
+              <Route path="/bikes/beheer" element={<BikeBeheer />} />
+              <Route path="/bikes/instellingen" element={<BikeInstellingen />} />
             </Routes>
           </main>
         ) : (

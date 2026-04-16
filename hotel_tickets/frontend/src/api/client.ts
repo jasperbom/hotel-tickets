@@ -322,3 +322,152 @@ export const reportApi = {
   exportCsv: () => api.get("/reports/export/csv", { responseType: "blob" }),
   exportExcel: () => api.get("/reports/export/excel", { responseType: "blob" }),
 };
+
+// --- Fietsen types ---
+
+export type BikeStatus = "available" | "maintenance" | "retired";
+export type BikeReservationStatus = "active" | "completed" | "cancelled";
+export type BikeLogCategory = "note" | "maintenance" | "issue";
+export type BikesModuleRoles = "all" | "reception" | "admin_supervisor";
+
+export interface BikeType {
+  id: number;
+  name: string;
+  price_per_day: number;
+  bike_count?: number;
+}
+
+export interface Bike {
+  id: number;
+  number: string;
+  name: string;
+  type_id: number;
+  type_name: string | null;
+  is_reserve: boolean;
+  status: BikeStatus;
+  total_rental_days: number;
+  notes: string | null;
+}
+
+export interface BikeReservation {
+  id: number;
+  guest_name: string;
+  guest_room: string | null;
+  start_date: string;
+  end_date: string;
+  num_days: number;
+  num_bikes: number;
+  bike_type_id: number;
+  bike_type_name: string | null;
+  price_per_day: number | null;
+  total_price: number | null;
+  status: BikeReservationStatus;
+  notes: string | null;
+  bikes: { id: number; number: string; name: string }[];
+  created_at: string | null;
+}
+
+export interface BikeAvailability {
+  available: boolean;
+  available_count: number;
+  requested_count: number;
+  bikes: Bike[];
+}
+
+export interface BikeLogEntry {
+  id: number | null;
+  type: BikeLogCategory | "rental" | "maintenance";
+  date: string;
+  end_date: string | null;
+  description: string;
+  meta: string | null;
+  ticket_id?: string | null;
+  deletable: boolean;
+}
+
+export interface BikeMaintenanceConflict {
+  reservation_id: number;
+  guest_name: string;
+  start_date: string;
+  end_date: string;
+  can_move: boolean;
+  alternative_bike: string | null;
+}
+
+export interface BikeMaintenanceRecord {
+  id: number;
+  start_date: string;
+  expected_end_date: string | null;
+  reason: string | null;
+  notes: string | null;
+  resolved_at: string | null;
+  ticket_id: string | null;
+}
+
+// --- Fietsen API ---
+
+export const bikeApi = {
+  // Fietstypes
+  listTypes: () => api.get<BikeType[]>("/bikes/types"),
+  createType: (data: { name: string; price_per_day: number }) => api.post<BikeType>("/bikes/types", data),
+  updateType: (id: number, data: Partial<BikeType>) => api.put<BikeType>(`/bikes/types/${id}`, data),
+  deleteType: (id: number) => api.delete(`/bikes/types/${id}`),
+
+  // Fietsen
+  list: () => api.get<Bike[]>("/bikes"),
+  create: (data: Omit<Bike, "id" | "type_name" | "status" | "total_rental_days" | "notes"> & { notes?: string | null }) =>
+    api.post<Bike>("/bikes", data),
+  update: (id: number, data: Partial<Bike>) => api.put<Bike>(`/bikes/${id}`, data),
+  remove: (id: number) => api.delete(`/bikes/${id}`),
+
+  // Beschikbaarheid
+  checkAvailability: (params: { start_date: string; num_days: number; type_id: number; count?: number }) =>
+    api.get<BikeAvailability>("/bikes/availability", { params }),
+
+  // Logboek
+  getLog: (bikeId: number) => api.get<BikeLogEntry[]>(`/bikes/${bikeId}/log`),
+  addLog: (bikeId: number, data: { entry_date: string; category: BikeLogCategory; description: string }) =>
+    api.post<{ id: number; ok: boolean }>(`/bikes/${bikeId}/log`, data),
+  deleteLog: (bikeId: number, entryId: number) => api.delete(`/bikes/${bikeId}/log/${entryId}`),
+};
+
+export const bikeReservationApi = {
+  list: (status?: BikeReservationStatus | "all") =>
+    api.get<BikeReservation[]>("/bike-reservations", { params: status && status !== "all" ? { status } : {} }),
+  create: (data: {
+    guest_name: string;
+    guest_room?: string;
+    start_date: string;
+    num_days: number;
+    num_bikes: number;
+    bike_type_id: number;
+    notes?: string;
+  }) => api.post<BikeReservation>("/bike-reservations", data),
+  get: (id: number) => api.get<BikeReservation>(`/bike-reservations/${id}`),
+  update: (id: number, data: Partial<BikeReservation>) =>
+    api.put<BikeReservation>(`/bike-reservations/${id}`, data),
+  cancel: (id: number) => api.delete(`/bike-reservations/${id}`),
+};
+
+export const bikeMaintenanceApi = {
+  start: (data: {
+    bike_id: number;
+    start_date: string;
+    expected_end_date?: string;
+    reason?: string;
+    notes?: string;
+    conflict_action?: "move" | "cancel";
+  }) => api.post<{ ok: boolean; maintenance_record_id: number; ticket_id: string; moved_reservations: object[]; cancelled_reservations: object[] }>("/bike-maintenance/start", data),
+  resolve: (bikeId: number) =>
+    api.post<{ ok: boolean }>("/bike-maintenance/resolve", { bike_id: bikeId }),
+  checkConflicts: (bikeId: number, startDate: string) =>
+    api.get<BikeMaintenanceConflict[]>(`/bike-maintenance/conflicts/${bikeId}`, { params: { start_date: startDate } }),
+  history: (bikeId: number) =>
+    api.get<BikeMaintenanceRecord[]>(`/bike-maintenance/history/${bikeId}`),
+};
+
+export const bikesModuleApi = {
+  getSetting: () => api.get<{ bikes_module_roles: BikesModuleRoles }>("/settings/bikes-module"),
+  updateSetting: (roles: BikesModuleRoles) =>
+    api.patch<{ bikes_module_roles: BikesModuleRoles }>("/settings/bikes-module", { bikes_module_roles: roles }),
+};

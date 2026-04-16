@@ -46,3 +46,33 @@ async def update_system_settings(
             db.add(SystemSetting(key="ticket_base_url", value=body.ticket_base_url.rstrip("/")))
 
     return SystemSettingsOut(ticket_base_url=await get_ticket_base_url(db))
+
+
+# ── Fietsen module instelling ──────────────────────────────────────────────────
+
+BIKES_MODULE_ROLES_OPTIONS = ["all", "reception", "admin_supervisor"]
+
+
+@router.get("/bikes-module")
+async def get_bikes_module_setting(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    row = await db.get(SystemSetting, "bikes_module_roles")
+    return {"bikes_module_roles": row.value if row else "all"}
+
+
+@router.patch("/bikes-module")
+async def update_bikes_module_setting(
+    body: dict,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen deze instelling wijzigen")
+    value = body.get("bikes_module_roles", "all")
+    if value not in BIKES_MODULE_ROLES_OPTIONS:
+        raise HTTPException(status_code=400, detail=f"Ongeldige waarde. Kies uit: {BIKES_MODULE_ROLES_OPTIONS}")
+    row = await db.get(SystemSetting, "bikes_module_roles")
+    if row:
+        row.value = value
+    else:
+        db.add(SystemSetting(key="bikes_module_roles", value=value))
+    return {"bikes_module_roles": value}

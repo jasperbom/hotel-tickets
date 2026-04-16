@@ -88,3 +88,12 @@ async def _run_migrations(conn):
         await conn.exec_driver_sql(
             "INSERT INTO pool_configs (pool_id, label) VALUES ('wellness', 'Wellness'), ('zwembad', 'Zwembad')"
         )
+
+    # Seed standaard module-instelling voor fietsen (alle rollen mogen het zien)
+    result = await conn.exec_driver_sql(
+        "SELECT COUNT(*) FROM system_settings WHERE key = 'bikes_module_roles'"
+    )
+    if result.scalar() == 0:
+        await conn.exec_driver_sql(
+            "INSERT INTO system_settings (key, value) VALUES ('bikes_module_roles', 'all')"
+        )

@@ -1,7 +1,7 @@
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, date, timezone
 from enum import Enum as PyEnum
-from sqlalchemy import String, Text, DateTime, Boolean, Integer, ForeignKey, Enum
+from sqlalchemy import String, Text, DateTime, Date, Boolean, Integer, Float, ForeignKey, Enum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from .database import Base
 
@@ -160,3 +160,112 @@ class UserRole(Base):
     notify_email: Mapped[bool] = mapped_column(Boolean, default=False)
     ha_notify_service: Mapped[str | None] = mapped_column(String(255))  # bijv. "notify.mobile_app_iphone"
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+# ── Fietsen module ──────────────────────────────────────────────────────────────
+
+class BikeStatus(str, PyEnum):
+    available = "available"
+    maintenance = "maintenance"
+    retired = "retired"
+
+
+class BikeReservationStatus(str, PyEnum):
+    active = "active"
+    completed = "completed"
+    cancelled = "cancelled"
+
+
+class BikeLogCategory(str, PyEnum):
+    note = "note"
+    maintenance = "maintenance"
+    issue = "issue"
+
+
+class BikeType(Base):
+    __tablename__ = "bike_types"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    price_per_day: Mapped[float] = mapped_column(Float, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    bikes: Mapped[list["Bike"]] = relationship("Bike", back_populates="bike_type")
+    bike_reservations: Mapped[list["BikeReservation"]] = relationship("BikeReservation", back_populates="bike_type")
+
+
+class Bike(Base):
+    __tablename__ = "bikes"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    number: Mapped[str] = mapped_column(String(50), nullable=False, unique=True)
+    name: Mapped[str] = mapped_column(String(100), nullable=False)
+    type_id: Mapped[int] = mapped_column(Integer, ForeignKey("bike_types.id"), nullable=False)
+    is_reserve: Mapped[bool] = mapped_column(Boolean, default=False)
+    status: Mapped[BikeStatus] = mapped_column(Enum(BikeStatus), default=BikeStatus.available, nullable=False)
+    total_rental_days: Mapped[int] = mapped_column(Integer, default=0)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    bike_type: Mapped["BikeType"] = relationship("BikeType", back_populates="bikes")
+    reservation_bikes: Mapped[list["BikeReservationBike"]] = relationship("BikeReservationBike", back_populates="bike")
+    maintenance_records: Mapped[list["BikeMaintenanceRecord"]] = relationship("BikeMaintenanceRecord", back_populates="bike")
+    log_entries: Mapped[list["BikeLog"]] = relationship("BikeLog", back_populates="bike", cascade="all, delete-orphan")
+
+
+class BikeReservation(Base):
+    __tablename__ = "bike_reservations"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    guest_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    guest_room: Mapped[str | None] = mapped_column(String(50))
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    end_date: Mapped[date] = mapped_column(Date, nullable=False)
+    num_days: Mapped[int] = mapped_column(Integer, nullable=False)
+    num_bikes: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    bike_type_id: Mapped[int] = mapped_column(Integer, ForeignKey("bike_types.id"), nullable=False)
+    status: Mapped[BikeReservationStatus] = mapped_column(Enum(BikeReservationStatus), default=BikeReservationStatus.active, nullable=False)
+    notes: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    bike_type: Mapped["BikeType"] = relationship("BikeType", back_populates="bike_reservations")
+    reservation_bikes: Mapped[list["BikeReservationBike"]] = relationship("BikeReservationBike", back_populates="reservation", cascade="all, delete-orphan")
+
+
+class BikeReservationBike(Base):
+    __tablename__ = "bike_reservation_bikes"
+
+    reservation_id: Mapped[int] = mapped_column(Integer, ForeignKey("bike_reservations.id"), primary_key=True)
+    bike_id: Mapped[int] = mapped_column(Integer, ForeignKey("bikes.id"), primary_key=True)
+
+    reservation: Mapped["BikeReservation"] = relationship("BikeReservation", back_populates="reservation_bikes")
+    bike: Mapped["Bike"] = relationship("Bike", back_populates="reservation_bikes")
+
+
+class BikeMaintenanceRecord(Base):
+    __tablename__ = "bike_maintenance_records"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bike_id: Mapped[int] = mapped_column(Integer, ForeignKey("bikes.id"), nullable=False)
+    start_date: Mapped[date] = mapped_column(Date, nullable=False)
+    expected_end_date: Mapped[date | None] = mapped_column(Date)
+    reason: Mapped[str | None] = mapped_column(String(500))
+    notes: Mapped[str | None] = mapped_column(Text)
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    ticket_id: Mapped[str | None] = mapped_column(String(36))  # gekoppeld hotel-ticket id
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    bike: Mapped["Bike"] = relationship("Bike", back_populates="maintenance_records")
+
+
+class BikeLog(Base):
+    __tablename__ = "bike_logs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    bike_id: Mapped[int] = mapped_column(Integer, ForeignKey("bikes.id"), nullable=False)
+    entry_date: Mapped[date] = mapped_column(Date, nullable=False)
+    category: Mapped[BikeLogCategory] = mapped_column(Enum(BikeLogCategory), default=BikeLogCategory.note, nullable=False)
+    description: Mapped[str] = mapped_column(Text, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    bike: Mapped["Bike"] = relationship("Bike", back_populates="log_entries")
