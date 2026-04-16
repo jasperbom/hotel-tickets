@@ -186,6 +186,61 @@ def start_keycard_watcher() -> None:
     logger.info("Keycard watcher gestart (elke minuut)")
 
 
+async def _bike_key_return_job() -> None:
+    """
+    Maakt dagelijks om 07:00 receptie-tickets aan voor fietsreserveringen die vandaag aflopen,
+    zodat de receptie de sleutel kan terugkrijgen.
+    """
+    from datetime import date
+    from sqlalchemy import select, and_
+    from .database import AsyncSessionLocal
+    from .models import Ticket, BikeReservation, BikeReservationStatus, Category, Priority, Status
+
+    async with AsyncSessionLocal() as db:
+        today = date.today()
+        result = await db.execute(
+            select(BikeReservation).where(
+                and_(
+                    BikeReservation.end_date == today,
+                    BikeReservation.status == BikeReservationStatus.active,
+                    BikeReservation.key_ticket_id.is_(None),
+                    BikeReservation.key_returned_at.is_(None),
+                )
+            )
+        )
+        reservations = result.scalars().all()
+        for res in reservations:
+            desc_parts = [f"Verhuurperiode eindigt vandaag ({today})."]
+            if res.guest_room:
+                desc_parts.append(f"Kamer: {res.guest_room}.")
+            ticket = Ticket(
+                title=f"Fietssleutel terugkrijgen – {res.guest_name}",
+                description=" ".join(desc_parts),
+                category=Category.reception,
+                priority=Priority.high,
+                created_by="system",
+                status=Status.open,
+            )
+            db.add(ticket)
+            await db.flush()
+            res.key_ticket_id = ticket.id
+        if reservations:
+            await db.commit()
+            logger.info("Sleuteltickets aangemaakt voor %d reserveringen", len(reservations))
+
+
+def start_bike_key_watcher() -> None:
+    """Plan de dagelijkse fietssleutel-terugave job — draait elke dag om 07:00."""
+    _scheduler.add_job(
+        _bike_key_return_job,
+        trigger=CronTrigger(hour=7, minute=0),
+        id="bike_key_return",
+        replace_existing=True,
+        name="Fietssleutel terugave tickets",
+    )
+    logger.info("Bike key return job gepland (dagelijks 07:00)")
+
+
 async def load_all_templates() -> None:
     """Laad alle actieve templates bij opstarten van de app."""
     from .database import AsyncSessionLocal

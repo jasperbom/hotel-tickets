@@ -7,7 +7,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
 from .database import init_db
-from .scheduler import get_scheduler, load_all_templates, start_keycard_watcher
+from .scheduler import get_scheduler, load_all_templates, start_keycard_watcher, start_bike_key_watcher
 from .routers import tickets, users, locations, recurring, reports, integration, settings, nfc, pools, bikes, bike_reservations, bike_maintenance, bike_admin
 
 logging.basicConfig(
@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     scheduler.start()
     await load_all_templates()
     start_keycard_watcher()
+    start_bike_key_watcher()
 
     yield
 
