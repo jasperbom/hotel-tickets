@@ -219,7 +219,7 @@ export default function App() {
       {/* Rechter kolom: topnav + inhoud */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top navigatie */}
-        {activeModule && (
+        {(activeModule || isOnInstellingen) && (
           <nav className="bg-hotel-900 text-white shadow-lg relative z-50">
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 min-w-0">
@@ -232,7 +232,7 @@ export default function App() {
                       mobileMenuOpen ? "bg-white/20" : "hover:bg-white/10"
                     }`}
                   >
-                    {activeModule.icon}
+                    {activeModule?.icon ?? "⚙️"}
                   </button>
 
                   {/* Module-dropdown */}
@@ -275,7 +275,7 @@ export default function App() {
                 </div>
 
                 <span className="font-bold text-base md:text-lg mr-1 md:mr-3 text-white shrink-0">
-                  {activeModule.navTitle}
+                  {activeModule?.navTitle ?? "Instellingen"}
                 </span>
 
                 {/* Navigatie links — altijd zichtbaar, horizontaal scrollbaar op mobiel */}

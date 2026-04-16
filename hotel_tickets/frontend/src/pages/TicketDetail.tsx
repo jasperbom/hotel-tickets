@@ -2,8 +2,15 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type KeycardStatus, type Role } from "../api/client";
+import { ticketApi, userApi, locationApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "../components/StatusBadge";
+
+const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
+  { value: "urgent", label: "Urgent" },
+  { value: "high", label: "Hoog" },
+  { value: "medium", label: "Middel" },
+  { value: "low", label: "Laag" },
+];
 
 const STATUS_OPTIONS: { value: Status; label: string }[] = [
   { value: "open", label: "Open" },
@@ -24,6 +31,8 @@ export default function TicketDetail() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [editingField, setEditingField] = useState<"title" | "description" | "priority" | null>(null);
+  const [editValue, setEditValue] = useState("");
   const [photos, setPhotos] = useState<{ filename: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
@@ -155,10 +164,50 @@ export default function TicketDetail() {
           </svg>
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-gray-900">{ticket.title}</h1>
+          {editingField === "title" ? (
+            <input
+              autoFocus
+              className="text-xl font-bold text-gray-900 w-full border-b-2 border-blue-400 focus:outline-none bg-transparent pb-0.5"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => { updateField({ title: editValue }); setEditingField(null); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") { updateField({ title: editValue }); setEditingField(null); }
+                if (e.key === "Escape") setEditingField(null);
+              }}
+            />
+          ) : (
+            <h1
+              className="text-xl font-bold text-gray-900 cursor-text hover:bg-gray-50 rounded px-0.5 -mx-0.5"
+              onClick={() => { setEditingField("title"); setEditValue(ticket.title); }}
+              title="Klik om te bewerken"
+            >
+              {ticket.title}
+            </h1>
+          )}
           <div className="flex flex-wrap gap-1.5 mt-2">
             <StatusBadge status={ticket.status} />
-            <PriorityBadge priority={ticket.priority} />
+            {editingField === "priority" ? (
+              <select
+                autoFocus
+                className="border border-gray-300 rounded px-2 py-0.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+                value={ticket.priority}
+                onChange={(e) => { updateField({ priority: e.target.value as Priority }); setEditingField(null); }}
+                onBlur={() => setEditingField(null)}
+              >
+                {PRIORITY_OPTIONS.map((o) => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            ) : (
+              <span
+                className="cursor-pointer hover:opacity-80"
+                onClick={() => setEditingField("priority")}
+                title="Klik om prioriteit te wijzigen"
+              >
+                <PriorityBadge priority={ticket.priority} />
+              </span>
+            )}
             <CategoryBadge category={ticket.category} />
           </div>
         </div>
@@ -310,12 +359,30 @@ export default function TicketDetail() {
 
       {/* Details */}
       <div className="card space-y-4">
-        {ticket.description && (
-          <div>
-            <h2 className="font-semibold mb-1">Omschrijving</h2>
-            <p className="text-gray-700 whitespace-pre-wrap">{ticket.description}</p>
-          </div>
-        )}
+        <div>
+          <h2 className="font-semibold mb-1">Omschrijving</h2>
+          {editingField === "description" ? (
+            <textarea
+              autoFocus
+              rows={4}
+              className="w-full border border-blue-400 rounded-lg px-3 py-2 text-sm text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onBlur={() => { updateField({ description: editValue }); setEditingField(null); }}
+              onKeyDown={(e) => {
+                if (e.key === "Escape") setEditingField(null);
+              }}
+            />
+          ) : (
+            <p
+              className={`text-sm whitespace-pre-wrap cursor-text hover:bg-gray-50 rounded px-1 -mx-1 py-0.5 ${ticket.description ? "text-gray-700" : "text-gray-400 italic"}`}
+              onClick={() => { setEditingField("description"); setEditValue(ticket.description || ""); }}
+              title="Klik om te bewerken"
+            >
+              {ticket.description || "Klik om een omschrijving toe te voegen"}
+            </p>
+          )}
+        </div>
 
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>

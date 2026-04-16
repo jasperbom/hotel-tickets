@@ -396,6 +396,11 @@ function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locat
               📷 {ticket.photos.length}
             </span>
           )}
+          {!!ticket.comment_count && ticket.comment_count > 0 && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+              💬 {ticket.comment_count}
+            </span>
+          )}
         </div>
         <p className="text-xs text-gray-400">
           {format(parseUTC(ticket.created_at), "d MMM", { locale: nl })}
@@ -550,6 +555,11 @@ function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; l
               📷 {ticket.photos.length}
             </span>
           )}
+          {!!ticket.comment_count && ticket.comment_count > 0 && (
+            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+              💬 {ticket.comment_count}
+            </span>
+          )}
         </div>
         <p className="text-xs text-red-400">
           {format(parseUTC(ticket.created_at), "d MMM HH:mm", { locale: nl })}
@@ -579,6 +589,11 @@ function AvailableTicketRow({ ticket, locationName, occupied, onClaim }: { ticke
             {ticket.photos && ticket.photos.length > 0 && (
               <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
                 📷 {ticket.photos.length}
+              </span>
+            )}
+            {!!ticket.comment_count && ticket.comment_count > 0 && (
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+                💬 {ticket.comment_count}
               </span>
             )}
           </div>

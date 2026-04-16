@@ -66,6 +66,7 @@ export interface Ticket {
   notify_when_free: boolean;
   subtasks: Subtask[] | null;
   photos: string[] | null;
+  comment_count?: number;
 }
 
 export interface Comment {

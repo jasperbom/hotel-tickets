@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from croniter import croniter
 
 from ..database import get_db
-from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate
+from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate, TicketComment
 from ..auth import RequireUser
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -223,6 +223,17 @@ async def get_my_overview(
     upcoming_recurring.sort(key=lambda x: x[0])
     upcoming_5 = [item for _, item in upcoming_recurring[:5]]
 
+    # Commentaar-tellingen per ticket (één query voor alle tickets tegelijk)
+    all_ticket_ids = [t.id for t in list(my_tickets) + list(available) + list(urgent_tickets)]
+    comment_count_map: dict[str, int] = {}
+    if all_ticket_ids:
+        cc_result = await db.execute(
+            select(TicketComment.ticket_id, func.count(TicketComment.id).label("cnt"))
+            .where(TicketComment.ticket_id.in_(all_ticket_ids))
+            .group_by(TicketComment.ticket_id)
+        )
+        comment_count_map = {row.ticket_id: row.cnt for row in cc_result}
+
     return {
         "user": {
             "ha_user_id": user.ha_user_id,
@@ -235,9 +246,9 @@ async def get_my_overview(
             "team_open": total_open or 0,
             "urgent": urgent_count or 0,
         },
-        "urgent_tickets": [_ticket_dict(t) for t in urgent_tickets],
-        "my_tickets": [_ticket_dict(t) for t in my_tickets],
-        "available_tickets": [_ticket_dict(t) for t in available],
+        "urgent_tickets": [_ticket_dict(t, comment_count_map) for t in urgent_tickets],
+        "my_tickets": [_ticket_dict(t, comment_count_map) for t in my_tickets],
+        "available_tickets": [_ticket_dict(t, comment_count_map) for t in available],
         "today_recurring": today_recurring,
         "upcoming_recurring": upcoming_5,
     }
@@ -266,7 +277,7 @@ def _template_dict(t: RecurringTemplate, next_run: datetime, active_ticket: "Tic
     return result
 
 
-def _ticket_dict(t: Ticket) -> dict:
+def _ticket_dict(t: Ticket, comment_counts: dict[str, int] | None = None) -> dict:
     subtasks = None
     if t.subtasks:
         try:
@@ -297,6 +308,7 @@ def _ticket_dict(t: Ticket) -> dict:
         "recurring_template_id": t.recurring_template_id,
         "subtasks": subtasks,
         "photos": photos,
+        "comment_count": (comment_counts or {}).get(t.id, 0),
     }
 
 
