@@ -1,18 +1,20 @@
 """
-Fiets-admin router: Excel-import van historische reserveringsdata.
-Accepteert een geüpload .xlsx-bestand (Fietsverhuur formaat).
+Fiets-admin router: Excel-import en export van reserveringsdata.
+- Import: altijd mogelijk, duplicaten worden overgeslagen (zelfde gast + fiets + datums)
+- Export: alle reserveringen als xlsx
 """
 import asyncio
 import io
 import re
 from datetime import date, datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from ..database import get_db
 from ..models import (
-    Bike, BikeReservation, BikeReservationBike,
+    Bike, BikeType, BikeReservation, BikeReservationBike,
     BikeReservationStatus, SystemSetting,
 )
 from ..auth import RequireUser
@@ -156,6 +158,73 @@ def _parse_excel(file_bytes: bytes) -> tuple[list[dict], list[str]]:
     return results, errors
 
 
+def _build_export_excel(reservations: list[dict]) -> bytes:
+    """Genereer xlsx-bestand van alle reserveringen. Synchrone functie."""
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Reserveringen"
+
+    headers = [
+        "ID", "Gast", "Kamer", "Startdatum", "Einddatum",
+        "Dagen", "# Fietsen", "Fietstype", "Status", "Fietsnummers", "Notities"
+    ]
+    header_fill = PatternFill("solid", fgColor="1E3A5F")
+    header_font = Font(bold=True, color="FFFFFF")
+
+    for col_i, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_i, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    status_nl = {
+        "active": "Actief",
+        "completed": "Afgerond",
+        "cancelled": "Geannuleerd",
+    }
+
+    for row_i, res in enumerate(reservations, 2):
+        ws.cell(row=row_i, column=1, value=res["id"])
+        ws.cell(row=row_i, column=2, value=res["guest_name"])
+        ws.cell(row=row_i, column=3, value=res["guest_room"] or "")
+        ws.cell(row=row_i, column=4, value=res["start_date"])
+        ws.cell(row=row_i, column=5, value=res["end_date"])
+        ws.cell(row=row_i, column=6, value=res["num_days"])
+        ws.cell(row=row_i, column=7, value=res["num_bikes"])
+        ws.cell(row=row_i, column=8, value=res["bike_type_name"] or "")
+        ws.cell(row=row_i, column=9, value=status_nl.get(res["status"], res["status"]))
+        ws.cell(row=row_i, column=10, value=res["bike_numbers"] or "")
+        ws.cell(row=row_i, column=11, value=res["notes"] or "")
+
+        # Datum-cellen opmaken
+        for col in (4, 5):
+            ws.cell(row=row_i, column=col).number_format = "DD-MM-YYYY"
+
+        # Rij-kleur op basis van status
+        if res["status"] == "completed":
+            fill = PatternFill("solid", fgColor="F0F9F0")
+        elif res["status"] == "cancelled":
+            fill = PatternFill("solid", fgColor="FFF0F0")
+        else:
+            fill = PatternFill("solid", fgColor="F0F4FF")
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_i, column=col).fill = fill
+
+    # Kolombreedtes
+    col_widths = [8, 25, 10, 14, 14, 8, 10, 18, 14, 20, 35]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
 @router.post("/import-excel")
 async def import_excel(
     user: RequireUser,
@@ -167,14 +236,6 @@ async def import_excel(
     if not file.filename or not file.filename.endswith(".xlsx"):
         raise HTTPException(400, "Alleen .xlsx bestanden zijn toegestaan")
 
-    # Controleer of al eerder geïmporteerd
-    already = await db.get(SystemSetting, "bike_excel_imported")
-    if already and already.value == "true":
-        raise HTTPException(
-            400,
-            "Excel al eerder geïmporteerd. Verwijder de instelling 'bike_excel_imported' om opnieuw te importeren."
-        )
-
     contents = await file.read()
 
     # Parse synchroon in thread (openpyxl is niet async)
@@ -184,18 +245,34 @@ async def import_excel(
     bikes_result = await db.execute(select(Bike))
     bike_lookup: dict[str, Bike] = {b.number: b for b in bikes_result.scalars().all()}
 
+    # Bouw deduplicatie-set: (bike_id, start_date, end_date)
+    existing_result = await db.execute(
+        select(BikeReservationBike.bike_id, BikeReservation.start_date, BikeReservation.end_date)
+        .join(BikeReservation, BikeReservation.id == BikeReservationBike.reservation_id)
+    )
+    existing_keys: set[tuple] = {
+        (row.bike_id, row.start_date, row.end_date)
+        for row in existing_result
+    }
+
     # Haal huidige max ID op voor counter
     max_id_result = await db.execute(select(func.max(BikeReservation.id)))
     last_id = max_id_result.scalar() or 0
     next_id = last_id + 1
 
     imported = 0
-    skipped = 0
+    skipped_dup = 0
+    skipped_no_bike = 0
 
     for entry in parsed:
         bike = bike_lookup.get(entry["bike_number"])
         if not bike:
-            skipped += 1
+            skipped_no_bike += 1
+            continue
+
+        dedup_key = (bike.id, entry["start_date"], entry["end_date"])
+        if dedup_key in existing_keys:
+            skipped_dup += 1
             continue
 
         res = BikeReservation(
@@ -214,6 +291,7 @@ async def import_excel(
         await db.flush()
         db.add(BikeReservationBike(reservation_id=res.id, bike_id=bike.id))
         bike.total_rental_days += entry["num_days"]
+        existing_keys.add(dedup_key)
         next_id += 1
         imported += 1
 
@@ -224,23 +302,74 @@ async def import_excel(
     else:
         db.add(SystemSetting(key="bike_reservation_counter", value=str(next_id)))
 
-    # Markeer als geïmporteerd
-    db.add(SystemSetting(key="bike_excel_imported", value="true"))
+    await db.commit()
 
     return {
         "ok": True,
         "imported": imported,
-        "skipped": skipped,
-        "errors": errors[:10],  # max 10 foutmeldingen tonen
+        "skipped": skipped_dup + skipped_no_bike,
+        "skipped_duplicates": skipped_dup,
+        "skipped_no_bike": skipped_no_bike,
+        "errors": errors[:10],
     }
 
 
-@router.delete("/import-excel")
-async def reset_import(user: RequireUser, db: AsyncSession = Depends(get_db)):
-    """Reset de import-vlag zodat opnieuw geïmporteerd kan worden."""
+@router.get("/export-excel")
+async def export_excel(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Exporteer alle reserveringen als xlsx-bestand."""
     if not user.is_admin:
-        raise HTTPException(403, "Alleen admins")
-    setting = await db.get(SystemSetting, "bike_excel_imported")
-    if setting:
-        setting.value = "false"
-    return {"ok": True}
+        raise HTTPException(403, "Alleen admins kunnen exporteren")
+
+    # Haal alle reserveringen op met fietstype + fietsnummers
+    res_result = await db.execute(
+        select(BikeReservation).order_by(BikeReservation.start_date.desc())
+    )
+    reservations = res_result.scalars().all()
+
+    # Fietstype lookup
+    types_result = await db.execute(select(BikeType))
+    type_lookup: dict[int, str] = {t.id: t.name for t in types_result.scalars().all()}
+
+    # Bike lookup
+    bikes_res = await db.execute(select(Bike))
+    bike_lookup_id: dict[int, str] = {b.id: b.number for b in bikes_res.scalars().all()}
+
+    # Koppeltabel: reservation_id → list[bike_id]
+    links_result = await db.execute(select(BikeReservationBike))
+    bike_links: dict[int, list[int]] = {}
+    for link in links_result.scalars().all():
+        bike_links.setdefault(link.reservation_id, []).append(link.bike_id)
+
+    rows = []
+    for r in reservations:
+        linked_bikes = bike_links.get(r.id, [])
+        bike_numbers = ", ".join(
+            f"#{bike_lookup_id[bid]}" for bid in linked_bikes if bid in bike_lookup_id
+        )
+        rows.append({
+            "id": r.id,
+            "guest_name": r.guest_name,
+            "guest_room": r.guest_room,
+            "start_date": r.start_date,
+            "end_date": r.end_date,
+            "num_days": r.num_days,
+            "num_bikes": r.num_bikes,
+            "bike_type_name": type_lookup.get(r.bike_type_id) if r.bike_type_id else None,
+            "status": r.status.value if hasattr(r.status, "value") else r.status,
+            "bike_numbers": bike_numbers,
+            "notes": r.notes,
+        })
+
+    excel_bytes = await asyncio.to_thread(_build_export_excel, rows)
+
+    today_str = date.today().strftime("%Y-%m-%d")
+    filename = f"fietsreserveringen_{today_str}.xlsx"
+
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )

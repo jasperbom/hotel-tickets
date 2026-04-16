@@ -476,11 +476,30 @@ export const bikeAdminApi = {
   importExcel: (file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return api.post<{ ok: boolean; imported: number; skipped: number; errors: string[] }>(
+    return api.post<{
+      ok: boolean;
+      imported: number;
+      skipped: number;
+      skipped_duplicates: number;
+      skipped_no_bike: number;
+      errors: string[];
+    }>(
       "/bike-admin/import-excel",
       form,
       { headers: { "Content-Type": "multipart/form-data" } }
     );
   },
-  resetImport: () => api.delete<{ ok: boolean }>("/bike-admin/import-excel"),
+  exportExcel: async () => {
+    const response = await api.get("/bike-admin/export-excel", { responseType: "blob" });
+    const blob = new Blob([response.data], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const today = new Date().toISOString().slice(0, 10);
+    a.download = `fietsreserveringen_${today}.xlsx`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
 };

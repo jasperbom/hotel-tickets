@@ -71,17 +71,7 @@ export default function BikeInstellingen() {
     }
   }
 
-  async function resetImport() {
-    if (!window.confirm("Import-vlag resetten zodat je opnieuw kunt importeren?")) return;
-    try {
-      await bikeAdminApi.resetImport();
-      setImportResult(null);
-      setImportError(null);
-      alert("Reset gelukt. Je kunt nu opnieuw importeren.");
-    } catch {
-      setImportError("Reset mislukt");
-    }
-  }
+  // resetImport is verwijderd — import werkt altijd met deduplicatie
 
   if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
 
@@ -148,12 +138,6 @@ export default function BikeInstellingen() {
             >
               {importing ? "Importeren..." : "📂 Excel uploaden"}
             </label>
-            <button
-              onClick={resetImport}
-              className="text-sm text-gray-500 hover:text-red-600 underline"
-            >
-              Reset import-vlag
-            </button>
           </div>
 
           {importResult && (
