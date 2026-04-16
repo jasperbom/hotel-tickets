@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import date, datetime, timezone
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
@@ -41,6 +41,8 @@ class BikeReservationUpdate(BaseModel):
     guest_room: Optional[str] = None
     notes: Optional[str] = None
     status: Optional[str] = None
+    key_given: Optional[bool] = None
+    key_returned: Optional[bool] = None
 
 
 # ── Helper ─────────────────────────────────────────────────────────────────────
@@ -60,6 +62,8 @@ def _reservation_dict(res: BikeReservation) -> dict:
         "total_price": (res.num_days * res.num_bikes * res.bike_type.price_per_day) if res.bike_type else None,
         "status": res.status.value,
         "notes": res.notes,
+        "key_given_at": res.key_given_at.isoformat() if res.key_given_at else None,
+        "key_returned_at": res.key_returned_at.isoformat() if res.key_returned_at else None,
         "bikes": [
             {"id": rb.bike.id, "number": rb.bike.number, "name": rb.bike.name}
             for rb in res.reservation_bikes
@@ -187,6 +191,10 @@ async def update_reservation(
             res.status = BikeReservationStatus(data.status)
         except ValueError:
             raise HTTPException(400, f"Ongeldige status: {data.status}")
+    if data.key_given is not None:
+        res.key_given_at = datetime.now(timezone.utc) if data.key_given else None
+    if data.key_returned is not None:
+        res.key_returned_at = datetime.now(timezone.utc) if data.key_returned else None
     return _reservation_dict(res)
 
 

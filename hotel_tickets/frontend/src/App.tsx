@@ -20,7 +20,6 @@ import BikeNieuweReservering from "./pages/BikeNieuweReservering";
 import BikeReserveringDetail from "./pages/BikeReserveringDetail";
 import BikeBeheer from "./pages/BikeBeheer";
 import BikeInstellingen from "./pages/BikeInstellingen";
-import BikeTimeline from "./pages/BikeTimeline";
 import Instellingen from "./pages/Instellingen";
 import { userApi, bikesModuleApi, type UserRole, type BikesModuleRoles } from "./api/client";
 
@@ -79,7 +78,6 @@ const MODULES: ModuleConfig[] = [
     navItems: [
       { to: "/bikes", label: "Dashboard", icon: "📋", end: true, restricted: false },
       { to: "/bikes/reserveringen", label: "Reserveringen", icon: "📅", restricted: false },
-      { to: "/bikes/tijdlijn", label: "Tijdlijn", icon: "📆", restricted: false },
       { to: "/bikes/beheer", label: "Fietsbeheer", icon: "🔧", restricted: "adminOrSupervisor" },
     ],
   },
@@ -330,7 +328,6 @@ export default function App() {
               <Route path="/bikes/reserveringen" element={<BikeReserveringen />} />
               <Route path="/bikes/reserveringen/nieuw" element={<BikeNieuweReservering />} />
               <Route path="/bikes/reserveringen/:id" element={<BikeReserveringDetail />} />
-              <Route path="/bikes/tijdlijn" element={<BikeTimeline />} />
               <Route path="/bikes/beheer" element={<BikeBeheer />} />
               <Route path="/bikes/instellingen" element={<BikeInstellingen />} />
               {/* Instellingen (globaal) */}

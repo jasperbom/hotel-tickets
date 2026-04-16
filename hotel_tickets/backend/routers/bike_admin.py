@@ -452,10 +452,15 @@ async def export_excel(user: RequireUser, db: AsyncSession = Depends(get_db)):
 
 
 @router.post("/rebalance")
-async def rebalance_bikes(user: RequireUser, db: AsyncSession = Depends(get_db)):
+async def rebalance_bikes(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    dry_run: bool = False,
+):
     """
     Herbalanceer toekomstige (niet-gestarte) reserveringen voor betere rotatie.
     Wijs fietsen opnieuw toe op basis van verhuurdagen (minste eerst).
+    Met dry_run=true wordt niets opgeslagen, alleen het preview-resultaat teruggegeven.
     """
     if not user.is_admin:
         raise HTTPException(403, "Alleen admins")
@@ -547,8 +552,11 @@ async def rebalance_bikes(user: RequireUser, db: AsyncSession = Depends(get_db))
         if new_ids != original[res.id]:
             changed += 1
 
-    await db.commit()
-    return {"ok": True, "changed": changed, "total_future": len(future_res)}
+    if dry_run:
+        await db.rollback()
+    else:
+        await db.commit()
+    return {"ok": True, "changed": changed, "total_future": len(future_res), "dry_run": dry_run}
 
 
 # ── Database reset ─────────────────────────────────────────────────────────────
