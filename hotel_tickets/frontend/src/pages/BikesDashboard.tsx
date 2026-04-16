@@ -348,6 +348,8 @@ function BikeCard({
       className={`w-full text-left border rounded-xl p-3 transition-all hover:shadow-md active:scale-95 ${
         bike.status === "maintenance"
           ? "border-orange-200 bg-orange-50"
+          : keyGiven && !keyReturned
+          ? "border-red-200 bg-red-50"
           : todayReservation
           ? "border-green-200 bg-green-50"
           : "border-gray-200 bg-white hover:border-gray-300"
@@ -362,7 +364,7 @@ function BikeCard({
 
       {/* Naam huurder als verhuurd, anders fietsnaam */}
       {todayReservation ? (
-        <p className="text-xs font-medium text-green-800 truncate">{todayReservation.guest_name}</p>
+        <p className={`text-xs font-medium truncate ${keyGiven && !keyReturned ? "text-red-800" : "text-green-800"}`}>{todayReservation.guest_name}</p>
       ) : (
         <p className="text-xs text-gray-600 truncate">{bike.name}</p>
       )}
