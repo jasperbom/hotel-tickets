@@ -60,26 +60,29 @@ async def get_bikes_module_setting(user: RequireUser, db: AsyncSession = Depends
     return {"bikes_module_roles": row.value if row else "all"}
 
 
-MAX_LOGO_SIZE = 500 * 1024  # 500 KB
+MAX_LOGO_SIZE = 500 * 1024      # 500 KB
+MAX_BG_IMAGE_SIZE = 2 * 1024 * 1024  # 2 MB
 ALLOWED_LOGO_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
 class BrandingOut(BaseModel):
     brand_color: str | None
     brand_logo: str | None
+    btn_color: str | None
+    bg_color: str | None
+    bg_image: str | None
 
 
 class BrandingUpdate(BaseModel):
     brand_color: str | None = None
+    btn_color: str | None = None
+    bg_color: str | None = None
 
 
 async def _get_branding(db: AsyncSession) -> BrandingOut:
-    color_row = await db.get(SystemSetting, "brand_color")
-    logo_row = await db.get(SystemSetting, "brand_logo")
-    return BrandingOut(
-        brand_color=color_row.value if color_row else None,
-        brand_logo=logo_row.value if logo_row else None,
-    )
+    keys = ["brand_color", "brand_logo", "btn_color", "bg_color", "bg_image"]
+    rows = {k: await db.get(SystemSetting, k) for k in keys}
+    return BrandingOut(**{k: rows[k].value if rows[k] else None for k in keys})
 
 
 @router.get("/branding", response_model=BrandingOut)
@@ -95,12 +98,14 @@ async def update_branding(
 ):
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Alleen admins kunnen de huisstijl wijzigen")
-    if body.brand_color is not None:
-        row = await db.get(SystemSetting, "brand_color")
-        if row:
-            row.value = body.brand_color
-        else:
-            db.add(SystemSetting(key="brand_color", value=body.brand_color))
+    for field in ("brand_color", "btn_color", "bg_color"):
+        value = getattr(body, field)
+        if value is not None:
+            row = await db.get(SystemSetting, field)
+            if row:
+                row.value = value
+            else:
+                db.add(SystemSetting(key=field, value=value))
     await db.commit()
     return await _get_branding(db)
 
@@ -124,6 +129,43 @@ async def upload_branding_logo(
         row.value = data_url
     else:
         db.add(SystemSetting(key="brand_logo", value=data_url))
+    await db.commit()
+    return await _get_branding(db)
+
+
+@router.post("/branding/background", response_model=BrandingOut)
+async def upload_branding_background(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de achtergrond wijzigen")
+    if file.content_type not in ALLOWED_LOGO_TYPES:
+        raise HTTPException(status_code=400, detail="Alleen PNG, JPEG of WebP toegestaan")
+    data = await file.read()
+    if len(data) > MAX_BG_IMAGE_SIZE:
+        raise HTTPException(status_code=400, detail="Achtergrond mag maximaal 2 MB zijn")
+    data_url = f"data:{file.content_type};base64,{base64.b64encode(data).decode()}"
+    row = await db.get(SystemSetting, "bg_image")
+    if row:
+        row.value = data_url
+    else:
+        db.add(SystemSetting(key="bg_image", value=data_url))
+    await db.commit()
+    return await _get_branding(db)
+
+
+@router.delete("/branding/background", response_model=BrandingOut)
+async def delete_branding_background(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de achtergrond wijzigen")
+    row = await db.get(SystemSetting, "bg_image")
+    if row:
+        await db.delete(row)
     await db.commit()
     return await _get_branding(db)
 

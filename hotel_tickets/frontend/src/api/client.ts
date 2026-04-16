@@ -251,11 +251,14 @@ export const systemSettingsApi = {
 export interface BrandingSettings {
   brand_color: string | null;
   brand_logo: string | null;
+  btn_color: string | null;
+  bg_color: string | null;
+  bg_image: string | null;
 }
 
 export const brandingApi = {
   get: () => api.get<BrandingSettings>("/settings/branding"),
-  update: (data: { brand_color?: string | null }) =>
+  update: (data: { brand_color?: string | null; btn_color?: string | null; bg_color?: string | null }) =>
     api.patch<BrandingSettings>("/settings/branding", data),
   uploadLogo: (file: File) => {
     const fd = new FormData();
@@ -264,6 +267,14 @@ export const brandingApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  uploadBackground: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post<BrandingSettings>("/settings/branding/background", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteBackground: () => api.delete<BrandingSettings>("/settings/branding/background"),
 };
 
 // --- Zwembaden types ---
