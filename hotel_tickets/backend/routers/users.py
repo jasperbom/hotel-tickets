@@ -78,16 +78,20 @@ async def get_my_overview(
         else_=4,
     )
 
-    # Mijn openstaande tickets (aan mij toegewezen, niet gesloten)
+    # Mijn openstaande tickets (aan mij toegewezen, niet gesloten, geen herhalende taken)
     mine_result = await db.execute(
         select(Ticket).where(
-            and_(Ticket.assigned_to == uid, Ticket.status != Status.closed)
+            and_(
+                Ticket.assigned_to == uid,
+                Ticket.status != Status.closed,
+                Ticket.recurring_template_id.is_(None),
+            )
         ).order_by(_priority_sort, Ticket.created_at)
     )
     my_tickets = mine_result.scalars().all()
 
-    # Beschikbare tickets: open, niet toegewezen, in mijn afdeling (of alles voor admin)
-    avail_filters = [Ticket.status == Status.open, Ticket.assigned_to.is_(None)]
+    # Beschikbare tickets: open, niet toegewezen, in mijn afdeling (of alles voor admin), geen herhalende taken
+    avail_filters = [Ticket.status == Status.open, Ticket.assigned_to.is_(None), Ticket.recurring_template_id.is_(None)]
     if dept and not user.is_admin:
         avail_filters.append(Ticket.category == dept)
     avail_result = await db.execute(
@@ -103,18 +107,18 @@ async def get_my_overview(
     )
     urgent_tickets = urgent_result.scalars().all()
 
-    # Tellingen: eigen afdeling + toegewezen aan mij (voor niet-admins)
+    # Tellingen: eigen afdeling + toegewezen aan mij (voor niet-admins), geen herhalende taken
     if dept and not user.is_admin:
         dept_or_mine = or_(Ticket.category == dept, Ticket.assigned_to == uid)
         total_open = await db.scalar(
-            select(func.count()).where(and_(Ticket.status != Status.closed, dept_or_mine))
+            select(func.count()).where(and_(Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None), dept_or_mine))
         )
     else:
         total_open = await db.scalar(
-            select(func.count()).where(Ticket.status != Status.closed)
+            select(func.count()).where(and_(Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None)))
         )
     my_open = await db.scalar(
-        select(func.count()).where(and_(Ticket.assigned_to == uid, Ticket.status != Status.closed))
+        select(func.count()).where(and_(Ticket.assigned_to == uid, Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None)))
     )
     urgent_count = await db.scalar(
         select(func.count()).where(and_(Ticket.status == Status.open, Ticket.priority == "urgent"))
@@ -137,27 +141,33 @@ async def get_my_overview(
     today_recurring = []
     upcoming_recurring = []
 
-    # Laad actieve tickets met subtaken voor alle templates (één query)
+    # Laad alle actieve (niet-gesloten) tickets voor templates (één query)
     template_ids = [t.id for t in dept_templates]
     active_by_template: dict[str, Ticket] = {}
+    templates_with_open: set[str] = set()
     if template_ids:
         active_result = await db.execute(
             select(Ticket).where(
                 and_(
                     Ticket.recurring_template_id.in_(template_ids),
                     Ticket.status != Status.closed,
-                    Ticket.subtasks.isnot(None),
                 )
-            )
+            ).order_by(Ticket.created_at)  # oudste eerst
         )
         for ticket in active_result.scalars().all():
-            active_by_template[ticket.recurring_template_id] = ticket
+            tid = ticket.recurring_template_id
+            templates_with_open.add(tid)
+            # Bewaar oudste ticket per template (voor created_at referentie en subtaken)
+            if tid not in active_by_template:
+                active_by_template[tid] = ticket
 
     for t in dept_templates:
         try:
             base_dt = datetime.combine(today, datetime.min.time()) - timedelta(seconds=1)
             cron = croniter(t.cron_expression, base_dt)
             next_run = cron.get_next(datetime)
+            has_open = t.id in templates_with_open
+
             if next_run.date() == today:
                 # Tel het aantal vandaag gesloten tickets voor dit sjabloon
                 closed_today_count = await db.scalar(
@@ -187,6 +197,11 @@ async def get_my_overview(
                     upcoming_recurring.append((future_run, _template_dict(t, future_run)))
                 else:
                     upcoming_recurring.append((next_run, _template_dict(t, next_run)))
+            elif has_open:
+                # Open ticket van vorige run, volgende uitvoering nog niet vandaag → toon als verlopen taak
+                active_ticket = active_by_template[t.id]
+                today_recurring.append(_template_dict(t, active_ticket.created_at, active_ticket))
+                # Niet toevoegen aan upcoming: al zichtbaar als verlopen in today_recurring
             else:
                 upcoming_recurring.append((next_run, _template_dict(t, next_run)))
         except Exception:
