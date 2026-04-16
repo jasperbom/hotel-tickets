@@ -79,50 +79,62 @@ async def get_my_overview(
     )
 
     # Mijn openstaande tickets (aan mij toegewezen, niet gesloten, geen herhalende taken)
+    mine_filters = [
+        Ticket.assigned_to == uid,
+        Ticket.status != Status.closed,
+        Ticket.recurring_template_id.is_(None),
+    ]
+    if dept and user.is_admin:
+        mine_filters.append(Ticket.category == dept)
     mine_result = await db.execute(
-        select(Ticket).where(
-            and_(
-                Ticket.assigned_to == uid,
-                Ticket.status != Status.closed,
-                Ticket.recurring_template_id.is_(None),
-            )
-        ).order_by(_priority_sort, Ticket.created_at)
+        select(Ticket).where(and_(*mine_filters)).order_by(_priority_sort, Ticket.created_at)
     )
     my_tickets = mine_result.scalars().all()
 
-    # Beschikbare tickets: open, niet toegewezen, in mijn afdeling (of alles voor admin), geen herhalende taken
+    # Beschikbare tickets: open, niet toegewezen, gefilterd op afdeling (altijd als dept gezet), geen herhalende taken
     avail_filters = [Ticket.status == Status.open, Ticket.assigned_to.is_(None), Ticket.recurring_template_id.is_(None)]
-    if dept and not user.is_admin:
+    if dept:
         avail_filters.append(Ticket.category == dept)
     avail_result = await db.execute(
         select(Ticket).where(and_(*avail_filters)).order_by(_priority_sort, Ticket.created_at).limit(10)
     )
     available = avail_result.scalars().all()
 
-    # Urgente tickets: altijd alle urgente tickets, ongeacht afdeling
+    # Urgente tickets: voor reguliere medewerkers altijd alle urgente tickets zichtbaar;
+    # admins/supervisors zien urgente tickets gefilterd op geselecteerde afdeling
+    urgent_filters = [Ticket.status != Status.closed, Ticket.priority == "urgent"]
+    if dept and user.is_admin:
+        urgent_filters.append(Ticket.category == dept)
     urgent_result = await db.execute(
-        select(Ticket).where(
-            and_(Ticket.status != Status.closed, Ticket.priority == "urgent")
-        ).order_by(Ticket.created_at.desc()).limit(20)
+        select(Ticket).where(and_(*urgent_filters)).order_by(Ticket.created_at.desc()).limit(20)
     )
     urgent_tickets = urgent_result.scalars().all()
 
-    # Tellingen: eigen afdeling + toegewezen aan mij (voor niet-admins), geen herhalende taken
-    if dept and not user.is_admin:
-        dept_or_mine = or_(Ticket.category == dept, Ticket.assigned_to == uid)
-        total_open = await db.scalar(
-            select(func.count()).where(and_(Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None), dept_or_mine))
-        )
+    # Tellingen: geen herhalende taken meerekenen
+    if dept:
+        if user.is_admin:
+            # Admin/supervisor met afdelingsfilter: alleen die afdeling
+            total_open = await db.scalar(
+                select(func.count()).where(and_(Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None), Ticket.category == dept))
+            )
+        else:
+            # Reguliere medewerker: eigen afdeling + eigen tickets (cross-dept)
+            dept_or_mine = or_(Ticket.category == dept, Ticket.assigned_to == uid)
+            total_open = await db.scalar(
+                select(func.count()).where(and_(Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None), dept_or_mine))
+            )
     else:
         total_open = await db.scalar(
             select(func.count()).where(and_(Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None)))
         )
-    my_open = await db.scalar(
-        select(func.count()).where(and_(Ticket.assigned_to == uid, Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None)))
-    )
-    urgent_count = await db.scalar(
-        select(func.count()).where(and_(Ticket.status == Status.open, Ticket.priority == "urgent"))
-    )
+    my_open_filters = [Ticket.assigned_to == uid, Ticket.status != Status.closed, Ticket.recurring_template_id.is_(None)]
+    if dept and user.is_admin:
+        my_open_filters.append(Ticket.category == dept)
+    my_open = await db.scalar(select(func.count()).where(and_(*my_open_filters)))
+    urgent_count_filters = [Ticket.status == Status.open, Ticket.priority == "urgent"]
+    if dept and user.is_admin:
+        urgent_count_filters.append(Ticket.category == dept)
+    urgent_count = await db.scalar(select(func.count()).where(and_(*urgent_count_filters)))
 
     # Herhalende taken: vandaag gepland + aankomende
     templates_result = await db.execute(
@@ -130,8 +142,8 @@ async def get_my_overview(
     )
     all_templates = templates_result.scalars().all()
 
-    # Filter op afdeling (admins/supervisors zien alles)
-    if dept and not user.is_admin:
+    # Filter op afdeling (geen dept = alles zichtbaar, bijv. admin zonder filter)
+    if dept:
         dept_templates = [t for t in all_templates if t.category == dept]
     else:
         dept_templates = list(all_templates)
