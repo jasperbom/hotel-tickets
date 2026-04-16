@@ -155,13 +155,13 @@ function BikePopup({
 
             {/* Sleutelbeheer voor vandaag verhuurde fiets */}
             {todayReservation && (
-              <div className="bg-green-50 border border-green-200 rounded-xl p-3 space-y-3">
+              <div className={`${keyGiven && !keyReturned ? "bg-red-50 border-red-300" : "bg-green-50 border-green-200"} border rounded-xl p-3 space-y-3`}>
                 <div>
-                  <p className="text-sm font-semibold text-green-800">{todayReservation.guest_name}</p>
+                  <p className={`text-sm font-semibold ${keyGiven && !keyReturned ? "text-red-800" : "text-green-800"}`}>{todayReservation.guest_name}</p>
                   {todayReservation.guest_room && (
-                    <p className="text-xs text-green-600">Kamer {todayReservation.guest_room}</p>
+                    <p className={`text-xs ${keyGiven && !keyReturned ? "text-red-600" : "text-green-600"}`}>Kamer {todayReservation.guest_room}</p>
                   )}
-                  <p className="text-xs text-green-600">t/m {todayReservation.end_date}</p>
+                  <p className={`text-xs ${keyGiven && !keyReturned ? "text-red-600" : "text-green-600"}`}>t/m {todayReservation.end_date}</p>
                 </div>
 
                 <div className="space-y-2">
