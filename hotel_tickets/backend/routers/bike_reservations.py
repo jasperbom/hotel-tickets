@@ -4,12 +4,20 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..models import (
     Bike, BikeType, BikeReservation, BikeReservationBike,
     BikeReservationStatus, SystemSetting,
 )
+
+def _reservation_options():
+    """Eager-load opties voor BikeReservation zodat lazy-loading niet nodig is."""
+    return [
+        selectinload(BikeReservation.bike_type),
+        selectinload(BikeReservation.reservation_bikes).selectinload(BikeReservationBike.bike),
+    ]
 from ..auth import RequireUser
 from .bikes import _get_available_bikes, _bike_dict
 
@@ -83,7 +91,7 @@ async def list_reservations(
     user: RequireUser = None,
     db: AsyncSession = Depends(get_db),
 ):
-    stmt = select(BikeReservation).order_by(BikeReservation.start_date.desc())
+    stmt = select(BikeReservation).options(*_reservation_options()).order_by(BikeReservation.start_date.desc())
     if status:
         try:
             stmt = stmt.where(BikeReservation.status == BikeReservationStatus(status))
@@ -136,13 +144,19 @@ async def create_reservation(data: BikeReservationCreate, user: RequireUser, db:
         bike.total_rental_days += data.num_days
 
     await db.flush()
-    await db.refresh(reservation)
+    # Herlaad met alle relationships
+    result2 = await db.execute(
+        select(BikeReservation).options(*_reservation_options()).where(BikeReservation.id == reservation.id)
+    )
+    reservation = result2.scalar_one()
     return _reservation_dict(reservation)
 
 
 @router.get("/{reservation_id}")
 async def get_reservation(reservation_id: int, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(BikeReservation).where(BikeReservation.id == reservation_id))
+    result = await db.execute(
+        select(BikeReservation).options(*_reservation_options()).where(BikeReservation.id == reservation_id)
+    )
     res = result.scalar_one_or_none()
     if not res:
         raise HTTPException(404, "Reservering niet gevonden")
@@ -156,7 +170,9 @@ async def update_reservation(
     user: RequireUser,
     db: AsyncSession = Depends(get_db),
 ):
-    result = await db.execute(select(BikeReservation).where(BikeReservation.id == reservation_id))
+    result = await db.execute(
+        select(BikeReservation).options(*_reservation_options()).where(BikeReservation.id == reservation_id)
+    )
     res = result.scalar_one_or_none()
     if not res:
         raise HTTPException(404, "Reservering niet gevonden")
@@ -176,7 +192,11 @@ async def update_reservation(
 
 @router.delete("/{reservation_id}")
 async def cancel_reservation(reservation_id: int, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(BikeReservation).where(BikeReservation.id == reservation_id))
+    result = await db.execute(
+        select(BikeReservation)
+        .options(*_reservation_options())
+        .where(BikeReservation.id == reservation_id)
+    )
     res = result.scalar_one_or_none()
     if not res:
         raise HTTPException(404, "Reservering niet gevonden")

@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
+from sqlalchemy.orm import selectinload
 
 from ..database import get_db
 from ..models import (
@@ -71,7 +72,9 @@ async def _create_maintenance_ticket(
 
 @router.post("/start")
 async def start_maintenance(data: MaintenanceStart, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    result = await db.execute(select(Bike).where(Bike.id == data.bike_id))
+    result = await db.execute(
+        select(Bike).options(selectinload(Bike.bike_type)).where(Bike.id == data.bike_id)
+    )
     bike = result.scalar_one_or_none()
     if not bike:
         raise HTTPException(404, "Fiets niet gevonden")
@@ -81,6 +84,9 @@ async def start_maintenance(data: MaintenanceStart, user: RequireUser, db: Async
     # Zoek conflicterende actieve reserveringen
     conflicts_result = await db.execute(
         select(BikeReservation)
+        .options(
+            selectinload(BikeReservation.reservation_bikes).selectinload(BikeReservationBike.bike)
+        )
         .join(BikeReservationBike)
         .where(
             BikeReservationBike.bike_id == data.bike_id,
