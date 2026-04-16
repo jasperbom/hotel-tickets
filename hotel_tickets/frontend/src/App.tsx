@@ -20,6 +20,7 @@ import BikeNieuweReservering from "./pages/BikeNieuweReservering";
 import BikeReserveringDetail from "./pages/BikeReserveringDetail";
 import BikeBeheer from "./pages/BikeBeheer";
 import BikeInstellingen from "./pages/BikeInstellingen";
+import Instellingen from "./pages/Instellingen";
 import { userApi, bikesModuleApi, type UserRole, type BikesModuleRoles } from "./api/client";
 
 // --- Module configuratie ---
@@ -54,7 +55,6 @@ const MODULES: ModuleConfig[] = [
       { to: "/dashboard", label: "Dashboard", icon: "⊞", restricted: false },
       { to: "/recurring", label: "Herhalend", icon: "🔄", restricted: false },
       { to: "/reports", label: "Rapportage", icon: "📊", restricted: "adminOrSupervisor" },
-      { to: "/settings", label: "Instellingen", icon: "⚙️", restricted: "settings" },
     ],
   },
   {
@@ -67,7 +67,6 @@ const MODULES: ModuleConfig[] = [
       { to: "/pools", label: "Overzicht", icon: "📋", end: true, restricted: false },
       { to: "/pools/logboek", label: "Logboek", icon: "📖", restricted: false },
       { to: "/pools/nieuw", label: "Nieuwe meting", icon: "➕", restricted: false },
-      { to: "/pools/instellingen", label: "Instellingen", icon: "⚙️", restricted: "adminOrSupervisor" },
     ],
   },
   {
@@ -80,7 +79,6 @@ const MODULES: ModuleConfig[] = [
       { to: "/bikes", label: "Dashboard", icon: "📋", end: true, restricted: false },
       { to: "/bikes/reserveringen", label: "Reserveringen", icon: "📅", restricted: false },
       { to: "/bikes/beheer", label: "Fietsbeheer", icon: "🔧", restricted: "adminOrSupervisor" },
-      { to: "/bikes/instellingen", label: "Instellingen", icon: "⚙️", restricted: "settings" },
     ],
   },
 ];
@@ -123,6 +121,13 @@ export default function App() {
     setMobileMenuOpen(false);
   }, [location.pathname]);
 
+  // Wis actieve module bij navigatie naar instellingen
+  useEffect(() => {
+    if (location.pathname === "/instellingen") {
+      setActiveModuleId(null);
+    }
+  }, [location.pathname]);
+
   // Sluit mobile menu bij klik buiten het menu
   useEffect(() => {
     function handleClick(e: MouseEvent) {
@@ -158,6 +163,9 @@ export default function App() {
     return true;
   });
 
+  const isOnInstellingen = location.pathname === "/instellingen";
+  const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
+
   function handleModuleClick(mod: ModuleConfig) {
     setActiveModuleId(mod.id);
     navigate(mod.defaultPath);
@@ -173,7 +181,7 @@ export default function App() {
             {activeModule.icon}
           </div>
         )}
-        <div className="flex flex-col items-center gap-2 pt-2 w-full">
+        <div className="flex flex-col items-center gap-2 pt-2 w-full flex-1">
         {visibleModules.map((mod) => (
           <button
             key={mod.id}
@@ -190,6 +198,22 @@ export default function App() {
           </button>
         ))}
         </div>
+        {canSeeInstellingen && (
+          <div className="mb-3">
+            <button
+              onClick={() => navigate("/instellingen")}
+              title="Instellingen"
+              className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+                isOnInstellingen
+                  ? "bg-white/20 text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <span className="text-xl">⚙️</span>
+              <span className="leading-tight text-center truncate w-full px-0.5">Instellingen</span>
+            </button>
+          </div>
+        )}
       </aside>
 
       {/* Rechter kolom: topnav + inhoud */}
@@ -221,7 +245,7 @@ export default function App() {
                       {/* Module knoppen */}
                       <div className="px-3 py-2 border-b border-white/10">
                         <span className="text-xs text-white/40 uppercase tracking-wide">Modules</span>
-                        <div className="flex gap-2 mt-2">
+                        <div className="flex flex-wrap gap-2 mt-2">
                           {visibleModules.map((mod) => (
                             <button
                               key={mod.id}
@@ -236,6 +260,19 @@ export default function App() {
                               <span>{mod.label}</span>
                             </button>
                           ))}
+                          {canSeeInstellingen && (
+                            <button
+                              onClick={() => navigate("/instellingen")}
+                              className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-sm transition-colors ${
+                                isOnInstellingen
+                                  ? "bg-white/20 text-white"
+                                  : "text-white/60 hover:text-white hover:bg-white/10"
+                              }`}
+                            >
+                              <span>⚙️</span>
+                              <span>Instellingen</span>
+                            </button>
+                          )}
                         </div>
                       </div>
                       {/* Navigatie items actieve module */}
@@ -291,7 +328,7 @@ export default function App() {
         )}
 
         {/* Inhoud */}
-        {activeModule ? (
+        {activeModule || isOnInstellingen ? (
           <main className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/pools/logboek" ? "" : "max-w-5xl"}`}>
             <Routes>
               {/* Taken module */}
@@ -317,6 +354,8 @@ export default function App() {
               <Route path="/bikes/reserveringen/:id" element={<BikeReserveringDetail />} />
               <Route path="/bikes/beheer" element={<BikeBeheer />} />
               <Route path="/bikes/instellingen" element={<BikeInstellingen />} />
+              {/* Instellingen (globaal) */}
+              <Route path="/instellingen" element={<Instellingen />} />
             </Routes>
           </main>
         ) : (
