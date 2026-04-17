@@ -67,3 +67,38 @@ create_ticket:
       example: "Jan de Vries"
       selector:
         text:
+
+navigate:
+  name: Navigeer naar pagina
+  description: Stuur een push-notificatie met een deep link naar een specifieke pagina in de Hotel Tickets app. Bruikbaar vanuit automaties om gebruikers direct naar tickets, dashboard of andere pagina's te sturen.
+  fields:
+    target:
+      name: Doel
+      description: De notify service van het apparaat (bijv. mobile_app_iphone_jan)
+      required: true
+      example: "mobile_app_iphone_jan"
+      selector:
+        text:
+    path:
+      name: Pad
+      description: Het pad in de app om naartoe te navigeren. Ondersteunt query parameters voor filters.
+      required: true
+      example: "/tickets?category=technical&status=open,in_progress"
+      selector:
+        text:
+    title:
+      name: Titel
+      description: Titel van de push-notificatie
+      required: false
+      default: "Hotel Tickets"
+      example: "Openstaande tickets"
+      selector:
+        text:
+    message:
+      name: Bericht
+      description: Inhoud van de push-notificatie
+      required: false
+      default: "Tik om te openen"
+      example: "Er zijn 3 nieuwe technische tickets"
+      selector:
+        text:

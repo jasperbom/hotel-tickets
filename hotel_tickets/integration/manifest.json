@@ -1,11 +1,12 @@
 {
   "domain": "hotel_tickets",
   "name": "Hotel Ticket System",
-  "version": "1.3.20",
+  "version": "1.4.16",
   "documentation": "https://github.com/jasperbom/hotel-tickets",
   "issue_tracker": "https://github.com/jasperbom/hotel-tickets/issues",
   "codeowners": ["@jasperbom"],
   "requirements": [],
+  "after_dependencies": ["tag", "mobile_app"],
   "iot_class": "local_push",
   "config_flow": true
 }
