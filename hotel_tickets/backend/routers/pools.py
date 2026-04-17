@@ -11,7 +11,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field, field_validator
-from sqlalchemy import select, func, and_
+from sqlalchemy import select, func, and_, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import RequireUser
@@ -147,6 +147,26 @@ def _row_to_out(row: PoolLog) -> dict:
 POOL_LABELS = {"wellness": "Wellness", "zwembad": "Zwembad"}
 
 
+def _has_measurement_filter():
+    """SQL-filter: log telt als 'echte meting' als minstens één meetwaarde gevuld is.
+    Logs met alleen chemicaliën, filterspoeling of notitie tellen niet mee."""
+    return or_(
+        PoolLog.water_temp.isnot(None),
+        PoolLog.doorzicht.isnot(None),
+        PoolLog.ph.isnot(None),
+        PoolLog.vbc_in.isnot(None),
+        PoolLog.vbc_uit.isnot(None),
+        PoolLog.tbc.isnot(None),
+        PoolLog.gbc.isnot(None),
+        PoolLog.ph_automaat.isnot(None),
+        PoolLog.vbc_automaat.isnot(None),
+        PoolLog.watermeter.isnot(None),
+        PoolLog.verbruik.isnot(None),
+        PoolLog.flow.isnot(None),
+        PoolLog.bezoekers.isnot(None),
+    )
+
+
 @router.get("/status", response_model=list[PoolStatus])
 async def pool_status(db: AsyncSession = Depends(get_db)):
     """BAL-compliance status per bad: zijn er vandaag >= 2 metingen?"""
@@ -155,14 +175,18 @@ async def pool_status(db: AsyncSession = Depends(get_db)):
     for pid in PoolId:
         count_q = await db.execute(
             select(func.count(PoolLog.id)).where(
-                and_(PoolLog.pool_id == pid, PoolLog.datum == today_str)
+                and_(
+                    PoolLog.pool_id == pid,
+                    PoolLog.datum == today_str,
+                    _has_measurement_filter(),
+                )
             )
         )
         count = count_q.scalar() or 0
 
         latest_q = await db.execute(
             select(PoolLog)
-            .where(PoolLog.pool_id == pid)
+            .where(and_(PoolLog.pool_id == pid, _has_measurement_filter()))
             .order_by(PoolLog.datum.desc(), PoolLog.tijd.desc())
             .limit(1)
         )
@@ -234,7 +258,13 @@ async def update_log(log_id: str, data: PoolLogUpdate, db: AsyncSession = Depend
 
 
 @router.delete("/logs/{log_id}", status_code=204)
-async def delete_log(log_id: str, db: AsyncSession = Depends(get_db)):
+async def delete_log(
+    log_id: str,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.is_admin:
+        raise HTTPException(403, "Alleen admins mogen logregels verwijderen")
     row = await db.get(PoolLog, log_id)
     if not row:
         raise HTTPException(404, "Log niet gevonden")
