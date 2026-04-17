@@ -63,13 +63,43 @@ const POOLS: { id: PoolId; label: string }[] = [
 ];
 
 function InfoBallon({ text }: { text: string }) {
+  const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    function onDocClick() { setOpen(false); }
+    // Volgende tick zodat de eigen klik niet direct sluit
+    const t = setTimeout(() => document.addEventListener("click", onDocClick), 0);
+    return () => {
+      clearTimeout(t);
+      document.removeEventListener("click", onDocClick);
+    };
+  }, [open]);
+
   return (
-    <span
-      className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold cursor-help align-middle"
-      title={text}
-      aria-label={text}
-    >
-      i
+    <span className="relative inline-block align-middle">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          e.preventDefault();
+          setOpen((o) => !o);
+        }}
+        className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold hover:bg-blue-200"
+        aria-label={text}
+        aria-expanded={open}
+      >
+        i
+      </button>
+      {open && (
+        <span
+          role="tooltip"
+          className="absolute left-0 top-full mt-1 z-20 w-56 bg-gray-900 text-white text-xs rounded-lg shadow-lg p-2 whitespace-pre-line"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {text}
+        </span>
+      )}
     </span>
   );
 }
