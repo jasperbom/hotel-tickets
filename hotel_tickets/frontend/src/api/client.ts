@@ -324,6 +324,25 @@ export interface PoolConfigItem {
   filter_nfc_tag_id_r: string | null;
 }
 
+export interface PoolIncident {
+  id: string;
+  pool_id: PoolId;
+  datum: string;
+  tijd: string;
+  beschrijving: string;
+  maatregelen: string | null;
+  gemeld_door: string;
+  created_at: string;
+}
+
+export interface PoolIncidentCreate {
+  pool_id: PoolId;
+  datum: string;
+  tijd: string;
+  beschrijving: string;
+  maatregelen?: string | null;
+}
+
 export const poolApi = {
   status: () => api.get<PoolStatus[]>("/pools/status"),
   list: (params?: Record<string, string>) => api.get<PoolLog[]>("/pools/logs", { params }),
@@ -333,6 +352,9 @@ export const poolApi = {
   remove: (id: string) => api.delete(`/pools/logs/${id}`),
   getConfigs: () => api.get<PoolConfigItem[]>("/pools/config"),
   updateConfig: (poolId: string, data: Partial<PoolConfigItem>) => api.patch<PoolConfigItem>(`/pools/config/${poolId}`, data),
+  listIncidents: (params?: Record<string, string>) => api.get<PoolIncident[]>("/pools/incidents", { params }),
+  createIncident: (data: PoolIncidentCreate) => api.post<PoolIncident>("/pools/incidents", data),
+  removeIncident: (id: string) => api.delete(`/pools/incidents/${id}`),
   importCsv: (file: File, poolId: string) => {
     const form = new FormData();
     form.append("file", file);

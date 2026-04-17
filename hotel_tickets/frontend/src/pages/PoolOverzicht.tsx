@@ -1,6 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { poolApi, type PoolStatus } from "../api/client";
+import {
+  poolApi,
+  type PoolId,
+  type PoolIncident,
+  type PoolStatus,
+} from "../api/client";
 
 /** Kleurcodering conform BAL-normen */
 function valClass(val: number | null, low: number, high: number): string {
@@ -91,6 +96,207 @@ function StatusCard({ pool }: { pool: PoolStatus }) {
   );
 }
 
+const VOORVAL_INFO = `Voorbeeld ongewone voorvallen
+
+Voorbeelden van ongewone voorvallen bij het gelegenheid bieden tot zwemmen of baden zijn verdrinking, of het in of rondom het badwaterbassin oplopen van ernstig letsel.
+
+Voorbeeld niet-ongewoon voorval
+
+Voorbeelden van een incident dat niet een ongewoon voorval is, is het oplopen van matig letsel zoals:
+ • een oppervlakkige schaafwond
+ • een tand door de lip
+
+Het gaat hier namelijk niet om significante gevolgen. Over deze incidenten hoeft het bevoegd gezag niet onverwijld geïnformeerd te worden, maar deze moeten wel worden geregistreerd in het logboek.`;
+
+function IncidentSection({ pools }: { pools: PoolStatus[] }) {
+  const now = new Date();
+  const [poolId, setPoolId] = useState<PoolId>((pools[0]?.pool_id as PoolId) ?? "wellness");
+  const [datum, setDatum] = useState(now.toISOString().slice(0, 10));
+  const [tijd, setTijd] = useState(now.toTimeString().slice(0, 5));
+  const [beschrijving, setBeschrijving] = useState("");
+  const [maatregelen, setMaatregelen] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
+  const [showInfo, setShowInfo] = useState(false);
+  const [incidents, setIncidents] = useState<PoolIncident[]>([]);
+
+  function loadIncidents() {
+    poolApi.listIncidents({ limit: "10" }).then((r) => setIncidents(r.data)).catch(() => {});
+  }
+
+  useEffect(() => {
+    loadIncidents();
+  }, []);
+
+  async function handleSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!beschrijving.trim()) {
+      setError("Beschrijf het voorval");
+      return;
+    }
+    setSaving(true);
+    setError("");
+    setSuccess("");
+    try {
+      await poolApi.createIncident({
+        pool_id: poolId,
+        datum,
+        tijd,
+        beschrijving: beschrijving.trim(),
+        maatregelen: maatregelen.trim() || null,
+      });
+      setBeschrijving("");
+      setMaatregelen("");
+      setSuccess("Voorval geregistreerd — admins zijn genotificeerd");
+      loadIncidents();
+    } catch {
+      setError("Registreren mislukt");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="bg-white rounded-2xl shadow p-5 space-y-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <h2 className="text-xl font-bold flex items-center gap-2">
+            ⚠️ Ongewoon voorval registreren
+          </h2>
+          <p className="text-sm text-gray-500 mt-1">
+            Leg verdrinkingen of ernstig letsel vast. Admins krijgen direct een
+            notificatie.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => setShowInfo((s) => !s)}
+          className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold hover:bg-blue-200"
+          aria-label="Informatie over ongewone voorvallen"
+          title="Wat is een ongewoon voorval?"
+        >
+          i
+        </button>
+      </div>
+
+      {showInfo && (
+        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-line">
+          {VOORVAL_INFO}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-3">
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-1">Bad</label>
+          <div className="grid grid-cols-2 gap-2">
+            {pools.map((p) => (
+              <button
+                key={p.pool_id}
+                type="button"
+                onClick={() => setPoolId(p.pool_id as PoolId)}
+                className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                  poolId === p.pool_id
+                    ? "bg-blue-600 text-white border-blue-600"
+                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                }`}
+              >
+                {p.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-2">
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-0.5">Datum</label>
+            <input
+              type="date"
+              className="w-full border rounded-lg px-2 py-1.5 text-sm"
+              value={datum}
+              onChange={(e) => setDatum(e.target.value)}
+              required
+            />
+          </div>
+          <div>
+            <label className="block text-xs font-medium text-gray-600 mb-0.5">Tijd</label>
+            <input
+              type="time"
+              className="w-full border rounded-lg px-2 py-1.5 text-sm"
+              value={tijd}
+              onChange={(e) => setTijd(e.target.value)}
+              required
+            />
+          </div>
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-0.5">
+            Beschrijving van het voorval *
+          </label>
+          <textarea
+            className="w-full border rounded-lg px-2 py-1.5 text-sm min-h-[80px]"
+            value={beschrijving}
+            onChange={(e) => setBeschrijving(e.target.value)}
+            placeholder="Wat is er gebeurd? Wie is betrokken? Welk letsel?"
+            required
+          />
+        </div>
+
+        <div>
+          <label className="block text-xs font-medium text-gray-600 mb-0.5">
+            Genomen maatregelen
+          </label>
+          <textarea
+            className="w-full border rounded-lg px-2 py-1.5 text-sm min-h-[60px]"
+            value={maatregelen}
+            onChange={(e) => setMaatregelen(e.target.value)}
+            placeholder="Welke actie is ondernomen? (optioneel)"
+          />
+        </div>
+
+        {error && <p className="text-red-600 text-sm">{error}</p>}
+        {success && <p className="text-green-700 text-sm">{success}</p>}
+
+        <button
+          type="submit"
+          disabled={saving}
+          className="bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 disabled:opacity-50"
+        >
+          {saving ? "Verzenden..." : "Registreren & admins melden"}
+        </button>
+      </form>
+
+      {incidents.length > 0 && (
+        <div className="pt-3 border-t border-gray-100">
+          <h3 className="text-sm font-semibold text-gray-700 mb-2">
+            Logboek ongewone voorvallen
+          </h3>
+          <ul className="divide-y divide-gray-100">
+            {incidents.map((i) => (
+              <li key={i.id} className="py-2 text-sm">
+                <div className="flex justify-between items-start gap-2">
+                  <span className="font-medium capitalize">{i.pool_id}</span>
+                  <span className="text-xs text-gray-500 shrink-0">
+                    {i.datum} {i.tijd}
+                  </span>
+                </div>
+                <p className="text-gray-700 whitespace-pre-line">{i.beschrijving}</p>
+                {i.maatregelen && (
+                  <p className="text-gray-500 text-xs mt-1">
+                    <span className="font-medium">Maatregelen:</span> {i.maatregelen}
+                  </p>
+                )}
+                <p className="text-xs text-gray-400 mt-1">Gemeld door {i.gemeld_door}</p>
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function PoolOverzicht() {
   const [status, setStatus] = useState<PoolStatus[]>([]);
   const [loading, setLoading] = useState(true);
@@ -104,8 +310,8 @@ export default function PoolOverzicht() {
   if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
 
   return (
-    <div>
-      <div className="flex items-center justify-between mb-6">
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Zwembaden overzicht</h1>
       </div>
 
@@ -114,6 +320,8 @@ export default function PoolOverzicht() {
           <StatusCard key={p.pool_id} pool={p} />
         ))}
       </div>
+
+      <IncidentSection pools={status} />
     </div>
   );
 }
