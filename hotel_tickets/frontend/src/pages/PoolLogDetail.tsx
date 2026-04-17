@@ -51,6 +51,7 @@ export default function PoolLogDetail() {
   const [editing, setEditing] = useState(false);
   const [editValues, setEditValues] = useState<Record<string, any>>({});
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -109,6 +110,20 @@ export default function PoolLogDetail() {
       setError("Opslaan mislukt");
     }
     setSaving(false);
+  }
+
+  async function handleDelete() {
+    if (!id) return;
+    if (!confirm("Weet je zeker dat je deze logregel wilt verwijderen? Dit kan niet ongedaan gemaakt worden.")) return;
+    setDeleting(true);
+    setError("");
+    try {
+      await poolApi.remove(id);
+      navigate(-1);
+    } catch {
+      setError("Verwijderen mislukt");
+      setDeleting(false);
+    }
   }
 
   if (!log) return <p className="text-gray-400 p-4">Laden...</p>;
@@ -211,17 +226,27 @@ export default function PoolLogDetail() {
             <div className="flex gap-2 pt-3">
               <button
                 onClick={handleSave}
-                disabled={saving}
+                disabled={saving || deleting}
                 className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
               >
                 {saving ? "Opslaan..." : "Opslaan"}
               </button>
               <button
                 onClick={() => setEditing(false)}
-                className="border px-5 py-2 rounded-lg text-sm hover:bg-gray-50"
+                disabled={saving || deleting}
+                className="border px-5 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
               >
                 Annuleren
               </button>
+              {isAdmin && (
+                <button
+                  onClick={handleDelete}
+                  disabled={saving || deleting}
+                  className="ml-auto bg-red-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+                >
+                  {deleting ? "Verwijderen..." : "Verwijderen"}
+                </button>
+              )}
             </div>
           </div>
         ) : (
