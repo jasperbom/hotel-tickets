@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { bikeReservationApi, type BikeReservation } from "../api/client";
+import { bikeReservationApi, formatDateNL, type BikeReservation } from "../api/client";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   active: { label: "Actief", cls: "bg-blue-100 text-blue-800" },
@@ -134,11 +134,11 @@ export default function BikeReserveringDetail() {
             )}
             <div>
               <span className="text-gray-500 block text-xs mb-0.5">Startdatum</span>
-              <span className="font-medium">{res.start_date}</span>
+              <span className="font-medium">{formatDateNL(res.start_date)}</span>
             </div>
             <div>
               <span className="text-gray-500 block text-xs mb-0.5">Retourdatum</span>
-              <span className="font-medium">{res.end_date} ({res.num_days}d)</span>
+              <span className="font-medium">{formatDateNL(res.end_date)} ({res.num_days}d)</span>
             </div>
             <div>
               <span className="text-gray-500 block text-xs mb-0.5">Fietstype</span>

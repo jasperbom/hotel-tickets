@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { bikeApi, bikeReservationApi, type Bike, type BikeReservation } from "../api/client";
+import { bikeApi, bikeReservationApi, formatDateNL, type Bike, type BikeReservation } from "../api/client";
 
 const DAY_W = 38;      // pixels per dag
 const LABEL_W = 130;   // pixels voor het fietslabel
@@ -282,7 +282,7 @@ export default function BikeTimeline() {
                               key={r.id}
                               className={`absolute top-1.5 bottom-1.5 rounded border flex items-center px-1.5 overflow-hidden cursor-pointer text-[11px] font-medium transition-opacity hover:opacity-90 ${blockColor(r)}`}
                               style={{ left: geo.left + 1, width: geo.width - 2 }}
-                              title={`${r.guest_name}${r.guest_room ? ` | Kamer ${r.guest_room}` : ""}\n${r.start_date} → ${r.end_date} (${r.num_days}d)`}
+                              title={`${r.guest_name}${r.guest_room ? ` | Kamer ${r.guest_room}` : ""}\n${formatDateNL(r.start_date)} → ${formatDateNL(r.end_date)} (${r.num_days}d)`}
                               onClick={() => navigate(`/bikes/reserveringen/${r.id}`)}
                             >
                               <span className="truncate">{r.guest_name}</span>

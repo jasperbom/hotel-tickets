@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bikeApi, bikeAdminApi, bikeMaintenanceApi, type Bike, type BikeType, type BikeMaintenanceConflict } from "../api/client";
+import { bikeApi, bikeAdminApi, bikeMaintenanceApi, formatDateNL, type Bike, type BikeType, type BikeMaintenanceConflict } from "../api/client";
 
 type Tab = "fietsen" | "types" | "onderhoud" | "balans";
 
@@ -116,7 +116,7 @@ function MaintenanceModal({
             </p>
             {conflicts.map((c) => (
               <p key={c.reservation_id} className="text-xs text-orange-700">
-                #{c.reservation_id} {c.guest_name} ({c.start_date} → {c.end_date})
+                #{c.reservation_id} {c.guest_name} ({formatDateNL(c.start_date)} → {formatDateNL(c.end_date)})
                 {c.can_move ? ` — verplaatsen naar #${c.alternative_bike}` : " — ⚠️ geen alternatief"}
               </p>
             ))}

@@ -222,14 +222,14 @@ export default function RecurringTaskDetail() {
           <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
             <span className="text-red-500">⚠</span>
             <p className="text-sm font-medium text-red-800">
-              Verlopen — stond gepland voor {nextRun ? format(nextRun, "d MMM HH:mm", { locale: nl }) : "onbekend"}
+              Verlopen — stond gepland voor {nextRun ? format(nextRun, "dd:MM:yyyy HH:mm", { locale: nl }) : "onbekend"}
             </p>
           </div>
         ) : nextRun ? (
           <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
             <span className="text-blue-500">📅</span>
             <p className="text-sm font-medium text-blue-800">
-              Volgende uitvoering: {format(nextRun, "eeee d MMM 'om' HH:mm", { locale: nl })}
+              Volgende uitvoering: {format(nextRun, "dd:MM:yyyy 'om' HH:mm", { locale: nl })}
             </p>
           </div>
         ) : null}
@@ -433,7 +433,7 @@ export default function RecurringTaskDetail() {
                 </div>
                 <span className="text-xs text-gray-400 shrink-0">
                   {entry.closed_at
-                    ? format(parseUTC(entry.closed_at), "d MMM yyyy HH:mm", { locale: nl })
+                    ? format(parseUTC(entry.closed_at), "dd:MM:yyyy HH:mm", { locale: nl })
                     : "–"}
                 </span>
               </div>
