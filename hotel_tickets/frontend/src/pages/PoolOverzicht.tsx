@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   poolApi,
+  formatDateNL,
   type PoolId,
   type PoolIncident,
   type PoolStatus,
@@ -41,7 +42,7 @@ function StatusCard({ pool }: { pool: PoolStatus }) {
         <div className="grid grid-cols-3 gap-3 text-sm">
           <div>
             <span className="text-gray-500 block">Datum</span>
-            <span className="font-medium">{l.datum} {l.tijd}</span>
+            <span className="font-medium">{formatDateNL(l.datum)} {l.tijd}</span>
           </div>
           <div>
             <span className="text-gray-500 block">Water temp</span>
@@ -278,7 +279,7 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
                 <div className="flex justify-between items-start gap-2">
                   <span className="font-medium capitalize">{i.pool_id}</span>
                   <span className="text-xs text-gray-500 shrink-0">
-                    {i.datum} {i.tijd}
+                    {formatDateNL(i.datum)} {i.tijd}
                   </span>
                 </div>
                 <p className="text-gray-700 whitespace-pre-line">{i.beschrijving}</p>

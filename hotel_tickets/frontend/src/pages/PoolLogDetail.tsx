@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { poolApi, userApi, type PoolLog, type UserRole } from "../api/client";
+import { poolApi, userApi, formatDateNL, type PoolLog, type UserRole } from "../api/client";
 
 function valClass(val: number | null, low: number, high: number): string {
   if (val === null) return "text-gray-400";
@@ -141,7 +141,7 @@ export default function PoolLogDetail() {
                 />
               </div>
             ) : (
-              <span className="text-gray-500 text-sm">{log.datum} {log.tijd}</span>
+              <span className="text-gray-500 text-sm">{formatDateNL(log.datum)} {log.tijd}</span>
             )}
           </div>
         </div>

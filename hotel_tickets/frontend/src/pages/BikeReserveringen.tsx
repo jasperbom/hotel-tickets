@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { bikeApi, bikeReservationApi, type Bike, type BikeReservation, type BikeReservationStatus } from "../api/client";
+import { bikeApi, bikeReservationApi, formatDateNL, type Bike, type BikeReservation, type BikeReservationStatus } from "../api/client";
 
 // ── Gedeelde helpers ──────────────────────────────────────────────────────────
 
@@ -242,7 +242,7 @@ function Timeline({
                               key={r.id}
                               className={`absolute top-1.5 bottom-1.5 rounded border flex items-center px-1.5 overflow-hidden cursor-pointer text-[11px] font-medium transition-opacity hover:opacity-90 ${blockColor(r)}`}
                               style={{ left: geo.left + 1, width: geo.width - 2 }}
-                              title={`${r.guest_name}${r.guest_room ? ` | Kamer ${r.guest_room}` : ""}\n${r.start_date} → ${r.end_date} (${r.num_days}d)`}
+                              title={`${r.guest_name}${r.guest_room ? ` | Kamer ${r.guest_room}` : ""}\n${formatDateNL(r.start_date)} → ${formatDateNL(r.end_date)} (${r.num_days}d)`}
                               onClick={() => navigate(`/bikes/reserveringen/${r.id}`)}
                             >
                               <span className="truncate">{r.guest_name}</span>
@@ -293,8 +293,8 @@ function ReservationRow({ r, onClick }: { r: BikeReservation; onClick: () => voi
         {r.guest_room && <p className="text-xs text-gray-400">Kamer {r.guest_room}</p>}
       </td>
       <td className="py-3 px-4 text-sm">
-        <p>{r.start_date}</p>
-        <p className="text-xs text-gray-400">t/m {r.end_date} ({r.num_days}d)</p>
+        <p>{formatDateNL(r.start_date)}</p>
+        <p className="text-xs text-gray-400">t/m {formatDateNL(r.end_date)} ({r.num_days}d)</p>
       </td>
       <td className="py-3 px-4 text-sm">
         {r.num_bikes}× {r.bike_type_name}

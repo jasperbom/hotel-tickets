@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { poolApi, type PoolLog } from "../api/client";
+import { poolApi, formatDateNL, type PoolLog } from "../api/client";
 
 function valClass(val: number | null, low: number, high: number): string {
   if (val === null) return "";
@@ -141,7 +141,7 @@ export default function PoolLogboek() {
                   onClick={() => navigate(`/pools/log/${l.id}`)}
                 >
                   <td className="px-3 py-2 capitalize font-medium">{l.pool_id}</td>
-                  <td className="px-3 py-2 whitespace-nowrap">{l.datum}</td>
+                  <td className="px-3 py-2 whitespace-nowrap">{formatDateNL(l.datum)}</td>
                   <td className="px-3 py-2">{l.tijd}</td>
                   <td className="px-3 py-2 border-l border-gray-100">{l.water_temp ?? "-"}</td>
                   <td className="px-3 py-2">{l.doorzicht ?? "-"}</td>

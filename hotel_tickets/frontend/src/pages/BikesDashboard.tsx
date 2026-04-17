@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { bikeApi, bikeMaintenanceApi, bikeReservationApi, type Bike, type BikeMaintenanceConflict, type BikeReservation } from "../api/client";
+import { bikeApi, bikeMaintenanceApi, bikeReservationApi, formatDateNL, type Bike, type BikeMaintenanceConflict, type BikeReservation } from "../api/client";
 
 const todayStr = () => new Date().toISOString().split("T")[0];
 
@@ -161,7 +161,7 @@ function BikePopup({
                   {todayReservation.guest_room && (
                     <p className={`text-xs ${keyGiven && !keyReturned ? "text-red-600" : "text-green-600"}`}>Kamer {todayReservation.guest_room}</p>
                   )}
-                  <p className={`text-xs ${keyGiven && !keyReturned ? "text-red-600" : "text-green-600"}`}>t/m {todayReservation.end_date}</p>
+                  <p className={`text-xs ${keyGiven && !keyReturned ? "text-red-600" : "text-green-600"}`}>t/m {formatDateNL(todayReservation.end_date)}</p>
                 </div>
 
                 <div className="space-y-2">
@@ -273,7 +273,7 @@ function BikePopup({
                 <p className="text-xs font-medium text-orange-800">{conflicts.length} reservering(en) geraakt:</p>
                 {conflicts.map((c) => (
                   <p key={c.reservation_id} className="text-xs text-orange-700">
-                    {c.guest_name} ({c.start_date} → {c.end_date})
+                    {c.guest_name} ({formatDateNL(c.start_date)} → {formatDateNL(c.end_date)})
                     {c.can_move ? ` → fiets #${c.alternative_bike}` : " — ⚠️ geen alternatief"}
                   </p>
                 ))}
@@ -517,7 +517,7 @@ export default function BikesDashboard() {
                     <p className="font-medium text-sm">{r.guest_name}</p>
                     <p className="text-xs text-gray-500">
                       {r.guest_room ? `Kamer ${r.guest_room} · ` : ""}
-                      {r.bikes.map(b => `#${b.number}`).join(", ")} · t/m {r.end_date}
+                      {r.bikes.map(b => `#${b.number}`).join(", ")} · t/m {formatDateNL(r.end_date)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -547,7 +547,7 @@ export default function BikesDashboard() {
                   <div>
                     <p className="font-medium text-sm">{r.guest_name}</p>
                     <p className="text-xs text-gray-500">
-                      {r.start_date} → {r.end_date} · {r.num_bikes}× {r.bike_type_name}
+                      {formatDateNL(r.start_date)} → {formatDateNL(r.end_date)} · {r.num_bikes}× {r.bike_type_name}
                     </p>
                   </div>
                   <span className="text-xs text-gray-400">#{r.id}</span>

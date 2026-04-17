@@ -63,7 +63,7 @@ export default function TicketCard({ ticket, users = {}, locations = {} }: Props
                 : "Niet toegewezen"}
             </span>
             <span>
-              {format(parseUTC(ticket.created_at), "d MMM HH:mm", { locale: nl })}
+              {format(parseUTC(ticket.created_at), "dd:MM HH:mm", { locale: nl })}
             </span>
           </div>
         </div>

@@ -403,7 +403,7 @@ function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locat
           )}
         </div>
         <p className="text-xs text-gray-400">
-          {format(parseUTC(ticket.created_at), "d MMM", { locale: nl })}
+          {format(parseUTC(ticket.created_at), "dd:MM", { locale: nl })}
         </p>
       </div>
     </Link>
@@ -418,7 +418,7 @@ function formatNextRun(dateStr: string): string {
   if (diffDays === 0) return "Vandaag";
   if (diffDays === 1) return "Morgen";
   if (diffDays < 7) return `Over ${diffDays} dagen`;
-  return format(date, "eee d MMM", { locale: nl });
+  return format(date, "dd:MM:yyyy", { locale: nl });
 }
 
 function RecurringTaskRow({ task, locationName, occupied, keycards, locations }: {
@@ -562,7 +562,7 @@ function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; l
           )}
         </div>
         <p className="text-xs text-red-400">
-          {format(parseUTC(ticket.created_at), "d MMM HH:mm", { locale: nl })}
+          {format(parseUTC(ticket.created_at), "dd:MM HH:mm", { locale: nl })}
         </p>
       </div>
     </Link>

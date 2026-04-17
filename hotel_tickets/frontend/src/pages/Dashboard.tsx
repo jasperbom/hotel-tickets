@@ -130,7 +130,7 @@ export default function Dashboard() {
                 </div>
               </div>
               <span className="text-xs text-gray-400 shrink-0">
-                {format(parseUTC(ticket.created_at), "d MMM", { locale: nl })}
+                {format(parseUTC(ticket.created_at), "dd:MM", { locale: nl })}
               </span>
             </Link>
           ))}

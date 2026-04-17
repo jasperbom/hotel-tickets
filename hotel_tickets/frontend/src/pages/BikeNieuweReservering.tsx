@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { bikeApi, bikeReservationApi, type BikeType, type BikeAvailability } from "../api/client";
+import { bikeApi, bikeReservationApi, formatDateNL, type BikeType, type BikeAvailability } from "../api/client";
 
 function addDays(dateStr: string, days: number): string {
   const d = new Date(dateStr);
@@ -145,7 +145,7 @@ export default function BikeNieuweReservering() {
         </div>
         {form.num_days >= 1 && (
           <p className="text-xs text-gray-500 -mt-3">
-            Retourdatum: <strong>{endDate}</strong>
+            Retourdatum: <strong>{formatDateNL(endDate)}</strong>
           </p>
         )}
 

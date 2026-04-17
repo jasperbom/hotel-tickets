@@ -292,7 +292,7 @@ export default function TicketDetail() {
             {usersMap[ticket.created_by] || (ticket.created_by === "system" ? "Home Assistant" : ticket.created_by)}
           </span>
           <span className="text-gray-400">·</span>
-          <span className="text-gray-400">{format(parseUTC(ticket.created_at), "d MMM yyyy HH:mm", { locale: nl })}</span>
+          <span className="text-gray-400">{format(parseUTC(ticket.created_at), "dd:MM:yyyy HH:mm", { locale: nl })}</span>
         </div>
 
         {ticket.closed_by && ticket.closed_at && (
@@ -303,7 +303,7 @@ export default function TicketDetail() {
               {usersMap[ticket.closed_by] || ticket.closed_by}
             </span>
             <span className="text-gray-400">·</span>
-            <span className="text-gray-400">{format(parseUTC(ticket.closed_at!), "d MMM yyyy HH:mm", { locale: nl })}</span>
+            <span className="text-gray-400">{format(parseUTC(ticket.closed_at!), "dd:MM:yyyy HH:mm", { locale: nl })}</span>
           </div>
         )}
 
@@ -495,7 +495,7 @@ export default function TicketDetail() {
                   {c.updated_at && <span className="text-gray-400 italic">(bewerkt)</span>}
                 </div>
                 <div className="flex items-center gap-2">
-                  <span>{format(parseUTC(c.created_at), "d MMM HH:mm", { locale: nl })}</span>
+                  <span>{format(parseUTC(c.created_at), "dd:MM HH:mm", { locale: nl })}</span>
                   {currentUserId === c.author_id && editingCommentId !== c.id && (
                     <>
                       <button
