@@ -5,16 +5,36 @@ Wordt aangeroepen vanuit een HA-automatisering wanneer een NFC-tag gescand wordt
 from datetime import datetime, timezone
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_
+from sqlalchemy import select, and_, or_
 from pydantic import BaseModel
 
 from ..database import get_db
-from ..models import RecurringTemplate, Ticket, Status, Priority, UserRole, new_uuid
+from ..models import (
+    RecurringTemplate,
+    Ticket,
+    Status,
+    Priority,
+    UserRole,
+    PoolConfig,
+    PoolLog,
+    PoolId,
+    new_uuid,
+)
 from ..services.notifications import notify_push
 from ..services.ha_entities import sync_ticket_sensors
 from .settings import get_ticket_base_url
 
 router = APIRouter(prefix="/nfc", tags=["nfc"])
+
+
+# Welke chemische actie hoort bij welk PoolConfig-kolom
+CHEMICAL_ACTIONS = {
+    "chloor_nfc_tag_id": "Chloor tank vervangen",
+    "zuur_nfc_tag_id": "Zuur tank vervangen",
+    "vlokmiddel_nfc_tag_id": "Vlokmiddel bijgevuld",
+}
+
+POOL_LABELS = {"wellness": "Wellness", "zwembad": "Zwembad"}
 
 
 class NfcScanRequest(BaseModel):
@@ -27,11 +47,80 @@ class NfcScanResponse(BaseModel):
     message: str
     ticket_id: str | None = None
     template_title: str | None = None
+    pool_log_id: str | None = None
+
+
+async def _handle_chemical_scan(
+    body: NfcScanRequest,
+    db: AsyncSession,
+) -> NfcScanResponse | None:
+    """Probeer de NFC-tag te matchen tegen een chemicaliën-tag per bad.
+    Retourneert een respons als de tag gematcht is, anders None."""
+    result = await db.execute(
+        select(PoolConfig).where(
+            or_(
+                PoolConfig.chloor_nfc_tag_id == body.tag_id,
+                PoolConfig.zuur_nfc_tag_id == body.tag_id,
+                PoolConfig.vlokmiddel_nfc_tag_id == body.tag_id,
+            )
+        )
+    )
+    config = result.scalar_one_or_none()
+    if not config:
+        return None
+
+    # Bepaal welke actie het is
+    action_label: str | None = None
+    for column, label in CHEMICAL_ACTIONS.items():
+        if getattr(config, column) == body.tag_id:
+            action_label = label
+            break
+    if action_label is None:
+        return None
+
+    # Bepaal wie de scan uitvoerde
+    user: UserRole | None = None
+    if body.ha_user_id:
+        user = await db.get(UserRole, body.ha_user_id)
+    gemeten_door = (user.display_name if user else None) or body.ha_user_id or "nfc"
+
+    now = datetime.now(timezone.utc)
+    pool_label = POOL_LABELS.get(config.pool_id, config.pool_id)
+
+    log = PoolLog(
+        id=new_uuid(),
+        pool_id=PoolId(config.pool_id),
+        datum=now.date().isoformat(),
+        tijd=now.strftime("%H:%M"),
+        chemicalien=action_label,
+        gemeten_door=gemeten_door,
+    )
+    db.add(log)
+    await db.flush()
+
+    # Bedank-notificatie naar de scanner
+    if user and user.ha_notify_service:
+        await notify_push(
+            user.ha_notify_service,
+            title=f"✓ {action_label} — {pool_label}",
+            message=f"Dankjewel {user.display_name}, dit is geregistreerd in het logboek.",
+        )
+
+    return NfcScanResponse(
+        ok=True,
+        message=f"{action_label} geregistreerd voor {pool_label}",
+        pool_log_id=log.id,
+    )
 
 
 @router.post("/scan", response_model=NfcScanResponse)
 async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
     """Verwerk een NFC-scan: sluit de openstaande taak en stuur een bevestiging."""
+
+    # Eerst checken of het een zwembad-chemicaliën-tag is
+    chemical_response = await _handle_chemical_scan(body, db)
+    if chemical_response is not None:
+        return chemical_response
 
     # Zoek het sjabloon met dit NFC-tag
     result = await db.execute(
