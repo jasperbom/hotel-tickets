@@ -111,6 +111,7 @@ const MODULES: ModuleConfig[] = [
       { to: "/pools", label: "Overzicht", icon: "📋", end: true, restricted: false },
       { to: "/pools/logboek", label: "Logboek", icon: "📖", restricted: false },
       { to: "/pools/nieuw", label: "Nieuwe meting", icon: "➕", restricted: false },
+      { to: "/pools/instellingen", label: "Instellingen", icon: "⚙️", restricted: "adminOrSupervisor" },
     ],
   },
   {
