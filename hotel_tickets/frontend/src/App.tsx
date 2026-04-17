@@ -13,7 +13,6 @@ import PoolOverzicht from "./pages/PoolOverzicht";
 import PoolLogboek from "./pages/PoolLogboek";
 import PoolNieuweMeting from "./pages/PoolNieuweMeting";
 import PoolLogDetail from "./pages/PoolLogDetail";
-import PoolInstellingen from "./pages/PoolInstellingen";
 import BikesDashboard from "./pages/BikesDashboard";
 import BikeReserveringen from "./pages/BikeReserveringen";
 import BikeNieuweReservering from "./pages/BikeNieuweReservering";
@@ -111,7 +110,6 @@ const MODULES: ModuleConfig[] = [
       { to: "/pools", label: "Overzicht", icon: "📋", end: true, restricted: false },
       { to: "/pools/logboek", label: "Logboek", icon: "📖", restricted: false },
       { to: "/pools/nieuw", label: "Nieuwe meting", icon: "➕", restricted: false },
-      { to: "/pools/instellingen", label: "Instellingen", icon: "⚙️", restricted: "adminOrSupervisor" },
     ],
   },
   {
@@ -388,7 +386,6 @@ export default function App() {
               <Route path="/pools/logboek" element={<PoolLogboek />} />
               <Route path="/pools/nieuw" element={<PoolNieuweMeting />} />
               <Route path="/pools/log/:id" element={<PoolLogDetail />} />
-              <Route path="/pools/instellingen" element={<PoolInstellingen />} />
               {/* Fietsen module */}
               <Route path="/bikes" element={<BikesDashboard />} />
               <Route path="/bikes/reserveringen" element={<BikeReserveringen />} />
