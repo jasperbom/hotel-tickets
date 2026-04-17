@@ -160,7 +160,7 @@ export default function PoolNieuweMeting() {
   const [error, setError] = useState("");
 
   useEffect(() => {
-    poolApi.list({ pool_id: poolId, limit: "50" }).then((r) => {
+    poolApi.list({ pool_id: poolId, limit: "50", only_measurements: "true" }).then((r) => {
       setPrevLog(r.data.length > 0 ? r.data[0] : null);
       const withWater = r.data.find((l) => l.watermeter !== null);
       setPrevWatermeter(withWater?.watermeter ?? null);

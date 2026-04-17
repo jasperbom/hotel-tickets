@@ -210,6 +210,7 @@ async def list_logs(
     datum_tot: Optional[str] = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0),
+    only_measurements: bool = Query(False),
     db: AsyncSession = Depends(get_db),
 ):
     q = select(PoolLog).order_by(PoolLog.datum.desc(), PoolLog.tijd.desc())
@@ -219,6 +220,8 @@ async def list_logs(
         q = q.where(PoolLog.datum >= datum_van)
     if datum_tot:
         q = q.where(PoolLog.datum <= datum_tot)
+    if only_measurements:
+        q = q.where(_has_measurement_filter())
     q = q.offset(offset).limit(limit)
     rows = await db.execute(q)
     return [_row_to_out(r) for r in rows.scalars().all()]
