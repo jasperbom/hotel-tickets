@@ -1,12 +1,7 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { poolApi, formatDateNL, type PoolLog } from "../api/client";
-
-function valClass(val: number | null, low: number, high: number): string {
-  if (val === null) return "";
-  if (val < low || val > high) return "bg-red-100 text-red-700 font-bold";
-  return "";
-}
+import { valueClass } from "../components/PoolValueVisualization";
 
 export default function PoolLogboek() {
   const [searchParams, setSearchParams] = useSearchParams();
@@ -145,13 +140,13 @@ export default function PoolLogboek() {
                   <td className="px-3 py-2">{l.tijd}</td>
                   <td className="px-3 py-2 border-l border-gray-100">{l.water_temp ?? "-"}</td>
                   <td className="px-3 py-2">{l.doorzicht ?? "-"}</td>
-                  <td className={`px-3 py-2 ${valClass(l.ph, 7.0, 7.6)}`}>{l.ph ?? "-"}</td>
-                  <td className={`px-3 py-2 ${valClass(l.vbc_in, 0.5, 1.5)}`}>{l.vbc_in ?? "-"}</td>
-                  <td className={`px-3 py-2 ${valClass(l.vbc_uit, 0.5, 1.5)}`}>{l.vbc_uit ?? "-"}</td>
+                  <td className={`px-3 py-2 ${valueClass("ph", l.ph, "table")}`}>{l.ph ?? "-"}</td>
+                  <td className={`px-3 py-2 ${valueClass("vbc_in", l.vbc_in, "table")}`}>{l.vbc_in ?? "-"}</td>
+                  <td className={`px-3 py-2 ${valueClass("vbc_uit", l.vbc_uit, "table")}`}>{l.vbc_uit ?? "-"}</td>
                   <td className="px-3 py-2">{l.tbc ?? "-"}</td>
-                  <td className={`px-3 py-2 ${valClass(l.gbc, 0, 0.6)}`}>{l.gbc ?? "-"}</td>
-                  <td className={`px-3 py-2 border-l border-gray-100 ${valClass(l.ph_automaat, 7.0, 7.6)}`}>{l.ph_automaat ?? "-"}</td>
-                  <td className={`px-3 py-2 ${valClass(l.vbc_automaat, 0.5, 1.5)}`}>{l.vbc_automaat ?? "-"}</td>
+                  <td className={`px-3 py-2 ${valueClass("gbc", l.gbc, "table")}`}>{l.gbc ?? "-"}</td>
+                  <td className={`px-3 py-2 border-l border-gray-100 ${valueClass("ph", l.ph_automaat, "table")}`}>{l.ph_automaat ?? "-"}</td>
+                  <td className={`px-3 py-2 ${valueClass("vbc_in", l.vbc_automaat, "table")}`}>{l.vbc_automaat ?? "-"}</td>
                   <td className="px-3 py-2">{l.watermeter ?? "-"}</td>
                   <td className="px-3 py-2">{l.verbruik ?? "-"}</td>
                   <td className="px-3 py-2">{l.flow ?? "-"}</td>
