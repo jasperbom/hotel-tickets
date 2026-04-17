@@ -4,17 +4,12 @@ import {
   poolApi,
   type PoolId,
   type PoolIncident,
+  type PoolLog,
   type PoolStatus,
 } from "../api/client";
+import { PoolValueVisualization, valueClass } from "../components/PoolValueVisualization";
 
-/** Kleurcodering conform BAL-normen */
-function valClass(val: number | null, low: number, high: number): string {
-  if (val === null) return "";
-  if (val < low || val > high) return "text-red-600 font-bold";
-  return "text-green-700";
-}
-
-function StatusCard({ pool }: { pool: PoolStatus }) {
+function StatusCard({ pool, logs }: { pool: PoolStatus; logs: PoolLog[] }) {
   const navigate = useNavigate();
   const l = pool.latest;
 
@@ -53,19 +48,19 @@ function StatusCard({ pool }: { pool: PoolStatus }) {
           </div>
           <div>
             <span className="text-gray-500 block">pH</span>
-            <span className={`font-medium ${valClass(l.ph, 7.0, 7.6)}`}>{l.ph ?? "-"}</span>
+            <span className={`font-medium ${valueClass("ph", l.ph)}`}>{l.ph ?? "-"}</span>
           </div>
           <div>
             <span className="text-gray-500 block">VBC in</span>
-            <span className={`font-medium ${valClass(l.vbc_in, 0.5, 1.5)}`}>{l.vbc_in ?? "-"}</span>
+            <span className={`font-medium ${valueClass("vbc_in", l.vbc_in)}`}>{l.vbc_in ?? "-"}</span>
           </div>
           <div>
             <span className="text-gray-500 block">VBC uit</span>
-            <span className={`font-medium ${valClass(l.vbc_uit, 0.5, 1.5)}`}>{l.vbc_uit ?? "-"}</span>
+            <span className={`font-medium ${valueClass("vbc_uit", l.vbc_uit)}`}>{l.vbc_uit ?? "-"}</span>
           </div>
           <div>
             <span className="text-gray-500 block">GBC</span>
-            <span className={`font-medium ${valClass(l.gbc, 0, 0.6)}`}>{l.gbc ?? "-"}</span>
+            <span className={`font-medium ${valueClass("gbc", l.gbc)}`}>{l.gbc ?? "-"}</span>
           </div>
           <div>
             <span className="text-gray-500 block">Flow</span>
@@ -79,6 +74,9 @@ function StatusCard({ pool }: { pool: PoolStatus }) {
       ) : (
         <p className="text-gray-400 italic">Nog geen metingen</p>
       )}
+
+      {/* Grafische weergave t.o.v. streefbereik */}
+      <PoolValueVisualization logs={logs} />
 
       {/* Nieuwe meting knop */}
       <div className="mt-4 pt-3 border-t border-gray-100">
@@ -299,13 +297,32 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
 
 export default function PoolOverzicht() {
   const [status, setStatus] = useState<PoolStatus[]>([]);
+  const [logsByPool, setLogsByPool] = useState<Record<string, PoolLog[]>>({});
   const [loading, setLoading] = useState(true);
 
-  function loadStatus() {
-    poolApi.status().then((r) => { setStatus(r.data); setLoading(false); });
+  async function loadAll() {
+    const statusRes = await poolApi.status();
+    const pools = statusRes.data;
+    setStatus(pools);
+
+    // 14 dagen terug — gebruik bestaande datum_van filter
+    const sinds = new Date();
+    sinds.setDate(sinds.getDate() - 14);
+    const datumVan = sinds.toISOString().slice(0, 10);
+
+    const entries = await Promise.all(
+      pools.map(async (p) => {
+        const r = await poolApi.list({ pool_id: p.pool_id, datum_van: datumVan, limit: "100" });
+        return [p.pool_id, r.data] as const;
+      }),
+    );
+    setLogsByPool(Object.fromEntries(entries));
+    setLoading(false);
   }
 
-  useEffect(() => { loadStatus(); }, []);
+  useEffect(() => {
+    loadAll().catch(() => setLoading(false));
+  }, []);
 
   if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
 
@@ -317,7 +334,7 @@ export default function PoolOverzicht() {
 
       <div className="grid md:grid-cols-2 gap-6">
         {status.map((p) => (
-          <StatusCard key={p.pool_id} pool={p} />
+          <StatusCard key={p.pool_id} pool={p} logs={logsByPool[p.pool_id] ?? []} />
         ))}
       </div>
 
