@@ -313,7 +313,7 @@ export default function PoolOverzicht() {
 
     const entries = await Promise.all(
       pools.map(async (p) => {
-        const r = await poolApi.list({ pool_id: p.pool_id, datum_van: datumVan, limit: "100" });
+        const r = await poolApi.list({ pool_id: p.pool_id, datum_van: datumVan, limit: "100", only_measurements: "true" });
         return [p.pool_id, r.data] as const;
       }),
     );
