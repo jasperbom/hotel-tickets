@@ -141,6 +141,19 @@ class PoolConfig(Base):
     filter_nfc_tag_id_r: Mapped[str | None] = mapped_column(String(255))  # zwembad rechter filter
 
 
+class PoolIncident(Base):
+    __tablename__ = "pool_incidents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    pool_id: Mapped[PoolId] = mapped_column(Enum(PoolId), nullable=False)
+    datum: Mapped[str] = mapped_column(String(10), nullable=False)  # YYYY-MM-DD
+    tijd: Mapped[str] = mapped_column(String(5), nullable=False)    # HH:MM
+    beschrijving: Mapped[str] = mapped_column(Text, nullable=False)
+    maatregelen: Mapped[str | None] = mapped_column(Text)
+    gemeld_door: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class SystemSetting(Base):
     __tablename__ = "system_settings"
 

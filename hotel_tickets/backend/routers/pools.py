@@ -3,20 +3,47 @@ Zwembaden logboek — CRUD + BAL-compliance status.
 """
 import csv
 import io
+import logging
 import zipfile
 from datetime import date
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import select, func, and_
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import RequireUser
 from ..database import get_db
-from ..models import PoolLog, PoolId, PoolConfig
+from ..models import PoolLog, PoolId, PoolConfig, PoolIncident, UserRole, Role
+from ..services.notifications import notify_push, notify_persistent
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/pools", tags=["pools"])
+
+
+# --- Bewakingswaardes: harde grenzen waarbinnen metingen moeten vallen ---
+BEWAKING = {
+    "ph": (4.00, 9.00),
+    "vbc_in": (0.00, 2.00),
+    "vbc_uit": (0.00, 2.00),
+    "tbc": (0.00, 2.50),
+}
+
+
+def _check_bewaking(data: dict) -> None:
+    """Valideer dat gemeten waardes binnen de bewakingsgrenzen vallen."""
+    for key, (lo, hi) in BEWAKING.items():
+        val = data.get(key)
+        if val is None:
+            continue
+        if val < lo or val > hi:
+            raise HTTPException(
+                status_code=422,
+                detail=f"{key.upper()} {val} valt buiten bewakingsgrens ({lo}–{hi})",
+            )
 
 
 # --- Pydantic schemas ---
@@ -175,7 +202,9 @@ async def list_logs(
 
 @router.post("/logs", response_model=PoolLogOut, status_code=201)
 async def create_log(data: PoolLogCreate, db: AsyncSession = Depends(get_db)):
-    row = PoolLog(**data.model_dump())
+    payload = data.model_dump()
+    _check_bewaking(payload)
+    row = PoolLog(**payload)
     db.add(row)
     await db.flush()
     await db.refresh(row)
@@ -195,7 +224,9 @@ async def update_log(log_id: str, data: PoolLogUpdate, db: AsyncSession = Depend
     row = await db.get(PoolLog, log_id)
     if not row:
         raise HTTPException(404, "Log niet gevonden")
-    for key, val in data.model_dump(exclude_unset=True).items():
+    updates = data.model_dump(exclude_unset=True)
+    _check_bewaking(updates)
+    for key, val in updates.items():
         setattr(row, key, val)
     await db.flush()
     await db.refresh(row)
@@ -453,3 +484,112 @@ async def update_config(pool_id: str, data: PoolConfigUpdate, db: AsyncSession =
     await db.flush()
     await db.refresh(row)
     return row
+
+
+# --- Ongewone voorvallen ---
+
+class PoolIncidentCreate(BaseModel):
+    pool_id: PoolId
+    datum: str = Field(..., pattern=r"^\d{4}-\d{2}-\d{2}$")
+    tijd: str = Field(..., pattern=r"^\d{2}:\d{2}$")
+    beschrijving: str = Field(..., min_length=1)
+    maatregelen: Optional[str] = None
+
+
+class PoolIncidentOut(BaseModel):
+    id: str
+    pool_id: str
+    datum: str
+    tijd: str
+    beschrijving: str
+    maatregelen: Optional[str]
+    gemeld_door: str
+    created_at: str
+
+    class Config:
+        from_attributes = True
+
+
+def _incident_to_out(row: PoolIncident) -> dict:
+    return {
+        "id": row.id,
+        "pool_id": row.pool_id.value if isinstance(row.pool_id, PoolId) else row.pool_id,
+        "datum": row.datum,
+        "tijd": row.tijd,
+        "beschrijving": row.beschrijving,
+        "maatregelen": row.maatregelen,
+        "gemeld_door": row.gemeld_door,
+        "created_at": row.created_at.isoformat() if row.created_at else "",
+    }
+
+
+@router.get("/incidents", response_model=list[PoolIncidentOut])
+async def list_incidents(
+    pool_id: Optional[str] = Query(None),
+    limit: int = Query(50, le=500),
+    db: AsyncSession = Depends(get_db),
+):
+    q = select(PoolIncident).order_by(PoolIncident.datum.desc(), PoolIncident.tijd.desc())
+    if pool_id:
+        q = q.where(PoolIncident.pool_id == pool_id)
+    q = q.limit(limit)
+    rows = await db.execute(q)
+    return [_incident_to_out(r) for r in rows.scalars().all()]
+
+
+@router.post("/incidents", response_model=PoolIncidentOut, status_code=201)
+async def create_incident(
+    data: PoolIncidentCreate,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    row = PoolIncident(
+        pool_id=data.pool_id,
+        datum=data.datum,
+        tijd=data.tijd,
+        beschrijving=data.beschrijving,
+        maatregelen=data.maatregelen,
+        gemeld_door=user.display_name or user.ha_user_id,
+    )
+    db.add(row)
+    await db.flush()
+    await db.refresh(row)
+
+    # Notificeer admins: push + persistent
+    pool_label = POOL_LABELS.get(data.pool_id.value, data.pool_id.value)
+    title = f"⚠️ Ongewoon voorval — {pool_label}"
+    short = data.beschrijving if len(data.beschrijving) <= 160 else data.beschrijving[:157] + "..."
+    message = f"{short}\nGemeld door: {row.gemeld_door}"
+
+    try:
+        admins_q = await db.execute(
+            select(UserRole).where(
+                and_(
+                    UserRole.role == Role.admin,
+                    UserRole.notify_push == True,
+                    UserRole.ha_notify_service.isnot(None),
+                )
+            )
+        )
+        for admin in admins_q.scalars().all():
+            if admin.ha_notify_service:
+                await notify_push(admin.ha_notify_service, title, message)
+        await notify_persistent(title, message, notification_id=f"pool_incident_{row.id}")
+    except Exception as exc:
+        logger.warning("Admin notificatie voor ongewoon voorval mislukt: %s", exc)
+
+    return _incident_to_out(row)
+
+
+@router.delete("/incidents/{incident_id}", status_code=204)
+async def delete_incident(
+    incident_id: str,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.is_admin:
+        raise HTTPException(403, "Alleen admins mogen voorvallen verwijderen")
+    row = await db.get(PoolIncident, incident_id)
+    if not row:
+        raise HTTPException(404, "Voorval niet gevonden")
+    await db.delete(row)

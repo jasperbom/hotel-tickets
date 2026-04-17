@@ -2,14 +2,50 @@ import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { poolApi, userApi, type PoolId, type PoolLog } from "../api/client";
 
-type FieldDef = { key: string; label: string; type: "number" | "text"; step?: string };
+type FieldDef = {
+  key: string;
+  label: string;
+  type: "number" | "text";
+  step?: string;
+  /** Harde bewakingsgrens — waarde mag hier niet buiten vallen */
+  bewaking?: { min: number; max: number };
+  /** Adviesbereik — toont een info-ballon met streefwaarde */
+  advies?: string;
+};
 
 const WAARDES: FieldDef[] = [
   { key: "water_temp", label: "Water temperatuur (°C)", type: "number", step: "0.1" },
-  { key: "ph", label: "pH", type: "number", step: "0.01" },
-  { key: "vbc_in", label: "VBC in", type: "number", step: "0.01" },
-  { key: "vbc_uit", label: "VBC uit", type: "number", step: "0.01" },
-  { key: "tbc", label: "TBC", type: "number", step: "0.01" },
+  {
+    key: "ph",
+    label: "pH",
+    type: "number",
+    step: "0.01",
+    bewaking: { min: 4.0, max: 9.0 },
+    advies: "Streefwaarde: tussen 7,0 en 7,6",
+  },
+  {
+    key: "vbc_in",
+    label: "VBC in",
+    type: "number",
+    step: "0.01",
+    bewaking: { min: 0.0, max: 2.0 },
+    advies: "Streefwaarde: tussen 0,5 en 1,5 mg/l",
+  },
+  {
+    key: "vbc_uit",
+    label: "VBC uit",
+    type: "number",
+    step: "0.01",
+    bewaking: { min: 0.0, max: 2.0 },
+    advies: "Streefwaarde: tussen 0,5 en 1,5 mg/l",
+  },
+  {
+    key: "tbc",
+    label: "TBC",
+    type: "number",
+    step: "0.01",
+    bewaking: { min: 0.0, max: 2.5 },
+  },
 ];
 
 const AUTOMATEN: FieldDef[] = [
@@ -20,6 +56,23 @@ const AUTOMATEN: FieldDef[] = [
 ];
 
 const ALL_INPUT_FIELDS = [...WAARDES, ...AUTOMATEN];
+
+const POOLS: { id: PoolId; label: string }[] = [
+  { id: "wellness", label: "Wellness" },
+  { id: "zwembad", label: "Zwembad" },
+];
+
+function InfoBallon({ text }: { text: string }) {
+  return (
+    <span
+      className="ml-1 inline-flex items-center justify-center w-4 h-4 rounded-full bg-blue-100 text-blue-700 text-[10px] font-bold cursor-help align-middle"
+      title={text}
+      aria-label={text}
+    >
+      i
+    </span>
+  );
+}
 
 const DRAFT_STORAGE_KEY = "pool-nieuwe-meting-draft-v1";
 
@@ -118,6 +171,21 @@ export default function PoolNieuweMeting() {
   const isAfter17 = now.getHours() >= 17;
 
   const hasValue = (v: any) => v !== undefined && v !== null && v !== "";
+
+  // Bewakingsfout per veld (harde grens)
+  const bewakingFouten: Record<string, string> = {};
+  for (const f of WAARDES) {
+    if (!f.bewaking) continue;
+    const raw = values[f.key];
+    if (!hasValue(raw)) continue;
+    const n = Number(raw);
+    if (Number.isNaN(n)) continue;
+    if (n < f.bewaking.min || n > f.bewaking.max) {
+      bewakingFouten[f.key] = `Moet tussen ${f.bewaking.min.toFixed(2)} en ${f.bewaking.max.toFixed(2)} liggen`;
+    }
+  }
+  const heeftBewakingFout = Object.keys(bewakingFouten).length > 0;
+
   const isFormComplete =
     !!tijd &&
     hasValue(values.water_temp) &&
@@ -129,12 +197,17 @@ export default function PoolNieuweMeting() {
     hasValue(values.vbc_automaat) &&
     hasValue(values.tbc) &&
     hasValue(values.flow) &&
-    (!isAfter17 || hasValue(values.bezoekers));
+    (!isAfter17 || hasValue(values.bezoekers)) &&
+    !heeftBewakingFout;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!values.gemeten_door?.trim()) {
       setError("Vul in wie de meting doet");
+      return;
+    }
+    if (heeftBewakingFout) {
+      setError("Een of meer waardes vallen buiten de bewakingsgrenzen");
       return;
     }
     setSaving(true);
@@ -181,41 +254,60 @@ export default function PoolNieuweMeting() {
   }
 
   function renderField(f: FieldDef) {
+    const fout = bewakingFouten[f.key];
     return (
       <div key={f.key}>
-        <label className="block text-xs font-medium text-gray-600 mb-0.5">{f.label}</label>
+        <label className="block text-xs font-medium text-gray-600 mb-0.5">
+          {f.label}
+          {f.advies && <InfoBallon text={f.advies} />}
+        </label>
         <input
           type={f.type}
           step={f.step}
-          className="w-full border rounded-lg px-2 py-1.5 text-sm"
+          min={f.bewaking?.min}
+          max={f.bewaking?.max}
+          className={`w-full border rounded-lg px-2 py-1.5 text-sm ${fout ? "border-red-500 bg-red-50" : ""}`}
           value={values[f.key] ?? ""}
           placeholder={getPlaceholder(f.key)}
           onChange={(e) => set(f.key, e.target.value)}
         />
+        {fout && <p className="text-[11px] text-red-600 mt-0.5">{fout}</p>}
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl">
-      <h1 className="text-xl font-bold mb-4">Nieuwe meting</h1>
+    <div className="max-w-2xl space-y-4">
+      <h1 className="text-xl font-bold">Nieuwe meting</h1>
 
-      <form onSubmit={handleSubmit} className="space-y-4">
+      {/* Bad-kiezer bovenaan — altijd zichtbaar zodat duidelijk is voor welk bad de meting is */}
+      <div className="bg-white rounded-2xl shadow p-4">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          Kies een bad
+        </p>
+        <div className="grid grid-cols-2 gap-2">
+          {POOLS.map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => setPoolId(p.id)}
+              className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
+                poolId === p.id
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <form onSubmit={handleSubmit} className="space-y-4 bg-white rounded-2xl shadow p-5">
         {/* Algemeen */}
         <section>
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Algemeen</h2>
-          <div className="grid grid-cols-3 gap-2">
-            <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Bad</label>
-              <select
-                className="w-full border rounded-lg px-2 py-1.5 text-sm"
-                value={poolId}
-                onChange={(e) => setPoolId(e.target.value as PoolId)}
-              >
-                <option value="wellness">Wellness</option>
-                <option value="zwembad">Zwembad</option>
-              </select>
-            </div>
+          <div className="grid grid-cols-2 gap-2">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-0.5">Datum</label>
               <input
@@ -260,7 +352,10 @@ export default function PoolNieuweMeting() {
             {WAARDES.slice(1).map(renderField)}
             {/* Gebonden chloor – berekend */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Gebonden chloor</label>
+              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                Gebonden chloor
+                <InfoBallon text="Streefwaarde: onder 0,6 mg/l" />
+              </label>
               <div className="w-full border rounded-lg px-2 py-1.5 text-sm bg-gray-50 text-gray-700">
                 {gebondenChloor !== null ? gebondenChloor : <span className="text-gray-400">TBC − VBC uit</span>}
               </div>
