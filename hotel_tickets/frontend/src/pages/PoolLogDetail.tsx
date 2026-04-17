@@ -38,6 +38,7 @@ const EDITABLE_FIELDS: FieldDef[] = [
   { key: "verbruik", label: "Verbruik", type: "number", step: "0.1" },
   { key: "flow", label: "Flow", type: "number", step: "0.01" },
   { key: "bezoekers", label: "Aantal zwemmers", type: "number", step: "1" },
+  { key: "chemicalien", label: "Chemicaliën", type: "text" },
   { key: "gemeten_door", label: "Gemeten door", type: "text" },
   { key: "notitie", label: "Notitie", type: "text" },
 ];
@@ -240,6 +241,7 @@ export default function PoolLogDetail() {
             <Row label="Flow" value={log.flow} />
             <Row label="Filterspoeling" value={log.filterspoeling || "Nee"} />
             <Row label="Aantal zwemmers" value={log.bezoekers} />
+            <Row label="Chemicaliën" value={log.chemicalien} />
             <Row label="Gemeten door" value={log.gemeten_door} />
             {log.notitie && (
               <div className="mt-4 p-3 bg-yellow-50 rounded-lg text-sm">

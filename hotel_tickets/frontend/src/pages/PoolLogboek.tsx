@@ -123,6 +123,7 @@ export default function PoolLogboek() {
                 <th className="px-3 py-2.5">Flow</th>
                 <th className="px-3 py-2.5">Filterspoeling</th>
                 <th className="px-3 py-2.5 border-l border-gray-200">Bezoekers</th>
+                <th className="px-3 py-2.5">Chemicaliën</th>
                 <th className="px-3 py-2.5">Gemeten door</th>
                 <th className="px-3 py-2.5 rounded-tr-xl">Notitie</th>
               </tr>
@@ -151,6 +152,7 @@ export default function PoolLogboek() {
                   <td className="px-3 py-2">{l.flow ?? "-"}</td>
                   <td className="px-3 py-2">{l.filterspoeling || "-"}</td>
                   <td className="px-3 py-2 border-l border-gray-100">{l.bezoekers ?? "-"}</td>
+                  <td className="px-3 py-2 max-w-[220px] truncate">{l.chemicalien || "-"}</td>
                   <td className="px-3 py-2">{l.gemeten_door}</td>
                   <td className="px-3 py-2 max-w-[200px] truncate">{l.notitie || "-"}</td>
                 </tr>

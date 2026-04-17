@@ -139,6 +139,9 @@ class PoolConfig(Base):
     label: Mapped[str] = mapped_column(String(100), nullable=False)
     filter_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
     filter_nfc_tag_id_r: Mapped[str | None] = mapped_column(String(255))  # zwembad rechter filter
+    chloor_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
+    zuur_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
+    vlokmiddel_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
 
 
 class PoolIncident(Base):

@@ -322,6 +322,9 @@ export interface PoolConfigItem {
   label: string;
   filter_nfc_tag_id: string | null;
   filter_nfc_tag_id_r: string | null;
+  chloor_nfc_tag_id: string | null;
+  zuur_nfc_tag_id: string | null;
+  vlokmiddel_nfc_tag_id: string | null;
 }
 
 export interface PoolIncident {
