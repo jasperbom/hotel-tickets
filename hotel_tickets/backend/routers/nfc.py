@@ -50,11 +50,20 @@ class NfcScanResponse(BaseModel):
     pool_log_id: str | None = None
 
 
-async def _handle_chemical_scan(
+def _filterspoeling_value(config: PoolConfig, tag_id: str) -> str | None:
+    """Bepaal welke filterspoeling-waarde hoort bij deze tag. L/R voor zwembad, X voor wellness."""
+    if config.filter_nfc_tag_id == tag_id:
+        return "L" if config.pool_id == "zwembad" else "X"
+    if config.filter_nfc_tag_id_r == tag_id:
+        return "R"
+    return None
+
+
+async def _handle_pool_scan(
     body: NfcScanRequest,
     db: AsyncSession,
 ) -> NfcScanResponse | None:
-    """Probeer de NFC-tag te matchen tegen een chemicaliën-tag per bad.
+    """Probeer de NFC-tag te matchen tegen een chemicaliën- of filter-tag per bad.
     Retourneert een respons als de tag gematcht is, anders None."""
     result = await db.execute(
         select(PoolConfig).where(
@@ -62,6 +71,8 @@ async def _handle_chemical_scan(
                 PoolConfig.chloor_nfc_tag_id == body.tag_id,
                 PoolConfig.zuur_nfc_tag_id == body.tag_id,
                 PoolConfig.vlokmiddel_nfc_tag_id == body.tag_id,
+                PoolConfig.filter_nfc_tag_id == body.tag_id,
+                PoolConfig.filter_nfc_tag_id_r == body.tag_id,
             )
         )
     )
@@ -69,14 +80,23 @@ async def _handle_chemical_scan(
     if not config:
         return None
 
-    # Bepaal welke actie het is
+    # Bepaal of het een chemicaliën- of filter-scan is
+    chemicalien: str | None = None
+    filterspoeling: str | None = None
     action_label: str | None = None
+
     for column, label in CHEMICAL_ACTIONS.items():
         if getattr(config, column) == body.tag_id:
+            chemicalien = label
             action_label = label
             break
+
     if action_label is None:
-        return None
+        filterspoeling = _filterspoeling_value(config, body.tag_id)
+        if filterspoeling is None:
+            return None
+        side = {"L": " links", "R": " rechts", "X": ""}.get(filterspoeling, "")
+        action_label = f"Filterspoeling{side}"
 
     # Bepaal wie de scan uitvoerde
     user: UserRole | None = None
@@ -92,7 +112,8 @@ async def _handle_chemical_scan(
         pool_id=PoolId(config.pool_id),
         datum=now.date().isoformat(),
         tijd=now.strftime("%H:%M"),
-        chemicalien=action_label,
+        chemicalien=chemicalien,
+        filterspoeling=filterspoeling,
         gemeten_door=gemeten_door,
     )
     db.add(log)
@@ -117,10 +138,10 @@ async def _handle_chemical_scan(
 async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
     """Verwerk een NFC-scan: sluit de openstaande taak en stuur een bevestiging."""
 
-    # Eerst checken of het een zwembad-chemicaliën-tag is
-    chemical_response = await _handle_chemical_scan(body, db)
-    if chemical_response is not None:
-        return chemical_response
+    # Eerst checken of het een zwembad-tag is (chemicaliën of filter)
+    pool_response = await _handle_pool_scan(body, db)
+    if pool_response is not None:
+        return pool_response
 
     # Zoek het sjabloon met dit NFC-tag
     result = await db.execute(
