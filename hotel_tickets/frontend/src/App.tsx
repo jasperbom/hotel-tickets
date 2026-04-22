@@ -189,12 +189,24 @@ export default function App() {
   }, [location.pathname]);
 
   // Zorg dat het gefocuste input-veld op mobiel zichtbaar blijft wanneer
-  // het virtuele toetsenbord opent. Op iOS Safari scrollt de browser dat
-  // niet altijd netjes — dus we scrollen het element handmatig in beeld
-  // na een korte vertraging (tijd voor het toetsenbord om op te komen).
+  // het virtuele toetsenbord opent. Op iOS Safari (en de HA iOS-app) krimpt
+  // de layout viewport niet mee — we gebruiken visualViewport om te detecteren
+  // hoe hoog het toetsenbord is, publiceren die als CSS-variabele --kb-inset
+  // en scrollen het veld pas in beeld nadat het toetsenbord daadwerkelijk open is.
   useEffect(() => {
-    const isTouchViewport = window.matchMedia("(max-width: 767px), (hover: none) and (pointer: coarse)").matches;
-    if (!isTouchViewport) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+
+    const root = document.documentElement;
+
+    function updateKeyboardInset() {
+      const inset = Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop);
+      root.style.setProperty("--kb-inset", `${Math.round(inset)}px`);
+    }
+
+    updateKeyboardInset();
+    vv.addEventListener("resize", updateKeyboardInset);
+    vv.addEventListener("scroll", updateKeyboardInset);
 
     const SCROLLABLE_INPUT_TYPES = new Set([
       "text", "email", "number", "search", "password", "tel", "url",
@@ -211,16 +223,59 @@ export default function App() {
       return (el as HTMLElement).isContentEditable;
     }
 
+    let pendingTarget: HTMLElement | null = null;
+    let fallbackTimer: number | null = null;
+
+    function scrollPendingIntoView() {
+      if (!pendingTarget) return;
+      const target = pendingTarget;
+      pendingTarget = null;
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
+      target.scrollIntoView({ block: "center", behavior: "smooth" });
+    }
+
+    function handleVvResize() {
+      updateKeyboardInset();
+      // Zodra het toetsenbord opengaat krimpt visualViewport.height; dan pas
+      // het gefocuste element centreren.
+      if (pendingTarget) {
+        window.requestAnimationFrame(scrollPendingIntoView);
+      }
+    }
+
+    vv.addEventListener("resize", handleVvResize);
+
     function handleFocusIn(e: FocusEvent) {
       const target = e.target as Element | null;
       if (!target || !shouldScroll(target)) return;
-      window.setTimeout(() => {
-        (target as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
-      }, 300);
+      pendingTarget = target as HTMLElement;
+      // Fallback als visualViewport niet krimpt (bv. desktop of externe keyboard).
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+      fallbackTimer = window.setTimeout(scrollPendingIntoView, 600);
+    }
+
+    function handleFocusOut() {
+      pendingTarget = null;
+      if (fallbackTimer !== null) {
+        window.clearTimeout(fallbackTimer);
+        fallbackTimer = null;
+      }
     }
 
     document.addEventListener("focusin", handleFocusIn);
-    return () => document.removeEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
+    return () => {
+      vv.removeEventListener("resize", updateKeyboardInset);
+      vv.removeEventListener("scroll", updateKeyboardInset);
+      vv.removeEventListener("resize", handleVvResize);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
+      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
+      root.style.removeProperty("--kb-inset");
+    };
   }, []);
 
   // Sluit mobile menu bij navigatie
@@ -279,10 +334,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-screen">
+    <div className="flex min-h-[100dvh]">
       {/* Desktop zijbalk — verborgen op mobile */}
       <aside
-        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-screen"
+        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-[100dvh]"
         style={{ backgroundColor: brandColor ?? "#111827" }}
       >
         {/* Logo bovenin zijbalk */}
@@ -421,7 +476,13 @@ export default function App() {
 
         {/* Inhoud */}
         {activeModule || isOnInstellingen ? (
-          <main className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/pools/logboek" ? "" : "max-w-5xl"}`}>
+          <main
+            className={`flex-1 px-4 pt-6 w-full mx-auto ${location.pathname === "/pools/logboek" ? "" : "max-w-5xl"}`}
+            style={{
+              paddingBottom:
+                "calc(1.5rem + env(safe-area-inset-bottom, 0px) + var(--kb-inset, 0px))",
+            }}
+          >
             <Routes>
               {/* Taken module */}
               <Route path="/" element={<MijnOverzicht />} />

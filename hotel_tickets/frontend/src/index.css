@@ -17,13 +17,28 @@
     --blue-900: #1e3799;
   }
 
+  html, body {
+    overscroll-behavior-y: contain;
+  }
+
   body {
     @apply text-gray-900 font-sans;
+    background-color: var(--app-bg, #f9fafb);
+    position: relative;
+  }
+
+  /* Achtergrond op een fixed pseudo-laag zodat iOS' background-attachment: fixed
+     niet tegen scrollgedrag onder het on-screen toetsenbord botst. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
     background-color: var(--app-bg, #f9fafb);
     background-image: var(--app-bg-image, none);
     background-size: cover;
     background-position: center;
-    background-attachment: fixed;
+    pointer-events: none;
   }
 }
 
