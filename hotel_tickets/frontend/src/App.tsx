@@ -189,31 +189,14 @@ export default function App() {
   }, [location.pathname]);
 
   // Zorg dat het gefocuste input-veld op mobiel zichtbaar blijft wanneer
-  // het virtuele toetsenbord opent. Op iOS Safari (en de HA iOS-app) krimpt
-  // de layout viewport niet mee — we gebruiken visualViewport om te detecteren
-  // hoe hoog het toetsenbord is, publiceren die als CSS-variabele --kb-inset
-  // en scrollen het veld pas in beeld nadat het toetsenbord daadwerkelijk open is.
+  // het virtuele toetsenbord opent. visualViewport.resize firet niet
+  // betrouwbaar binnen een iframe op iOS (HA ingress) — daarom leunen we op:
+  //   1. html { scroll-padding-bottom: 50vh } zodat de browser het target
+  //      automatisch boven de toetsenbord-zone zet
+  //   2. een focusin-fallback die ná de toetsenbord-animatie (~500ms) een
+  //      plain scrollIntoView() doet zonder opties (opties/smooth-gedrag heeft
+  //      gedocumenteerde bugs in iOS WKWebView)
   useEffect(() => {
-    const vv = window.visualViewport;
-    if (!vv) return;
-
-    const docEl = document.documentElement;
-    const rootEl = document.getElementById("root");
-
-    function updateKeyboardInset() {
-      const inset = Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop);
-      docEl.style.setProperty("--kb-inset", `${Math.round(inset)}px`);
-      // Pin de scrollcontainer aan de daadwerkelijke zichtbare hoogte zodat
-      // 'ie op iOS meekrimpt als het toetsenbord open staat.
-      if (rootEl) {
-        rootEl.style.height = `${Math.round(vv!.height)}px`;
-      }
-    }
-
-    updateKeyboardInset();
-    vv.addEventListener("resize", updateKeyboardInset);
-    vv.addEventListener("scroll", updateKeyboardInset);
-
     const SCROLLABLE_INPUT_TYPES = new Set([
       "text", "email", "number", "search", "password", "tel", "url",
       "date", "datetime-local", "month", "week", "time",
@@ -229,59 +212,36 @@ export default function App() {
       return (el as HTMLElement).isContentEditable;
     }
 
-    let pendingTarget: HTMLElement | null = null;
-    let fallbackTimer: number | null = null;
-
-    function scrollPendingIntoView() {
-      if (!pendingTarget) return;
-      const target = pendingTarget;
-      pendingTarget = null;
-      if (fallbackTimer !== null) {
-        window.clearTimeout(fallbackTimer);
-        fallbackTimer = null;
-      }
-      target.scrollIntoView({ block: "center", behavior: "smooth" });
-    }
-
-    function handleVvResize() {
-      updateKeyboardInset();
-      // Zodra het toetsenbord opengaat krimpt visualViewport.height; dan pas
-      // het gefocuste element centreren.
-      if (pendingTarget) {
-        window.requestAnimationFrame(scrollPendingIntoView);
-      }
-    }
-
-    vv.addEventListener("resize", handleVvResize);
+    let scrollTimer: number | null = null;
 
     function handleFocusIn(e: FocusEvent) {
       const target = e.target as Element | null;
       if (!target || !shouldScroll(target)) return;
-      pendingTarget = target as HTMLElement;
-      // Fallback als visualViewport niet krimpt (bv. desktop of externe keyboard).
-      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
-      fallbackTimer = window.setTimeout(scrollPendingIntoView, 600);
+      if (scrollTimer !== null) window.clearTimeout(scrollTimer);
+      scrollTimer = window.setTimeout(() => {
+        scrollTimer = null;
+        // Plain scrollIntoView zonder opties: de enige variant die in iOS
+        // WKWebView-iframes stabiel werkt. De scroll-padding-bottom op <html>
+        // zorgt dat het veld boven het toetsenbord landt.
+        if (document.activeElement === target) {
+          (target as HTMLElement).scrollIntoView();
+        }
+      }, 500);
     }
 
     function handleFocusOut() {
-      pendingTarget = null;
-      if (fallbackTimer !== null) {
-        window.clearTimeout(fallbackTimer);
-        fallbackTimer = null;
+      if (scrollTimer !== null) {
+        window.clearTimeout(scrollTimer);
+        scrollTimer = null;
       }
     }
 
     document.addEventListener("focusin", handleFocusIn);
     document.addEventListener("focusout", handleFocusOut);
     return () => {
-      vv.removeEventListener("resize", updateKeyboardInset);
-      vv.removeEventListener("scroll", updateKeyboardInset);
-      vv.removeEventListener("resize", handleVvResize);
       document.removeEventListener("focusin", handleFocusIn);
       document.removeEventListener("focusout", handleFocusOut);
-      if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
-      docEl.style.removeProperty("--kb-inset");
-      if (rootEl) rootEl.style.removeProperty("height");
+      if (scrollTimer !== null) window.clearTimeout(scrollTimer);
     };
   }, []);
 
@@ -341,10 +301,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-full">
+    <div className="flex min-h-[100dvh]">
       {/* Desktop zijbalk — verborgen op mobile */}
       <aside
-        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-full"
+        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-[100dvh]"
         style={{ backgroundColor: brandColor ?? "#111827" }}
       >
         {/* Logo bovenin zijbalk */}
@@ -486,8 +446,10 @@ export default function App() {
           <main
             className={`flex-1 px-4 pt-6 w-full mx-auto ${location.pathname === "/pools/logboek" ? "" : "max-w-5xl"}`}
             style={{
+              // Ruime onderkant zodat er op mobiel altijd scrollruimte is
+              // onder het laatste invoerveld als het toetsenbord opent.
               paddingBottom:
-                "calc(1.5rem + env(safe-area-inset-bottom, 0px) + var(--kb-inset, 0px))",
+                "calc(50vh + env(safe-area-inset-bottom, 0px))",
             }}
           >
             <Routes>

@@ -17,26 +17,22 @@
     --blue-900: #1e3799;
   }
 
+  html {
+    /* Reserveer onderaan ruimte waar het virtuele toetsenbord opkomt: iOS
+       Safari gebruikt scroll-padding bij native focus-scroll én bij
+       scrollIntoView(), waardoor het gefocuste veld boven het toetsenbord
+       komt zonder dat wij de viewport hoeven te meten. */
+    scroll-padding-bottom: 50vh;
+  }
+
   html, body {
-    height: 100%;
-    margin: 0;
-    overflow: hidden;
-    overscroll-behavior: none;
+    overscroll-behavior-y: contain;
   }
 
   body {
     @apply text-gray-900 font-sans;
     background-color: var(--app-bg, #f9fafb);
     position: relative;
-  }
-
-  /* #root is de enige scrollcontainer; hoogte wordt in JS gepind aan
-     visualViewport.height zodat 'ie op iOS meekrimpt met het toetsenbord. */
-  #root {
-    height: 100dvh;
-    overflow-y: auto;
-    overscroll-behavior-y: contain;
-    -webkit-overflow-scrolling: touch;
   }
 
   /* Achtergrond op een fixed pseudo-laag zodat iOS' background-attachment: fixed
