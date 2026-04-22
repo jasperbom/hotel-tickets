@@ -18,13 +18,25 @@
   }
 
   html, body {
-    overscroll-behavior-y: contain;
+    height: 100%;
+    margin: 0;
+    overflow: hidden;
+    overscroll-behavior: none;
   }
 
   body {
     @apply text-gray-900 font-sans;
     background-color: var(--app-bg, #f9fafb);
     position: relative;
+  }
+
+  /* #root is de enige scrollcontainer; hoogte wordt in JS gepind aan
+     visualViewport.height zodat 'ie op iOS meekrimpt met het toetsenbord. */
+  #root {
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Achtergrond op een fixed pseudo-laag zodat iOS' background-attachment: fixed
