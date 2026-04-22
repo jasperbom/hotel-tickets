@@ -197,11 +197,17 @@ export default function App() {
     const vv = window.visualViewport;
     if (!vv) return;
 
-    const root = document.documentElement;
+    const docEl = document.documentElement;
+    const rootEl = document.getElementById("root");
 
     function updateKeyboardInset() {
       const inset = Math.max(0, window.innerHeight - vv!.height - vv!.offsetTop);
-      root.style.setProperty("--kb-inset", `${Math.round(inset)}px`);
+      docEl.style.setProperty("--kb-inset", `${Math.round(inset)}px`);
+      // Pin de scrollcontainer aan de daadwerkelijke zichtbare hoogte zodat
+      // 'ie op iOS meekrimpt als het toetsenbord open staat.
+      if (rootEl) {
+        rootEl.style.height = `${Math.round(vv!.height)}px`;
+      }
     }
 
     updateKeyboardInset();
@@ -274,7 +280,8 @@ export default function App() {
       document.removeEventListener("focusin", handleFocusIn);
       document.removeEventListener("focusout", handleFocusOut);
       if (fallbackTimer !== null) window.clearTimeout(fallbackTimer);
-      root.style.removeProperty("--kb-inset");
+      docEl.style.removeProperty("--kb-inset");
+      if (rootEl) rootEl.style.removeProperty("height");
     };
   }, []);
 
@@ -334,10 +341,10 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-[100dvh]">
+    <div className="flex min-h-full">
       {/* Desktop zijbalk — verborgen op mobile */}
       <aside
-        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-[100dvh]"
+        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-full"
         style={{ backgroundColor: brandColor ?? "#111827" }}
       >
         {/* Logo bovenin zijbalk */}
