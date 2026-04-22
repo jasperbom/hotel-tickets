@@ -196,7 +196,13 @@ export default function App() {
   //   2. een focusin-fallback die ná de toetsenbord-animatie (~500ms) een
   //      plain scrollIntoView() doet zonder opties (opties/smooth-gedrag heeft
   //      gedocumenteerde bugs in iOS WKWebView)
+  //
+  // Alleen actief op touch-apparaten — op desktop geeft verspringen bij focus
+  // een onprettig gevoel en is er geen toetsenbord dat content overdekt.
   useEffect(() => {
+    const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    if (!isTouch) return;
+
     const SCROLLABLE_INPUT_TYPES = new Set([
       "text", "email", "number", "search", "password", "tel", "url",
       "date", "datetime-local", "month", "week", "time",
@@ -444,13 +450,7 @@ export default function App() {
         {/* Inhoud */}
         {activeModule || isOnInstellingen ? (
           <main
-            className={`flex-1 px-4 pt-6 w-full mx-auto ${location.pathname === "/pools/logboek" ? "" : "max-w-5xl"}`}
-            style={{
-              // Ruime onderkant zodat er op mobiel altijd scrollruimte is
-              // onder het laatste invoerveld als het toetsenbord opent.
-              paddingBottom:
-                "calc(50vh + env(safe-area-inset-bottom, 0px))",
-            }}
+            className={`flex-1 px-4 py-6 touch-keyboard-pb w-full mx-auto ${location.pathname === "/pools/logboek" ? "" : "max-w-5xl"}`}
           >
             <Routes>
               {/* Taken module */}
