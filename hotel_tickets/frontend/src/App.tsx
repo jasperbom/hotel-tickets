@@ -158,17 +158,69 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Detecteer actieve module op basis van URL bij laden
+  // Herstel de laatst bezochte pagina bij app-start. Alleen als de app op de
+  // default route opent (`/`) EN er is een eerdere route bewaard. Deep-links
+  // (bijv. via een push-notificatie naar `#/tickets/...`) worden gerespecteerd
+  // omdat de URL dan niet gelijk is aan "/".
   useEffect(() => {
-    if (!activeModuleId) {
-      if (location.pathname.startsWith("/pools")) {
-        setActiveModuleId("zwembaden");
-      } else if (location.pathname.startsWith("/bikes")) {
-        setActiveModuleId("fietsen");
-      } else if (location.pathname !== "") {
-        setActiveModuleId("taken");
-      }
+    const saved = localStorage.getItem("lastRoute");
+    const shouldRestore = location.pathname === "/" && saved && saved !== "/";
+    const pathToDetect = shouldRestore ? saved! : location.pathname;
+
+    if (pathToDetect.startsWith("/pools")) {
+      setActiveModuleId("zwembaden");
+    } else if (pathToDetect.startsWith("/bikes")) {
+      setActiveModuleId("fietsen");
+    } else if (pathToDetect.startsWith("/instellingen")) {
+      // Geen module — instellingen heeft geen module-context
+    } else {
+      setActiveModuleId("taken");
     }
+
+    if (shouldRestore) {
+      navigate(saved!, { replace: true });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Onthoud de huidige route zodat we bij volgende app-start hier terugkomen
+  useEffect(() => {
+    localStorage.setItem("lastRoute", location.pathname);
+  }, [location.pathname]);
+
+  // Zorg dat het gefocuste input-veld op mobiel zichtbaar blijft wanneer
+  // het virtuele toetsenbord opent. Op iOS Safari scrollt de browser dat
+  // niet altijd netjes — dus we scrollen het element handmatig in beeld
+  // na een korte vertraging (tijd voor het toetsenbord om op te komen).
+  useEffect(() => {
+    const isTouchViewport = window.matchMedia("(max-width: 767px), (hover: none) and (pointer: coarse)").matches;
+    if (!isTouchViewport) return;
+
+    const SCROLLABLE_INPUT_TYPES = new Set([
+      "text", "email", "number", "search", "password", "tel", "url",
+      "date", "datetime-local", "month", "week", "time",
+    ]);
+
+    function shouldScroll(el: Element): boolean {
+      const tag = el.tagName.toLowerCase();
+      if (tag === "textarea" || tag === "select") return true;
+      if (tag === "input") {
+        const type = ((el as HTMLInputElement).type || "text").toLowerCase();
+        return SCROLLABLE_INPUT_TYPES.has(type);
+      }
+      return (el as HTMLElement).isContentEditable;
+    }
+
+    function handleFocusIn(e: FocusEvent) {
+      const target = e.target as Element | null;
+      if (!target || !shouldScroll(target)) return;
+      window.setTimeout(() => {
+        (target as HTMLElement).scrollIntoView({ block: "center", behavior: "smooth" });
+      }, 300);
+    }
+
+    document.addEventListener("focusin", handleFocusIn);
+    return () => document.removeEventListener("focusin", handleFocusIn);
   }, []);
 
   // Sluit mobile menu bij navigatie
