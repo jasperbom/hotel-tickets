@@ -262,6 +262,9 @@ export default function PoolNieuweMeting() {
     payload.gbc = gebondenChloor;
     payload.verbruik = verbruik;
 
+    // Doorzicht (geen numeriek invoerveld, dus buiten ALL_INPUT_FIELDS-loop)
+    payload.doorzicht = values.doorzicht || null;
+
     // Administratie
     payload.bezoekers = isAfter17 && values.bezoekers !== undefined && values.bezoekers !== ""
       ? Number(values.bezoekers) : null;
