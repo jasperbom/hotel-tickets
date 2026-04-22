@@ -17,12 +17,15 @@
     --blue-900: #1e3799;
   }
 
-  html {
-    /* Reserveer onderaan ruimte waar het virtuele toetsenbord opkomt: iOS
-       Safari gebruikt scroll-padding bij native focus-scroll én bij
-       scrollIntoView(), waardoor het gefocuste veld boven het toetsenbord
-       komt zonder dat wij de viewport hoeven te meten. */
-    scroll-padding-bottom: 50vh;
+  /* Reserveer onderaan ruimte waar het virtuele toetsenbord opkomt: iOS
+     Safari gebruikt scroll-padding bij native focus-scroll én bij
+     scrollIntoView(), waardoor het gefocuste veld boven het toetsenbord
+     komt zonder dat wij de viewport hoeven te meten. Alleen op touch-
+     apparaten — op desktop zou dit onnodig springgedrag geven. */
+  @media (hover: none) and (pointer: coarse) {
+    html {
+      scroll-padding-bottom: 50vh;
+    }
   }
 
   html, body {
@@ -47,6 +50,14 @@
     background-size: cover;
     background-position: center;
     pointer-events: none;
+  }
+}
+
+/* Op touch-apparaten extra onderkant-padding zodat er altijd scrollruimte
+   is onder het laatste invoerveld wanneer het toetsenbord opent. */
+@media (hover: none) and (pointer: coarse) {
+  .touch-keyboard-pb {
+    padding-bottom: calc(50vh + env(safe-area-inset-bottom, 0px));
   }
 }
 
