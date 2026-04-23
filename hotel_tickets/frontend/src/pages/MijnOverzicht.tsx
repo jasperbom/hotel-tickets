@@ -291,18 +291,18 @@ export default function MijnOverzicht() {
       {/* Aankomende herhalende taken */}
       {upcoming_recurring.length > 0 && (
         <section>
-          <button
-            onClick={() => setShowUpcoming(!showUpcoming)}
-            className="flex items-center justify-between w-full mb-3"
-          >
-            <div className="flex items-center gap-2">
+          <div className="flex items-center justify-between mb-3">
+            <button
+              onClick={() => setShowUpcoming(!showUpcoming)}
+              className="flex items-center gap-2"
+            >
               <span className="text-purple-600 text-lg">🔁</span>
               <h2 className="font-semibold text-gray-900">Aankomende taken</h2>
               <span className="text-xs font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{upcoming_recurring.length}</span>
               <span className="text-gray-400 text-sm">{showUpcoming ? "▲" : "▼"}</span>
-            </div>
-            <Link to="/recurring" className="text-sm text-blue-600 hover:underline" onClick={(e) => e.stopPropagation()}>Beheren →</Link>
-          </button>
+            </button>
+            <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
+          </div>
           {showUpcoming && (
             <div className="space-y-2">
               {upcoming_recurring.map((t) => (
