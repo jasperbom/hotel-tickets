@@ -244,9 +244,9 @@ export default function RecurringTaskDetail() {
             <button
               type="button"
               onClick={() => toggleNotifyWhenFree(activeTicket)}
-              className={`relative w-10 h-6 rounded-full transition-colors ${activeTicket.notify_when_free ? "bg-amber-500" : "bg-gray-200"}`}
+              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${activeTicket.notify_when_free ? "bg-amber-500" : "bg-gray-200"}`}
             >
-              <span className={`absolute top-1 w-4 h-4 bg-white rounded-full shadow transition-transform ${activeTicket.notify_when_free ? "left-5" : "left-1"}`} />
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${activeTicket.notify_when_free ? "translate-x-5" : "translate-x-0"}`} />
             </button>
             <label className="text-sm text-gray-700">🔑 Meld mij wanneer de kamer vrij is</label>
           </div>

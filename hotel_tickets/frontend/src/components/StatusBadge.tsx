@@ -14,9 +14,9 @@ const STATUS_LABELS: Record<Status, string> = {
 
 const PRIORITY_COLORS: Record<Priority, string> = {
   low: "bg-gray-100 text-gray-600",
-  medium: "bg-blue-100 text-blue-700",
-  high: "bg-orange-100 text-orange-700",
-  urgent: "bg-red-100 text-red-700",
+  medium: "bg-yellow-100 text-yellow-800",
+  high: "bg-orange-300 text-orange-900",
+  urgent: "bg-red-600 text-white font-semibold",
 };
 
 const PRIORITY_LABELS: Record<Priority, string> = {
