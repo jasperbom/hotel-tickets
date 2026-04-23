@@ -135,13 +135,13 @@ export function OverviewRow(props: OverviewRowProps) {
               </span>
             ) : null}
           </div>
-          {actionSlot && <div className="shrink-0">{actionSlot}</div>}
+          {actionSlot && <div className="shrink-0 ml-auto sm:ml-0">{actionSlot}</div>}
           {onComplete && (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onComplete(); }}
               title={completeTitle}
               aria-label={completeTitle}
-              className="shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors"
+              className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors ${actionSlot ? "" : "ml-auto sm:ml-0"}`}
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
                 <path fillRule="evenodd" d="M16.704 5.296a1 1 0 010 1.408l-7.5 7.5a1 1 0 01-1.408 0l-3.5-3.5a1 1 0 111.408-1.408L8.5 12.092l6.796-6.796a1 1 0 011.408 0z" clipRule="evenodd" />
