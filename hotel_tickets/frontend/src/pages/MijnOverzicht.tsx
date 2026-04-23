@@ -400,7 +400,6 @@ function MyTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Tick
       priority={ticket.priority}
       roomName={locationName}
       occupied={occupied}
-      titleIcon="🎫"
       title={ticket.title}
       statusSlot={<StatusBadge status={ticket.status} />}
       prioritySlot={<PriorityBadge priority={ticket.priority} />}
@@ -454,7 +453,6 @@ function AvailableTicketRow({ ticket, locationName, occupied, onClaim, onClose }
       priority={ticket.priority}
       roomName={locationName}
       occupied={occupied}
-      titleIcon="🎫"
       title={ticket.title}
       statusSlot={<StatusBadge status={ticket.status} />}
       prioritySlot={<PriorityBadge priority={ticket.priority} />}
