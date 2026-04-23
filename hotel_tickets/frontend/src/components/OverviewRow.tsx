@@ -3,9 +3,9 @@ import { Link } from "react-router-dom";
 import type { Priority } from "../api/client";
 
 const PRIORITY_BORDER: Record<Priority, string> = {
-  urgent: "border-l-red-500",
-  high: "border-l-orange-400",
-  medium: "border-l-blue-400",
+  urgent: "border-l-red-600",
+  high: "border-l-orange-500",
+  medium: "border-l-yellow-400",
   low: "border-l-gray-300",
 };
 
@@ -90,7 +90,7 @@ export function OverviewRow(props: OverviewRowProps) {
           <div className="flex items-center gap-1 shrink-0 min-w-0 sm:w-28 sm:shrink-0">
             {titleIcon && <span className="text-base shrink-0">{titleIcon}</span>}
             {roomName ? (
-              <span className="font-semibold text-sm text-blue-700 truncate">{roomName}</span>
+              <span className="font-bold text-base text-blue-900 truncate">{roomName}</span>
             ) : (
               <span className="text-xs text-gray-300 hidden sm:inline">—</span>
             )}
@@ -157,7 +157,7 @@ export function OverviewRow(props: OverviewRowProps) {
           {extraRooms.map((r) => (
             <div key={r.id} className="flex items-center gap-1.5">
               {titleIcon && <span className="text-sm shrink-0">{titleIcon}</span>}
-              <span className="font-semibold text-xs text-blue-700">{r.name}</span>
+              <span className="font-bold text-sm text-blue-900">{r.name}</span>
               <OccupiedChip occupied={r.occupied} />
             </div>
           ))}
