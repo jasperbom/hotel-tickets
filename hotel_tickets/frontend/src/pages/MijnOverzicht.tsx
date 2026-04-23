@@ -2,7 +2,7 @@ import { useEffect, useState, useRef } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import api, { ticketApi, locationApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
+import api, { ticketApi, locationApi, recurringApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
 import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
 import { OverviewRow, type ExtraRoom } from "../components/OverviewRow";
 
@@ -113,6 +113,18 @@ export default function MijnOverzicht() {
     await loadData(deptFilter);
   }
 
+  async function closeTicket(ticketId: string, ticketTitle: string) {
+    if (!window.confirm(`Ticket "${ticketTitle}" sluiten?`)) return;
+    await ticketApi.update(ticketId, { status: "closed" });
+    await loadData(deptFilter);
+  }
+
+  async function completeRecurring(taskId: string, taskTitle: string) {
+    if (!window.confirm(`Taak "${taskTitle}" afronden?`)) return;
+    await recurringApi.complete(taskId);
+    await loadData(deptFilter);
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -200,7 +212,7 @@ export default function MijnOverzicht() {
           </div>
           <div className="space-y-2">
             {urgent_tickets.map((t) => (
-              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} />
+              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={() => closeTicket(t.id, t.title)} />
             ))}
           </div>
         </section>
@@ -216,7 +228,7 @@ export default function MijnOverzicht() {
           </div>
           <div className="space-y-2">
             {visibleToday.map((t) => (
-              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} />
+              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={() => completeRecurring(t.id, t.title)} />
             ))}
           </div>
           {!showAllToday && today_recurring.length > 3 && (
@@ -250,7 +262,7 @@ export default function MijnOverzicht() {
         ) : (
           <div className="space-y-2">
             {my_tickets.map((t) => (
-              <MyTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} />
+              <MyTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={() => closeTicket(t.id, t.title)} />
             ))}
           </div>
         )}
@@ -270,7 +282,7 @@ export default function MijnOverzicht() {
           </div>
           <div className="space-y-2">
             {available_tickets.map((t) => (
-              <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={() => claimTicket(t.id)} />
+              <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={() => claimTicket(t.id)} onClose={() => closeTicket(t.id, t.title)} />
             ))}
           </div>
         </section>
@@ -294,7 +306,7 @@ export default function MijnOverzicht() {
           {showUpcoming && (
             <div className="space-y-2">
               {upcoming_recurring.map((t) => (
-                <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} />
+                <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={() => completeRecurring(t.id, t.title)} />
               ))}
             </div>
           )}
@@ -381,7 +393,7 @@ function roomsModeExtras(
   };
 }
 
-function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locationName?: string; occupied?: boolean | null }) {
+function MyTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void }) {
   return (
     <OverviewRow
       to={`/tickets/${ticket.id}`}
@@ -396,11 +408,13 @@ function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locat
       subtasks={ticketSubtaskCount(ticket)}
       photoCount={ticket.photos?.length}
       commentCount={ticket.comment_count}
+      onComplete={onClose}
+      completeTitle="Ticket sluiten"
     />
   );
 }
 
-function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locationName?: string; occupied?: boolean | null }) {
+function UrgentTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void }) {
   return (
     <OverviewRow
       to={`/tickets/${ticket.id}`}
@@ -419,11 +433,13 @@ function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; l
       subtasks={ticketSubtaskCount(ticket)}
       photoCount={ticket.photos?.length}
       commentCount={ticket.comment_count}
+      onComplete={onClose}
+      completeTitle="Ticket sluiten"
     />
   );
 }
 
-function AvailableTicketRow({ ticket, locationName, occupied, onClaim }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim: () => void }) {
+function AvailableTicketRow({ ticket, locationName, occupied, onClaim, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim: () => void; onClose: () => void }) {
   const claimBtn = (
     <button
       onClick={(e) => { e.preventDefault(); onClaim(); }}
@@ -447,16 +463,19 @@ function AvailableTicketRow({ ticket, locationName, occupied, onClaim }: { ticke
       photoCount={ticket.photos?.length}
       commentCount={ticket.comment_count}
       actionSlot={claimBtn}
+      onComplete={onClose}
+      completeTitle="Ticket sluiten"
     />
   );
 }
 
-function RecurringTaskRow({ task, locationName, occupied, keycards, locations }: {
+function RecurringTaskRow({ task, locationName, occupied, keycards, locations, onComplete }: {
   task: UpcomingRecurring;
   locationName?: string;
   occupied?: boolean | null;
   keycards?: Record<string, boolean | null>;
   locations?: Record<string, string>;
+  onComplete: () => void;
 }) {
   const nextRunDate = parseUTC(task.next_run);
   const isOverdue = nextRunDate < new Date();
@@ -486,16 +505,19 @@ function RecurringTaskRow({ task, locationName, occupied, keycards, locations }:
       dateText={isOverdue ? format(nextRunDate, "HH:mm") : ""}
       dateClassName={isOverdue ? "text-red-500" : "text-gray-400"}
       subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
+      onComplete={onComplete}
+      completeTitle="Taak afronden"
     />
   );
 }
 
-function UpcomingRecurringRow({ task, locationName, occupied, keycards, locations }: {
+function UpcomingRecurringRow({ task, locationName, occupied, keycards, locations, onComplete }: {
   task: UpcomingRecurring;
   locationName?: string;
   occupied?: boolean | null;
   keycards?: Record<string, boolean | null>;
   locations?: Record<string, string>;
+  onComplete: () => void;
 }) {
   const rooms = roomsModeExtras(task, locations, keycards);
   const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
@@ -516,6 +538,8 @@ function UpcomingRecurringRow({ task, locationName, occupied, keycards, location
       dateText={formatNextRun(task.next_run)}
       dateClassName="text-gray-500"
       subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
+      onComplete={onComplete}
+      completeTitle="Taak afronden"
     />
   );
 }
