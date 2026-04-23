@@ -3,7 +3,8 @@ import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import api, { ticketApi, locationApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
-import { PriorityBadge, CategoryBadge, StatusBadge } from "../components/StatusBadge";
+import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
+import { OverviewRow, type ExtraRoom } from "../components/OverviewRow";
 
 interface Overview {
   user: {
@@ -346,70 +347,6 @@ function StatCard({
   );
 }
 
-const PRIORITY_BORDER: Record<string, string> = {
-  urgent: "border-l-red-500",
-  high: "border-l-orange-400",
-  medium: "border-l-blue-400",
-  low: "border-l-gray-300",
-};
-
-function RoomBadge({ name, occupied }: { name: string; occupied: boolean | null | undefined }) {
-  return (
-    <div className="flex items-center gap-1.5 shrink-0">
-      <span className="font-semibold text-sm text-blue-700">🚪 {name}</span>
-      {occupied === true && (
-        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Bezet</span>
-      )}
-      {occupied === false && (
-        <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">Vrij</span>
-      )}
-    </div>
-  );
-}
-
-function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locationName?: string; occupied?: boolean | null }) {
-  return (
-    <Link
-      to={`/tickets/${ticket.id}`}
-      className={`card flex flex-col gap-1.5 border-l-4 ${PRIORITY_BORDER[ticket.priority]} hover:shadow-md transition-shadow p-3`}
-    >
-      {locationName && <RoomBadge name={locationName} occupied={occupied} />}
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-medium text-sm text-gray-900 truncate">{ticket.title}</p>
-        <PriorityBadge priority={ticket.priority} />
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1.5 items-center flex-wrap">
-          <StatusBadge status={ticket.status} />
-          <CategoryBadge category={ticket.category} />
-          {ticket.subtasks && ticket.subtasks.length > 0 && (
-            <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-              ticket.subtasks.every((s) => s.done)
-                ? "bg-green-100 text-green-700"
-                : "bg-blue-50 text-blue-600"
-            }`}>
-              ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
-            </span>
-          )}
-          {ticket.photos && ticket.photos.length > 0 && (
-            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
-              📷 {ticket.photos.length}
-            </span>
-          )}
-          {!!ticket.comment_count && ticket.comment_count > 0 && (
-            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-              💬 {ticket.comment_count}
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-gray-400">
-          {format(parseUTC(ticket.created_at), "dd:MM", { locale: nl })}
-        </p>
-      </div>
-    </Link>
-  );
-}
-
 function formatNextRun(dateStr: string): string {
   const date = parseUTC(dateStr);
   const now = new Date();
@@ -418,7 +355,100 @@ function formatNextRun(dateStr: string): string {
   if (diffDays === 0) return "Vandaag";
   if (diffDays === 1) return "Morgen";
   if (diffDays < 7) return `Over ${diffDays} dagen`;
-  return format(date, "dd:MM:yyyy", { locale: nl });
+  return format(date, "dd-MM-yyyy", { locale: nl });
+}
+
+function ticketSubtaskCount(ticket: Ticket): { done: number; total: number } | undefined {
+  if (!ticket.subtasks || ticket.subtasks.length === 0) return undefined;
+  return {
+    done: ticket.subtasks.filter((s) => s.done).length,
+    total: ticket.subtasks.length,
+  };
+}
+
+function roomsModeExtras(
+  task: UpcomingRecurring,
+  locations?: Record<string, string>,
+  keycards?: Record<string, boolean | null>,
+): { main?: { name: string; occupied?: boolean | null }; extras: ExtraRoom[] } {
+  const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
+  if (!isRoomsMode) return { extras: [] };
+  const ids = task.subtask_items!;
+  const [firstId, ...rest] = ids;
+  return {
+    main: { name: locations?.[firstId] ?? firstId, occupied: keycards?.[firstId] },
+    extras: rest.map((id) => ({ id, name: locations?.[id] ?? id, occupied: keycards?.[id] })),
+  };
+}
+
+function MyTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locationName?: string; occupied?: boolean | null }) {
+  return (
+    <OverviewRow
+      to={`/tickets/${ticket.id}`}
+      priority={ticket.priority}
+      roomName={locationName}
+      occupied={occupied}
+      titleIcon="🎫"
+      title={ticket.title}
+      statusSlot={<StatusBadge status={ticket.status} />}
+      prioritySlot={<PriorityBadge priority={ticket.priority} />}
+      dateText={format(parseUTC(ticket.created_at), "dd-MM", { locale: nl })}
+      subtasks={ticketSubtaskCount(ticket)}
+      photoCount={ticket.photos?.length}
+      commentCount={ticket.comment_count}
+    />
+  );
+}
+
+function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locationName?: string; occupied?: boolean | null }) {
+  return (
+    <OverviewRow
+      to={`/tickets/${ticket.id}`}
+      priority="urgent"
+      borderOverride="border-l-red-500"
+      containerClassName="bg-red-50"
+      roomName={locationName}
+      occupied={occupied}
+      titleIcon="🚨"
+      title={ticket.title}
+      titleClassName="font-semibold text-red-900"
+      statusSlot={<StatusBadge status={ticket.status} />}
+      prioritySlot={<PriorityBadge priority={ticket.priority} />}
+      dateText={format(parseUTC(ticket.created_at), "dd-MM HH:mm", { locale: nl })}
+      dateClassName="text-red-400"
+      subtasks={ticketSubtaskCount(ticket)}
+      photoCount={ticket.photos?.length}
+      commentCount={ticket.comment_count}
+    />
+  );
+}
+
+function AvailableTicketRow({ ticket, locationName, occupied, onClaim }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim: () => void }) {
+  const claimBtn = (
+    <button
+      onClick={(e) => { e.preventDefault(); onClaim(); }}
+      className="text-sm text-blue-600 font-medium border border-blue-200 rounded-lg px-3 py-1 hover:bg-blue-50 transition-colors"
+    >
+      Pakken
+    </button>
+  );
+  return (
+    <OverviewRow
+      to={`/tickets/${ticket.id}`}
+      priority={ticket.priority}
+      roomName={locationName}
+      occupied={occupied}
+      titleIcon="🎫"
+      title={ticket.title}
+      statusSlot={<StatusBadge status={ticket.status} />}
+      prioritySlot={<PriorityBadge priority={ticket.priority} />}
+      dateText={format(parseUTC(ticket.created_at), "dd-MM", { locale: nl })}
+      subtasks={ticketSubtaskCount(ticket)}
+      photoCount={ticket.photos?.length}
+      commentCount={ticket.comment_count}
+      actionSlot={claimBtn}
+    />
+  );
 }
 
 function RecurringTaskRow({ task, locationName, occupied, keycards, locations }: {
@@ -428,56 +458,35 @@ function RecurringTaskRow({ task, locationName, occupied, keycards, locations }:
   keycards?: Record<string, boolean | null>;
   locations?: Record<string, string>;
 }) {
-  const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
   const nextRunDate = parseUTC(task.next_run);
   const isOverdue = nextRunDate < new Date();
+  const rooms = roomsModeExtras(task, locations, keycards);
+  const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
+
+  const statusChip = isOverdue ? (
+    <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-lg">Verlopen</span>
+  ) : (
+    <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-lg">Vandaag</span>
+  );
 
   return (
-    <Link
+    <OverviewRow
       to={`/recurring/${task.id}`}
-      className={`card flex flex-col gap-1.5 border-l-4 p-3 hover:shadow-md transition-shadow ${
-        isOverdue ? "border-l-red-500 bg-red-50" : "border-l-purple-400"
-      }`}
-    >
-      {/* Kamer(s) bovenaan */}
-      {locationName && !isRoomsMode && <RoomBadge name={locationName} occupied={occupied} />}
-      {isRoomsMode && task.subtask_items!.map((roomId) => (
-        <RoomBadge key={roomId} name={locations?.[roomId] ?? roomId} occupied={keycards?.[roomId]} />
-      ))}
-
-      {/* Titel + status badge */}
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <span className="text-base shrink-0">🔁</span>
-          <p className={`font-medium text-sm truncate ${isOverdue ? "text-red-900" : "text-gray-900"}`}>{task.title}</p>
-        </div>
-        {isOverdue ? (
-          <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-1 rounded-lg">Verlopen</span>
-            <span className="text-xs text-red-500">{format(nextRunDate, "HH:mm")}</span>
-          </div>
-        ) : (
-          <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-1 rounded-lg shrink-0">Vandaag</span>
-        )}
-      </div>
-
-      {/* Badges */}
-      <div className="flex gap-1.5 items-center flex-wrap">
-        <span className="badge bg-purple-100 text-purple-700">Herhalend</span>
-        <CategoryBadge category={task.category} />
-        <PriorityBadge priority={task.priority} />
-        {task.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
-        {task.subtask_total !== undefined && (
-          <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${
-            task.subtask_done === task.subtask_total
-              ? "bg-green-100 text-green-700"
-              : "bg-blue-50 text-blue-600"
-          }`}>
-            ☑ {task.subtask_done}/{task.subtask_total}
-          </span>
-        )}
-      </div>
-    </Link>
+      priority={task.priority}
+      borderOverride={isOverdue ? "border-l-red-500" : "border-l-purple-400"}
+      containerClassName={isOverdue ? "bg-red-50" : ""}
+      roomName={displayRoom?.name}
+      occupied={displayRoom?.occupied}
+      extraRooms={rooms.extras}
+      titleIcon="🔁"
+      title={task.title}
+      titleClassName={isOverdue ? "text-red-900" : ""}
+      statusSlot={statusChip}
+      prioritySlot={<PriorityBadge priority={task.priority} />}
+      dateText={isOverdue ? format(nextRunDate, "HH:mm") : ""}
+      dateClassName={isOverdue ? "text-red-500" : "text-gray-400"}
+      subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
+    />
   );
 }
 
@@ -488,123 +497,25 @@ function UpcomingRecurringRow({ task, locationName, occupied, keycards, location
   keycards?: Record<string, boolean | null>;
   locations?: Record<string, string>;
 }) {
-  const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
-  const visibleRooms = isRoomsMode ? task.subtask_items!.slice(0, 2) : [];
-  const extraRooms = isRoomsMode ? task.subtask_items!.length - 2 : 0;
+  const rooms = roomsModeExtras(task, locations, keycards);
+  const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
+  const herhalendBadge = <span className="badge bg-purple-100 text-purple-700">Herhalend</span>;
 
   return (
-    <Link
+    <OverviewRow
       to={`/recurring/${task.id}`}
-      className="card flex items-center gap-3 p-3 hover:shadow-md transition-shadow"
-    >
-      <span className="text-lg shrink-0">🔁</span>
-      <div className="flex-1 min-w-0">
-        <p className="font-medium text-sm text-gray-900 truncate">{task.title}</p>
-        <div className="flex gap-1.5 mt-1 flex-wrap items-center">
-          <span className="badge bg-purple-100 text-purple-700">Herhalend</span>
-          <CategoryBadge category={task.category} />
-          {locationName && !isRoomsMode && (
-            <span className="flex items-center gap-1 text-xs text-gray-500">
-              🚪 {locationName}
-              {occupied === true && <span className="font-semibold px-1 rounded bg-orange-100 text-orange-700">Bezet</span>}
-              {occupied === false && <span className="font-semibold px-1 rounded bg-green-100 text-green-700">Vrij</span>}
-            </span>
-          )}
-          {isRoomsMode && visibleRooms.map((roomId) => {
-            const name = locations?.[roomId] ?? roomId;
-            const occ = keycards?.[roomId];
-            return (
-              <span key={roomId} className="flex items-center gap-1 text-xs text-gray-500">
-                🚪 {name}
-                {occ === true && <span className="font-semibold px-1 rounded bg-orange-100 text-orange-700">Bezet</span>}
-                {occ === false && <span className="font-semibold px-1 rounded bg-green-100 text-green-700">Vrij</span>}
-              </span>
-            );
-          })}
-          {isRoomsMode && extraRooms > 0 && (
-            <span className="text-xs text-gray-400">+{extraRooms} meer</span>
-          )}
-        </div>
-      </div>
-      <span className="text-xs font-medium text-gray-500 shrink-0">{formatNextRun(task.next_run)}</span>
-    </Link>
-  );
-}
-
-function UrgentTicketRow({ ticket, locationName, occupied }: { ticket: Ticket; locationName?: string; occupied?: boolean | null }) {
-  return (
-    <Link
-      to={`/tickets/${ticket.id}`}
-      className="card flex flex-col gap-1.5 border-l-4 border-l-red-500 bg-red-50 p-3 hover:shadow-md transition-shadow"
-    >
-      {locationName && <RoomBadge name={locationName} occupied={occupied} />}
-      <div className="flex items-center justify-between gap-2">
-        <p className="font-semibold text-sm text-red-900 truncate">{ticket.title}</p>
-        <StatusBadge status={ticket.status} />
-      </div>
-      <div className="flex items-center justify-between">
-        <div className="flex gap-1.5 items-center flex-wrap">
-          <CategoryBadge category={ticket.category} />
-          {ticket.subtasks && ticket.subtasks.length > 0 && (
-            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-red-100 text-red-700">
-              ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
-            </span>
-          )}
-          {ticket.photos && ticket.photos.length > 0 && (
-            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
-              📷 {ticket.photos.length}
-            </span>
-          )}
-          {!!ticket.comment_count && ticket.comment_count > 0 && (
-            <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-              💬 {ticket.comment_count}
-            </span>
-          )}
-        </div>
-        <p className="text-xs text-red-400">
-          {format(parseUTC(ticket.created_at), "dd:MM HH:mm", { locale: nl })}
-        </p>
-      </div>
-    </Link>
-  );
-}
-
-function AvailableTicketRow({ ticket, locationName, occupied, onClaim }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim: () => void }) {
-  return (
-    <div className={`card flex flex-col gap-1.5 border-l-4 ${PRIORITY_BORDER[ticket.priority]} p-3`}>
-      {locationName && <RoomBadge name={locationName} occupied={occupied} />}
-      <div className="flex items-center gap-3">
-        <div className="flex-1 min-w-0">
-          <Link to={`/tickets/${ticket.id}`}>
-            <p className="font-medium text-sm text-gray-900 truncate hover:text-blue-600">{ticket.title}</p>
-          </Link>
-          <div className="flex gap-1.5 mt-1 items-center flex-wrap">
-            <CategoryBadge category={ticket.category} />
-            <PriorityBadge priority={ticket.priority} />
-            {ticket.subtasks && ticket.subtasks.length > 0 && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
-                ☑ {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length}
-              </span>
-            )}
-            {ticket.photos && ticket.photos.length > 0 && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
-                📷 {ticket.photos.length}
-              </span>
-            )}
-            {!!ticket.comment_count && ticket.comment_count > 0 && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-                💬 {ticket.comment_count}
-              </span>
-            )}
-          </div>
-        </div>
-        <button
-          onClick={(e) => { e.preventDefault(); onClaim(); }}
-          className="shrink-0 text-sm text-blue-600 font-medium border border-blue-200 rounded-lg px-3 py-1.5 hover:bg-blue-50 transition-colors"
-        >
-          Pakken
-        </button>
-      </div>
-    </div>
+      priority={task.priority}
+      borderOverride="border-l-purple-400"
+      roomName={displayRoom?.name}
+      occupied={displayRoom?.occupied}
+      extraRooms={rooms.extras}
+      titleIcon="🔁"
+      title={task.title}
+      statusSlot={herhalendBadge}
+      prioritySlot={<PriorityBadge priority={task.priority} />}
+      dateText={formatNextRun(task.next_run)}
+      dateClassName="text-gray-500"
+      subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
+    />
   );
 }
