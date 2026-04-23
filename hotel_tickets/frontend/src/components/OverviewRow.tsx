@@ -110,10 +110,10 @@ export function OverviewRow(props: OverviewRowProps) {
           <div className={`text-xs sm:w-16 sm:text-right sm:shrink-0 ${dateClassName}`}>
             {dateText ?? ""}
           </div>
-          <div className="sm:w-12 sm:text-right sm:shrink-0">
+          <div className="sm:w-16 sm:shrink-0 sm:flex sm:justify-end">
             {subtasks && (
               <span
-                className={`text-xs font-medium px-1.5 py-0.5 rounded ${
+                className={`text-xs font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${
                   subtasksAllDone ? "bg-green-100 text-green-700" : "bg-blue-50 text-blue-600"
                 }`}
               >
@@ -121,16 +121,16 @@ export function OverviewRow(props: OverviewRowProps) {
               </span>
             )}
           </div>
-          <div className="sm:w-10 sm:text-right sm:shrink-0">
+          <div className="sm:w-12 sm:shrink-0 sm:flex sm:justify-end">
             {photoCount ? (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600">
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 whitespace-nowrap">
                 📷 {photoCount}
               </span>
             ) : null}
           </div>
-          <div className="sm:w-10 sm:text-right sm:shrink-0">
+          <div className="sm:w-12 sm:shrink-0 sm:flex sm:justify-end">
             {commentCount ? (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
+              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 whitespace-nowrap">
                 💬 {commentCount}
               </span>
             ) : null}
