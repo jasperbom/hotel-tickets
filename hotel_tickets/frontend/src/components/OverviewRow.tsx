@@ -85,9 +85,9 @@ export function OverviewRow(props: OverviewRowProps) {
   const content = (
     <>
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-3">
-        {/* Regel 1 op mobiel: kamer + bezet/vrij + titel */}
-        <div className="flex items-center gap-2 min-w-0 sm:contents">
-          <div className="flex items-center gap-1 shrink-0 min-w-0 sm:w-28 sm:shrink-0">
+        {/* Regel 1 op mobiel: kamer + bezet/vrij + status + urgentie + datum */}
+        <div className="flex items-center gap-2 flex-wrap min-w-0 sm:contents">
+          <div className="flex items-center gap-1 shrink-0 min-w-0 sm:w-28 sm:shrink-0 sm:order-1">
             {titleIcon && <span className="text-base shrink-0">{titleIcon}</span>}
             {roomName ? (
               <span className="font-bold text-base text-blue-900 truncate">{roomName}</span>
@@ -95,22 +95,22 @@ export function OverviewRow(props: OverviewRowProps) {
               <span className="text-xs text-gray-300 hidden sm:inline">—</span>
             )}
           </div>
-          <div className="shrink-0 sm:w-14 sm:shrink-0">
+          <div className="shrink-0 sm:w-14 sm:shrink-0 sm:order-2">
             <OccupiedChip occupied={occupied} />
           </div>
-          <div className="flex items-center gap-1.5 flex-1 min-w-0 sm:flex-1 sm:min-w-0">
-            <p className={`font-medium text-sm truncate ${titleClassName || "text-gray-900"}`}>{title}</p>
+          <div className="sm:w-28 sm:shrink-0 sm:flex sm:justify-start sm:order-4">{statusSlot}</div>
+          <div className="sm:w-20 sm:shrink-0 sm:flex sm:justify-start sm:order-5">{prioritySlot}</div>
+          <div className={`text-xs sm:w-16 sm:text-right sm:shrink-0 sm:order-6 ${dateClassName}`}>
+            {dateText ?? ""}
           </div>
         </div>
 
-        {/* Regel 2 op mobiel: status, prio, datum, tellers, actie */}
+        {/* Regel 2 op mobiel: titel + subtaken + foto + chat + actie */}
         <div className="flex items-center gap-2 pl-3 flex-wrap sm:pl-0 sm:flex-nowrap sm:contents">
-          <div className="sm:w-28 sm:shrink-0 sm:flex sm:justify-start">{statusSlot}</div>
-          <div className="sm:w-20 sm:shrink-0 sm:flex sm:justify-start">{prioritySlot}</div>
-          <div className={`text-xs sm:w-16 sm:text-right sm:shrink-0 ${dateClassName}`}>
-            {dateText ?? ""}
+          <div className="flex items-center gap-1.5 flex-1 min-w-0 sm:flex-1 sm:min-w-0 sm:order-3">
+            <p className={`font-medium text-sm truncate ${titleClassName || "text-gray-900"}`}>{title}</p>
           </div>
-          <div className="sm:w-16 sm:shrink-0 sm:flex sm:justify-end">
+          <div className="sm:w-16 sm:shrink-0 sm:flex sm:justify-end sm:order-7">
             {subtasks && (
               <span
                 className={`text-xs font-medium px-1.5 py-0.5 rounded whitespace-nowrap ${
@@ -121,27 +121,27 @@ export function OverviewRow(props: OverviewRowProps) {
               </span>
             )}
           </div>
-          <div className="sm:w-12 sm:shrink-0 sm:flex sm:justify-end">
+          <div className="sm:w-12 sm:shrink-0 sm:flex sm:justify-end sm:order-8">
             {photoCount ? (
               <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-purple-50 text-purple-600 whitespace-nowrap">
                 📷 {photoCount}
               </span>
             ) : null}
           </div>
-          <div className="sm:w-12 sm:shrink-0 sm:flex sm:justify-end">
+          <div className="sm:w-12 sm:shrink-0 sm:flex sm:justify-end sm:order-9">
             {commentCount ? (
               <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 whitespace-nowrap">
                 💬 {commentCount}
               </span>
             ) : null}
           </div>
-          {actionSlot && <div className="shrink-0 ml-auto sm:ml-0">{actionSlot}</div>}
+          {actionSlot && <div className="shrink-0 ml-auto sm:ml-0 sm:order-10">{actionSlot}</div>}
           {onComplete && (
             <button
               onClick={(e) => { e.preventDefault(); e.stopPropagation(); onComplete(); }}
               title={completeTitle}
               aria-label={completeTitle}
-              className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors ${actionSlot ? "" : "ml-auto sm:ml-0"}`}
+              className={`shrink-0 inline-flex items-center justify-center w-8 h-8 rounded-lg border border-green-300 text-green-700 hover:bg-green-50 active:bg-green-100 transition-colors sm:order-10 ${actionSlot ? "" : "ml-auto sm:ml-0"}`}
             >
               <svg viewBox="0 0 20 20" fill="currentColor" className="w-4 h-4" aria-hidden="true">
                 <path fillRule="evenodd" d="M16.704 5.296a1 1 0 010 1.408l-7.5 7.5a1 1 0 01-1.408 0l-3.5-3.5a1 1 0 111.408-1.408L8.5 12.092l6.796-6.796a1 1 0 011.408 0z" clipRule="evenodd" />
