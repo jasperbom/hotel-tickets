@@ -62,9 +62,15 @@ def _filterspoeling_value(config: PoolConfig, tag_id: str) -> str | None:
 async def _handle_pool_scan(
     body: NfcScanRequest,
     db: AsyncSession,
+    send_notification: bool = True,
 ) -> NfcScanResponse | None:
     """Probeer de NFC-tag te matchen tegen een chemicaliën- of filter-tag per bad.
-    Retourneert een respons als de tag gematcht is, anders None."""
+    Retourneert een respons als de tag gematcht is, anders None.
+
+    Als ``send_notification`` False is wordt de bedank-push overgeslagen —
+    gebruikt wanneer dezelfde tag ook een herhalende taak afrondt en de
+    taken-push dus volstaat.
+    """
     result = await db.execute(
         select(PoolConfig).where(
             or_(
@@ -119,8 +125,9 @@ async def _handle_pool_scan(
     db.add(log)
     await db.flush()
 
-    # Bedank-notificatie naar de scanner
-    if user and user.ha_notify_service:
+    # Bedank-notificatie naar de scanner (overgeslagen als de taken-push al
+    # wordt verstuurd voor dezelfde scan)
+    if send_notification and user and user.ha_notify_service:
         await notify_push(
             user.ha_notify_service,
             title=f"✓ {action_label} — {pool_label}",
@@ -144,16 +151,19 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
     álle matches in plaats van bij de eerste te stoppen.
     """
 
-    # Zwembad-match (chemicaliën of filter) — registreert en geeft eigen push.
-    # Geeft None terug als de tag geen pool-actie is.
-    pool_response = await _handle_pool_scan(body, db)
-
     # Zoek ALLE sjablonen met dit NFC-tag. Meerdere templates kunnen dezelfde
     # tag delen; we sluiten ze allemaal af.
     result = await db.execute(
         select(RecurringTemplate).where(RecurringTemplate.nfc_tag_id == body.tag_id)
     )
     templates = list(result.scalars().all())
+
+    # Zwembad-match: registreert pool-log en geeft eigen bedank-push. Bij
+    # dezelfde tag ook een taak: push onderdrukken zodat er maar één melding
+    # naar de scanner gaat (de taken-push).
+    pool_response = await _handle_pool_scan(
+        body, db, send_notification=not templates
+    )
 
     if not templates:
         if pool_response is not None:
@@ -211,35 +221,24 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
 
     await sync_ticket_sensors(db)
 
-    # Eén gebundelde pushmelding voor alle afgeronde taken
+    # Eén taken-push naar de scanner (de taak is conceptueel dezelfde, ook
+    # als hij in meerdere templates voorkomt voor bv. log-registratie).
+    primary_title = closed_titles[0]
     if body.ha_user_id and primary_ticket is not None:
         user = await db.get(UserRole, body.ha_user_id)
         if user and user.ha_notify_service:
             base_url = await get_ticket_base_url(db)
             ticket_url = f"{base_url}/#/tickets/{primary_ticket.id}"
-            if len(closed_titles) == 1:
-                push_title = "✓ Taak afgerond"
-                push_message = f"{closed_titles[0]} is afgevinkt via NFC"
-            else:
-                push_title = f"✓ {len(closed_titles)} taken afgerond"
-                push_message = ", ".join(closed_titles)
             await notify_push(
                 user.ha_notify_service,
-                title=push_title,
-                message=push_message,
+                title="✓ Taak afgerond",
+                message=f"{primary_title} is afgevinkt via NFC",
                 data={"url": ticket_url},
             )
 
-    if len(closed_titles) == 1:
-        message = f"Taak '{closed_titles[0]}' afgerond"
-        template_title = closed_titles[0]
-    else:
-        message = f"{len(closed_titles)} taken afgerond: {', '.join(closed_titles)}"
-        template_title = ", ".join(closed_titles)
-
     return NfcScanResponse(
         ok=True,
-        message=message,
+        message=f"Taak '{primary_title}' afgerond",
         ticket_id=primary_ticket.id if primary_ticket else None,
-        template_title=template_title,
+        template_title=primary_title,
     )
