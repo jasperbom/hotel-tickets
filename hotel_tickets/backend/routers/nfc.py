@@ -62,9 +62,15 @@ def _filterspoeling_value(config: PoolConfig, tag_id: str) -> str | None:
 async def _handle_pool_scan(
     body: NfcScanRequest,
     db: AsyncSession,
+    send_notification: bool = True,
 ) -> NfcScanResponse | None:
     """Probeer de NFC-tag te matchen tegen een chemicaliën- of filter-tag per bad.
-    Retourneert een respons als de tag gematcht is, anders None."""
+    Retourneert een respons als de tag gematcht is, anders None.
+
+    Als ``send_notification`` False is wordt de bedank-push overgeslagen —
+    gebruikt wanneer dezelfde tag ook een herhalende taak afrondt en de
+    taken-push dus volstaat.
+    """
     result = await db.execute(
         select(PoolConfig).where(
             or_(
@@ -76,7 +82,7 @@ async def _handle_pool_scan(
             )
         )
     )
-    config = result.scalar_one_or_none()
+    config = result.scalars().first()
     if not config:
         return None
 
@@ -119,8 +125,9 @@ async def _handle_pool_scan(
     db.add(log)
     await db.flush()
 
-    # Bedank-notificatie naar de scanner
-    if user and user.ha_notify_service:
+    # Bedank-notificatie naar de scanner (overgeslagen als de taken-push al
+    # wordt verstuurd voor dezelfde scan)
+    if send_notification and user and user.ha_notify_service:
         await notify_push(
             user.ha_notify_service,
             title=f"✓ {action_label} — {pool_label}",
@@ -136,67 +143,88 @@ async def _handle_pool_scan(
 
 @router.post("/scan", response_model=NfcScanResponse)
 async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
-    """Verwerk een NFC-scan: sluit de openstaande taak en stuur een bevestiging."""
+    """Verwerk een NFC-scan: sluit de openstaande taak en stuur een bevestiging.
 
-    # Eerst checken of het een zwembad-tag is (chemicaliën of filter)
-    pool_response = await _handle_pool_scan(body, db)
-    if pool_response is not None:
-        return pool_response
+    Eén fysieke NFC-tag mag bewust aan meerdere dingen gekoppeld zijn (bv.
+    dezelfde pooltag dient ook als afvink-tag voor een herhalende controle,
+    of twee herhalende taken delen één tag). Deze handler verwerkt daarom
+    álle matches in plaats van bij de eerste te stoppen.
+    """
 
-    # Zoek het sjabloon met dit NFC-tag
+    # Zoek ALLE sjablonen met dit NFC-tag. Meerdere templates kunnen dezelfde
+    # tag delen; we sluiten ze allemaal af.
     result = await db.execute(
         select(RecurringTemplate).where(RecurringTemplate.nfc_tag_id == body.tag_id)
     )
-    template = result.scalar_one_or_none()
-    if not template:
-        raise HTTPException(status_code=404, detail=f"Geen herhalende taak gekoppeld aan NFC-tag '{body.tag_id}'")
+    templates = list(result.scalars().all())
 
-    # Zoek ALLE openstaande tickets van dit sjabloon — zelfde gedrag als de
-    # "Afronden"-knop (zie routers/recurring.py::complete_template). Als er
-    # meerdere cycli openstaan moeten ze allemaal gesloten worden, anders
-    # blijft een oudere ticket achter als "verlopen".
-    ticket_result = await db.execute(
-        select(Ticket).where(
-            and_(
-                Ticket.recurring_template_id == template.id,
-                Ticket.status != Status.closed,
-            )
-        ).order_by(Ticket.created_at.desc())
+    # Zwembad-match: registreert pool-log en geeft eigen bedank-push. Bij
+    # dezelfde tag ook een taak: push onderdrukken zodat er maar één melding
+    # naar de scanner gaat (de taken-push).
+    pool_response = await _handle_pool_scan(
+        body, db, send_notification=not templates
     )
-    open_tickets = ticket_result.scalars().all()
+
+    if not templates:
+        if pool_response is not None:
+            return pool_response
+        raise HTTPException(status_code=404, detail=f"Geen taak gekoppeld aan NFC-tag '{body.tag_id}'")
 
     now = datetime.now(timezone.utc)
     closed_by = body.ha_user_id or "nfc"
+    primary_ticket: Ticket | None = None
+    closed_titles: list[str] = []
 
-    if open_tickets:
-        for t in open_tickets:
-            t.status = Status.closed
-            t.closed_at = now
-            t.closed_by = closed_by
-        primary_ticket = open_tickets[0]
-    else:
-        # Geen openstaande ticket — maak er een aan en sluit hem direct
-        # zodat er altijd een registratie is van de NFC-scan
-        primary_ticket = Ticket(
-            id=new_uuid(),
-            title=template.title,
-            description="Afgevinkt via NFC-scan",
-            category=template.category,
-            priority=template.priority,
-            location_id=template.location_id,
-            created_by=closed_by,
-            assigned_to=body.ha_user_id,
-            recurring_template_id=template.id,
-            status=Status.closed,
-            closed_at=now,
-            closed_by=closed_by,
+    for template in templates:
+        # Zoek ALLE openstaande tickets van dit sjabloon — zelfde gedrag als de
+        # "Afronden"-knop (zie routers/recurring.py::complete_template). Als er
+        # meerdere cycli openstaan moeten ze allemaal gesloten worden, anders
+        # blijft een oudere ticket achter als "verlopen".
+        ticket_result = await db.execute(
+            select(Ticket).where(
+                and_(
+                    Ticket.recurring_template_id == template.id,
+                    Ticket.status != Status.closed,
+                )
+            ).order_by(Ticket.created_at.desc())
         )
-        db.add(primary_ticket)
+        open_tickets = list(ticket_result.scalars().all())
+
+        if open_tickets:
+            for t in open_tickets:
+                t.status = Status.closed
+                t.closed_at = now
+                t.closed_by = closed_by
+            ticket = open_tickets[0]
+        else:
+            # Geen openstaande ticket — maak er een aan en sluit hem direct
+            # zodat er altijd een registratie is van de NFC-scan
+            ticket = Ticket(
+                id=new_uuid(),
+                title=template.title,
+                description="Afgevinkt via NFC-scan",
+                category=template.category,
+                priority=template.priority,
+                location_id=template.location_id,
+                created_by=closed_by,
+                assigned_to=body.ha_user_id,
+                recurring_template_id=template.id,
+                status=Status.closed,
+                closed_at=now,
+                closed_by=closed_by,
+            )
+            db.add(ticket)
+
+        closed_titles.append(template.title)
+        if primary_ticket is None:
+            primary_ticket = ticket
 
     await sync_ticket_sensors(db)
 
-    # Stuur pushmelding naar de scanner (als ha_user_id bekend is)
-    if body.ha_user_id:
+    # Eén taken-push naar de scanner (de taak is conceptueel dezelfde, ook
+    # als hij in meerdere templates voorkomt voor bv. log-registratie).
+    primary_title = closed_titles[0]
+    if body.ha_user_id and primary_ticket is not None:
         user = await db.get(UserRole, body.ha_user_id)
         if user and user.ha_notify_service:
             base_url = await get_ticket_base_url(db)
@@ -204,13 +232,13 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
             await notify_push(
                 user.ha_notify_service,
                 title="✓ Taak afgerond",
-                message=f"{template.title} is afgevinkt via NFC",
+                message=f"{primary_title} is afgevinkt via NFC",
                 data={"url": ticket_url},
             )
 
     return NfcScanResponse(
         ok=True,
-        message=f"Taak '{template.title}' afgerond",
-        ticket_id=primary_ticket.id,
-        template_title=template.title,
+        message=f"Taak '{primary_title}' afgerond",
+        ticket_id=primary_ticket.id if primary_ticket else None,
+        template_title=primary_title,
     )
