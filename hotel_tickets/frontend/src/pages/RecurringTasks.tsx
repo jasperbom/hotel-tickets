@@ -21,7 +21,16 @@ const EMPTY_FORM = {
   notify_when_free: false,
   subtask_mode: "none" as SubtaskMode,
   subtask_items: [] as string[],
+  folder: "",
 };
+
+const NO_FOLDER_KEY = "__no_folder__";
+const NO_FOLDER_LABEL = "Zonder map";
+
+function folderKey(t: RecurringTemplate): string {
+  const f = (t.folder || "").trim();
+  return f === "" ? NO_FOLDER_KEY : f;
+}
 
 export default function RecurringTasks() {
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
@@ -31,6 +40,7 @@ export default function RecurringTasks() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [newSubtask, setNewSubtask] = useState("");
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     Promise.all([recurringApi.list(), locationApi.list()])
@@ -68,6 +78,7 @@ export default function RecurringTasks() {
       ...form,
       nfc_tag_id: form.nfc_tag_id || null,
       emoji: null,
+      folder: form.folder.trim(),
       subtask_items: form.subtask_items.length > 0 ? form.subtask_items : null,
     };
     if (editId) {
@@ -105,9 +116,42 @@ export default function RecurringTasks() {
       notify_when_free: template.notify_when_free,
       subtask_mode: template.subtask_mode || "none",
       subtask_items: template.subtask_items || [],
+      folder: template.folder || "",
     });
     setEditId(template.id);
     setShowForm(true);
+  }
+
+  const knownFolders = Array.from(
+    new Set(
+      templates
+        .map((t) => (t.folder || "").trim())
+        .filter((f) => f !== "")
+    )
+  ).sort((a, b) => a.localeCompare(b, "nl"));
+
+  const groupedTemplates = (() => {
+    const groups = new Map<string, RecurringTemplate[]>();
+    for (const t of templates) {
+      const key = folderKey(t);
+      const list = groups.get(key) ?? [];
+      list.push(t);
+      groups.set(key, list);
+    }
+    const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+      if (a === NO_FOLDER_KEY) return 1;
+      if (b === NO_FOLDER_KEY) return -1;
+      return a.localeCompare(b, "nl");
+    });
+    return sortedKeys.map((key) => ({
+      key,
+      label: key === NO_FOLDER_KEY ? NO_FOLDER_LABEL : key,
+      templates: groups.get(key)!,
+    }));
+  })();
+
+  function toggleFolder(key: string) {
+    setCollapsedFolders((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
   return (
@@ -140,6 +184,26 @@ export default function RecurringTasks() {
               rows={2}
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Map <span className="text-gray-400 font-normal">(optioneel)</span>
+            </label>
+            <input
+              type="text"
+              list="folder-suggestions"
+              value={form.folder}
+              onChange={(e) => setForm({ ...form, folder: e.target.value })}
+              placeholder="bijv. Dagelijks, Onderhoud, Schoonmaak..."
+              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+            <datalist id="folder-suggestions">
+              {knownFolders.map((f) => (
+                <option key={f} value={f} />
+              ))}
+            </datalist>
+            <p className="text-xs text-gray-500 mt-1">Gebruik mappen om sjablonen te groeperen. Laat leeg voor "Zonder map".</p>
           </div>
 
           <div className="grid grid-cols-2 gap-3">
@@ -278,58 +342,83 @@ export default function RecurringTasks() {
         <div className="flex items-center justify-center h-32">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
+      ) : templates.length === 0 ? (
+        <div className="card py-12 text-center text-gray-500">
+          Geen terugkerende taken. Maak een sjabloon aan.
+        </div>
       ) : (
-        <div className="space-y-3">
-          {templates.length === 0 && (
-            <div className="card py-12 text-center text-gray-500">
-              Geen terugkerende taken. Maak een sjabloon aan.
-            </div>
-          )}
-          {templates.map((t) => (
-            <div key={t.id} className={`card overflow-hidden ${!t.is_active ? "opacity-60" : ""}`}>
-              {/* Blauwe kamer-bar */}
-              {t.location_id && locations[t.location_id] && t.subtask_mode !== "rooms" && (
-                <div className="flex items-center gap-3 bg-blue-600 text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
-                  <span className="text-lg">🚪</span>
-                  <span className="font-bold tracking-wide">{locations[t.location_id]}</span>
-                </div>
-              )}
-              {t.subtask_mode === "rooms" && t.subtask_items && t.subtask_items.length > 0 && (
-                <div className="flex items-center gap-3 bg-blue-600 text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
-                  <span className="text-lg">🚪</span>
-                  <span className="font-bold tracking-wide">{t.subtask_items.length} kamers</span>
-                </div>
-              )}
-              <div className="flex items-center gap-3">
-                <span className="text-2xl shrink-0">🔁</span>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <Link to={`/recurring/${t.id}`} className="font-medium hover:text-blue-600">{t.title}</Link>
-                    {!t.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
-                    {t.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
-                    {t.subtask_mode === "subtasks" && <span className="badge bg-blue-50 text-blue-600">☑️ Subtaken</span>}
-                    {t.subtask_mode === "rooms" && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
+        <div className="space-y-5">
+          {groupedTemplates.map((group) => {
+            const collapsed = !!collapsedFolders[group.key];
+            const isNoFolder = group.key === NO_FOLDER_KEY;
+            return (
+              <div key={group.key} className="space-y-3">
+                <button
+                  type="button"
+                  onClick={() => toggleFolder(group.key)}
+                  className="w-full flex items-center gap-2 px-2 py-1 text-left hover:bg-gray-50 rounded-lg"
+                >
+                  <span className={`text-gray-500 transition-transform ${collapsed ? "" : "rotate-90"}`}>▶</span>
+                  <span className="text-lg shrink-0">{isNoFolder ? "📋" : "📁"}</span>
+                  <span className={`font-semibold ${isNoFolder ? "text-gray-500 italic" : "text-gray-800"}`}>
+                    {group.label}
+                  </span>
+                  <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                    {group.templates.length}
+                  </span>
+                </button>
+                {!collapsed && (
+                  <div className="space-y-3 pl-2">
+                    {group.templates.map((t) => (
+                      <div key={t.id} className={`card overflow-hidden ${!t.is_active ? "opacity-60" : ""}`}>
+                        {/* Blauwe kamer-bar */}
+                        {t.location_id && locations[t.location_id] && t.subtask_mode !== "rooms" && (
+                          <div className="flex items-center gap-3 bg-blue-600 text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
+                            <span className="text-lg">🚪</span>
+                            <span className="font-bold tracking-wide">{locations[t.location_id]}</span>
+                          </div>
+                        )}
+                        {t.subtask_mode === "rooms" && t.subtask_items && t.subtask_items.length > 0 && (
+                          <div className="flex items-center gap-3 bg-blue-600 text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
+                            <span className="text-lg">🚪</span>
+                            <span className="font-bold tracking-wide">{t.subtask_items.length} kamers</span>
+                          </div>
+                        )}
+                        <div className="flex items-center gap-3">
+                          <span className="text-2xl shrink-0">🔁</span>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <Link to={`/recurring/${t.id}`} className="font-medium hover:text-blue-600">{t.title}</Link>
+                              {!t.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
+                              {t.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
+                              {t.subtask_mode === "subtasks" && <span className="badge bg-blue-50 text-blue-600">☑️ Subtaken</span>}
+                              {t.subtask_mode === "rooms" && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
+                            </div>
+                            <div className="flex gap-1.5 mt-1 flex-wrap items-center">
+                              <CategoryBadge category={t.category} />
+                              <PriorityBadge priority={t.priority} />
+                              <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression)}</span>
+                            </div>
+                          </div>
+                          <div className="flex gap-2 shrink-0">
+                            <button onClick={() => toggleActive(t)} className="text-sm text-gray-500 hover:text-gray-700">
+                              {t.is_active ? "Pauzeren" : "Activeren"}
+                            </button>
+                            <button onClick={() => startEdit(t)} className="text-sm text-blue-600 hover:text-blue-700">
+                              Bewerken
+                            </button>
+                            <button onClick={() => deleteTemplate(t.id)} className="text-sm text-red-600 hover:text-red-700">
+                              Verwijderen
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
                   </div>
-                  <div className="flex gap-1.5 mt-1 flex-wrap items-center">
-                    <CategoryBadge category={t.category} />
-                    <PriorityBadge priority={t.priority} />
-                    <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression)}</span>
-                  </div>
-                </div>
-                <div className="flex gap-2 shrink-0">
-                  <button onClick={() => toggleActive(t)} className="text-sm text-gray-500 hover:text-gray-700">
-                    {t.is_active ? "Pauzeren" : "Activeren"}
-                  </button>
-                  <button onClick={() => startEdit(t)} className="text-sm text-blue-600 hover:text-blue-700">
-                    Bewerken
-                  </button>
-                  <button onClick={() => deleteTemplate(t.id)} className="text-sm text-red-600 hover:text-red-700">
-                    Verwijderen
-                  </button>
-                </div>
+                )}
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>
