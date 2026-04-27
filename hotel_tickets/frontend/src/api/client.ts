@@ -119,6 +119,7 @@ export interface RecurringTemplate {
   subtask_items: string[] | null;
   notify_when_free: boolean;
   emoji: string | null;
+  folder: string | null;
 }
 
 export interface ActiveTicket {

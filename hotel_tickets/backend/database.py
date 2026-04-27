@@ -55,6 +55,7 @@ async def _run_migrations(conn):
         ("recurring_templates", "subtask_items", "TEXT"),
         ("recurring_templates", "notify_when_free", "BOOLEAN NOT NULL DEFAULT 0"),
         ("recurring_templates", "emoji", "VARCHAR(10)"),
+        ("recurring_templates", "folder", "VARCHAR(100)"),
         ("ticket_comments", "updated_at", "DATETIME"),
         ("tickets", "photos", "TEXT"),
         ("bike_reservations", "key_given_at", "DATETIME"),
