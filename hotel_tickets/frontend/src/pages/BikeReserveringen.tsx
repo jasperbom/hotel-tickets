@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { bikeApi, bikeReservationApi, formatDateNL, type Bike, type BikeReservation, type BikeReservationStatus } from "../api/client";
 
@@ -20,7 +20,8 @@ function todayDateStr() {
 
 const DAY_W = 38;
 const LABEL_W = 130;
-const WINDOW_DAYS = 28;
+const MIN_WINDOW_DAYS = 14;
+const DEFAULT_WINDOW_DAYS = 28;
 const ROW_H = 46;
 
 function addDays(d: Date, n: number): Date {
@@ -57,13 +58,30 @@ function Timeline({
     return d;
   });
 
-  const windowEnd = addDays(windowStart, WINDOW_DAYS - 1);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [windowDays, setWindowDays] = useState(DEFAULT_WINDOW_DAYS);
+
+  useEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+    const update = () => {
+      const inner = el.clientWidth - LABEL_W;
+      if (inner <= 0) return;
+      setWindowDays(Math.max(MIN_WINDOW_DAYS, Math.floor(inner / DAY_W)));
+    };
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, []);
+
+  const windowEnd = addDays(windowStart, windowDays - 1);
   const today = useMemo(() => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; }, []);
   const todayStr = toStr(today);
 
   const days = useMemo(
-    () => Array.from({ length: WINDOW_DAYS }, (_, i) => addDays(windowStart, i)),
-    [windowStart]
+    () => Array.from({ length: windowDays }, (_, i) => addDays(windowStart, i)),
+    [windowStart, windowDays]
   );
 
   const monthGroups = useMemo(() => {
@@ -124,8 +142,8 @@ function Timeline({
   }
 
   const todayOffset = Math.round((today.getTime() - windowStart.getTime()) / 86400000);
-  const todayInWindow = todayOffset >= 0 && todayOffset < WINDOW_DAYS;
-  const totalW = WINDOW_DAYS * DAY_W;
+  const todayInWindow = todayOffset >= 0 && todayOffset < windowDays;
+  const totalW = windowDays * DAY_W;
 
   return (
     <div>
@@ -161,7 +179,7 @@ function Timeline({
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl shadow overflow-hidden">
+      <div ref={cardRef} className="bg-white rounded-2xl shadow overflow-hidden">
         <div className="overflow-x-auto">
           <div style={{ minWidth: LABEL_W + totalW }}>
             {/* Maandkoppenrij */}
