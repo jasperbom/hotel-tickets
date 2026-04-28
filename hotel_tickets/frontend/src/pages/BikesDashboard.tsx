@@ -2,7 +2,13 @@ import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { bikeApi, bikeMaintenanceApi, bikeReservationApi, formatDateNL, type Bike, type BikeMaintenanceConflict, type BikeReservation } from "../api/client";
 
-const todayStr = () => new Date().toISOString().split("T")[0];
+const todayStr = () => {
+  const d = new Date();
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+};
 
 function isActiveToday(r: BikeReservation) {
   const t = todayStr();
@@ -29,7 +35,7 @@ function BikePopup({
   const [updating, setUpdating] = useState(false);
 
   // Maintenance form state
-  const today = new Date().toISOString().split("T")[0];
+  const today = todayStr();
   const [maintForm, setMaintForm] = useState({
     start_date: today,
     expected_end_date: "",
