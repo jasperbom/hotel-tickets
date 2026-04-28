@@ -121,7 +121,7 @@ const MODULES: ModuleConfig[] = [
     navItems: [
       { to: "/bikes", label: "Dashboard", icon: "📋", end: true, restricted: false },
       { to: "/bikes/reserveringen", label: "Reserveringen", icon: "📅", restricted: false },
-      { to: "/bikes/beheer", label: "Fietsbeheer", icon: "🔧", restricted: "adminOrSupervisor" },
+      { to: "/bikes/beheer", label: "Fietsbeheer", icon: "🔧", restricted: false },
     ],
   },
 ];
