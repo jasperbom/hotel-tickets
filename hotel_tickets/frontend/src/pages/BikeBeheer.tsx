@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { bikeApi, bikeAdminApi, bikeMaintenanceApi, formatDateNL, type Bike, type BikeType, type BikeMaintenanceConflict } from "../api/client";
+import { bikeApi, bikeAdminApi, bikeMaintenanceApi, userApi, formatDateNL, type Bike, type BikeType, type BikeMaintenanceConflict } from "../api/client";
 
 type Tab = "fietsen" | "types" | "onderhoud" | "balans";
 
@@ -172,12 +172,14 @@ function MaintenanceModal({
 function BikeRow({
   b,
   types,
+  canEdit,
   onSave,
   onStartMaintenance,
   onResolveMaintenance,
 }: {
   b: Bike;
   types: BikeType[];
+  canEdit: boolean;
   onSave: (id: number, data: { number: string; name: string; type_id: number; is_reserve: boolean }) => Promise<void>;
   onStartMaintenance: (b: Bike) => void;
   onResolveMaintenance: (b: Bike) => void;
@@ -291,12 +293,14 @@ function BikeRow({
       </td>
       <td className="py-3 px-4">
         <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => setEditing(true)}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            Bewerken
-          </button>
+          {canEdit && (
+            <button
+              onClick={() => setEditing(true)}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              Bewerken
+            </button>
+          )}
           {b.status === "available" && (
             <button
               onClick={() => onStartMaintenance(b)}
@@ -323,10 +327,12 @@ function BikeRow({
 
 function BikeTypeRow({
   t,
+  canEdit,
   onSave,
   onDelete,
 }: {
   t: BikeType;
+  canEdit: boolean;
   onSave: (id: number, name: string, price: number) => Promise<void>;
   onDelete: (id: number) => Promise<void>;
 }) {
@@ -408,22 +414,24 @@ function BikeTypeRow({
       </td>
       <td className="py-3 px-4 text-gray-500 text-sm">{t.bike_count ?? 0} fietsen</td>
       <td className="py-3 px-4">
-        <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-          <button
-            onClick={() => setEditing(true)}
-            className="text-xs text-blue-600 hover:underline"
-          >
-            Bewerken
-          </button>
-          {(t.bike_count ?? 0) === 0 && (
+        {canEdit && (
+          <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
-              onClick={() => onDelete(t.id)}
-              className="text-xs text-red-500 hover:underline"
+              onClick={() => setEditing(true)}
+              className="text-xs text-blue-600 hover:underline"
             >
-              Verwijderen
+              Bewerken
             </button>
-          )}
-        </div>
+            {(t.bike_count ?? 0) === 0 && (
+              <button
+                onClick={() => onDelete(t.id)}
+                className="text-xs text-red-500 hover:underline"
+              >
+                Verwijderen
+              </button>
+            )}
+          </div>
+        )}
       </td>
     </tr>
   );
@@ -646,6 +654,7 @@ export default function BikeBeheer() {
   const [types, setTypes] = useState<BikeType[]>([]);
   const [loading, setLoading] = useState(true);
   const [maintenanceBike, setMaintenanceBike] = useState<Bike | null>(null);
+  const [canEdit, setCanEdit] = useState(false);
 
   const [newBike, setNewBike] = useState({ number: "", name: "", type_id: 0, is_reserve: false });
   const [newType, setNewType] = useState({ name: "", price_per_day: 0 });
@@ -666,6 +675,12 @@ export default function BikeBeheer() {
   }
 
   useEffect(() => { load(); }, []);
+
+  useEffect(() => {
+    userApi.me()
+      .then((r) => setCanEdit(r.data.role === "admin" || r.data.role === "supervisor"))
+      .catch(() => setCanEdit(false));
+  }, []);
 
   async function addBike(e: React.FormEvent) {
     e.preventDefault();
@@ -778,6 +793,7 @@ export default function BikeBeheer() {
                     key={b.id}
                     b={b}
                     types={types}
+                    canEdit={canEdit}
                     onSave={saveBike}
                     onStartMaintenance={setMaintenanceBike}
                     onResolveMaintenance={resolveMaintenanceBike}
@@ -788,6 +804,7 @@ export default function BikeBeheer() {
           </div>
 
           {/* Nieuwe fiets */}
+          {canEdit && (
           <div className="bg-white rounded-2xl shadow p-5">
             <h2 className="font-bold mb-3">Fiets toevoegen</h2>
             <form onSubmit={addBike} className="grid grid-cols-2 gap-3">
@@ -830,6 +847,7 @@ export default function BikeBeheer() {
               </button>
             </form>
           </div>
+          )}
         </div>
       )}
 
@@ -851,6 +869,7 @@ export default function BikeBeheer() {
                   <BikeTypeRow
                     key={t.id}
                     t={t}
+                    canEdit={canEdit}
                     onSave={saveType}
                     onDelete={deleteType}
                   />
@@ -858,6 +877,7 @@ export default function BikeBeheer() {
               </tbody>
             </table>
           </div>
+          {canEdit && (
           <div className="bg-white rounded-2xl shadow p-5">
             <h2 className="font-bold mb-3">Fietstype toevoegen</h2>
             <form onSubmit={addType} className="flex gap-3">
@@ -891,6 +911,7 @@ export default function BikeBeheer() {
               </button>
             </form>
           </div>
+          )}
         </div>
       )}
 

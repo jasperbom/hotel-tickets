@@ -418,7 +418,10 @@ export default function BikesDashboard() {
   }, [reservations]);
 
   const activeRes  = reservations.filter(isActiveToday);
-  const upcomingRes = reservations.filter(isUpcoming).slice(0, 8);
+  const upcomingRes = reservations
+    .filter(isUpcoming)
+    .sort((a, b) => a.start_date.localeCompare(b.start_date))
+    .slice(0, 8);
 
   const available     = bikes.filter(b => b.status === "available" && !rentedTodayIds.has(b.id));
   const rentedToday   = bikes.filter(b => b.status === "available" && rentedTodayIds.has(b.id));
