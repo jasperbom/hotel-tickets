@@ -483,7 +483,7 @@ export default function BikesDashboard() {
           {bikeGroups.map((group) => (
             <div key={group.typeName}>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{group.typeName}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-2">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2">
                 {group.bikes.map((b) => (
                   <BikeCard
                     key={b.id}
