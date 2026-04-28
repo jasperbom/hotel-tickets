@@ -1,19 +1,32 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { bikeApi, bikeReservationApi, formatDateNL, type Bike, type BikeReservation, type BikeReservationStatus } from "../api/client";
+import { bikeApi, bikeReservationApi, formatDateNL, type Bike, type BikeReservation } from "../api/client";
 
 // ── Gedeelde helpers ──────────────────────────────────────────────────────────
 
-type FilterStatus = BikeReservationStatus | "all";
+type FilterStatus = "planned" | "rented" | "completed" | "cancelled" | "all";
 
-const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  active: { label: "Actief", cls: "bg-blue-100 text-blue-800" },
-  completed: { label: "Voltooid", cls: "bg-green-100 text-green-800" },
-  cancelled: { label: "Geannuleerd", cls: "bg-red-100 text-red-800" },
-};
+interface DisplayStatus {
+  label: string;
+  cls: string;
+}
+
+function localDateStr(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
+}
 
 function todayDateStr() {
-  return new Date().toISOString().split("T")[0];
+  return localDateStr(new Date());
+}
+
+function getDisplayStatus(r: BikeReservation, today: string): DisplayStatus {
+  if (r.status === "completed") return { label: "Voltooid", cls: "bg-gray-100 text-gray-600" };
+  if (r.status === "cancelled") return { label: "Geannuleerd", cls: "bg-red-100 text-red-800" };
+  if (r.start_date > today) return { label: "Gepland", cls: "bg-blue-100 text-blue-800" };
+  return { label: "Verhuurd", cls: "bg-green-100 text-green-800" };
 }
 
 // ── Tijdlijn (Gantt) ──────────────────────────────────────────────────────────
@@ -30,7 +43,7 @@ function addDays(d: Date, n: number): Date {
   return r;
 }
 function toStr(d: Date) {
-  return d.toISOString().split("T")[0];
+  return localDateStr(d);
 }
 function parseDate(s: string) {
   return new Date(s + "T00:00:00");
@@ -136,7 +149,10 @@ function Timeline({
 
   function blockColor(r: BikeReservation): string {
     if (r.status === "completed") return "bg-gray-300 text-gray-600 border-gray-400";
-    if (r.start_date <= todayStr && r.end_date >= todayStr) return "bg-green-500 text-white border-green-600";
+    if (r.start_date <= todayStr && r.end_date >= todayStr) {
+      if (r.key_given_at && !r.key_returned_at) return "bg-red-500 text-white border-red-600";
+      return "bg-green-500 text-white border-green-600";
+    }
     if (r.start_date > todayStr) return "bg-blue-500 text-white border-blue-600";
     return "bg-gray-400 text-white border-gray-500";
   }
@@ -283,9 +299,10 @@ function Timeline({
         </div>
 
         <div className="flex flex-wrap items-center gap-4 px-4 py-3 bg-gray-50 border-t text-xs text-gray-500">
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-500" /> Actief vandaag</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-500" /> Toekomstig</div>
-          {showCompleted && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300" /> Afgerond</div>}
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-500" /> Verhuurd vandaag</div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-500" /> Sleutel uit</div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-500" /> Gepland</div>
+          {showCompleted && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300" /> Voltooid</div>}
           <span className="ml-auto text-gray-400">Klik op een blok om de reservering te openen</span>
         </div>
       </div>
@@ -296,8 +313,8 @@ function Timeline({
 // ── Reserveringslijst ─────────────────────────────────────────────────────────
 
 function ReservationRow({ r, onClick }: { r: BikeReservation; onClick: () => void }) {
-  const s = STATUS_LABELS[r.status] || { label: r.status, cls: "bg-gray-100 text-gray-600" };
   const t = todayDateStr();
+  const s = getDisplayStatus(r, t);
   const isNow = r.status === "active" && r.start_date <= t && r.end_date >= t;
 
   return (
@@ -327,51 +344,60 @@ function ReservationRow({ r, onClick }: { r: BikeReservation; onClick: () => voi
   );
 }
 
+const FILTER_LABELS: Record<FilterStatus, string> = {
+  planned: "Gepland",
+  rented: "Verhuurd",
+  completed: "Voltooid",
+  cancelled: "Geannuleerd",
+  all: "Alles",
+};
+
 function ReservationList({ reservations, onNavigate }: { reservations: BikeReservation[]; onNavigate: (id: number) => void }) {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<FilterStatus>("active");
+  const [filter, setFilter] = useState<FilterStatus>("rented");
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [list, setList] = useState<BikeReservation[]>(reservations);
 
-  useEffect(() => {
-    setList(reservations);
-  }, [reservations]);
-
-  function loadFiltered(f: FilterStatus) {
-    setLoading(true);
-    bikeReservationApi
-      .list(f === "all" ? undefined : f)
-      .then((r) => setList(r.data))
-      .finally(() => setLoading(false));
-  }
-
-  function handleFilter(f: FilterStatus) {
-    setFilter(f);
-    loadFiltered(f);
-  }
-
-  const filtered = search
-    ? list.filter(
+  const filtered = useMemo(() => {
+    const today = todayDateStr();
+    let arr = reservations;
+    switch (filter) {
+      case "planned":
+        arr = arr.filter((r) => r.status === "active" && r.start_date > today);
+        break;
+      case "rented":
+        arr = arr.filter((r) => r.status === "active" && r.start_date <= today);
+        break;
+      case "completed":
+        arr = arr.filter((r) => r.status === "completed");
+        break;
+      case "cancelled":
+        arr = arr.filter((r) => r.status === "cancelled");
+        break;
+    }
+    if (search) {
+      const q = search.toLowerCase();
+      arr = arr.filter(
         (r) =>
-          r.guest_name.toLowerCase().includes(search.toLowerCase()) ||
+          r.guest_name.toLowerCase().includes(q) ||
           (r.guest_room && r.guest_room.includes(search)) ||
           String(r.id).includes(search)
-      )
-    : list;
+      );
+    }
+    return [...arr].sort((a, b) => a.start_date.localeCompare(b.start_date));
+  }, [reservations, filter, search]);
 
   return (
     <div>
       <div className="flex flex-wrap gap-3 mb-4">
-        {(["active", "completed", "cancelled", "all"] as const).map((s) => (
+        {(["planned", "rented", "completed", "cancelled", "all"] as const).map((s) => (
           <button
             key={s}
-            onClick={() => handleFilter(s)}
+            onClick={() => setFilter(s)}
             className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
               filter === s ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
             }`}
           >
-            {s === "active" ? "Actief" : s === "completed" ? "Voltooid" : s === "cancelled" ? "Geannuleerd" : "Alles"}
+            {FILTER_LABELS[s]}
           </button>
         ))}
         <input
@@ -384,9 +410,7 @@ function ReservationList({ reservations, onNavigate }: { reservations: BikeReser
       </div>
 
       <div className="bg-white rounded-2xl shadow overflow-hidden">
-        {loading ? (
-          <p className="p-6 text-gray-400">Laden...</p>
-        ) : filtered.length === 0 ? (
+        {filtered.length === 0 ? (
           <p className="p-6 text-gray-400 italic">Geen reserveringen gevonden</p>
         ) : (
           <div className="overflow-x-auto">
@@ -476,7 +500,7 @@ export default function BikeReserveringen() {
 
       {view === "lijst" && (
         <ReservationList
-          reservations={reservations.filter(r => r.status === "active")}
+          reservations={reservations}
           onNavigate={() => {}}
         />
       )}
