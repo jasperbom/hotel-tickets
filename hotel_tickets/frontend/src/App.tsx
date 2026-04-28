@@ -450,7 +450,7 @@ export default function App() {
         {/* Inhoud */}
         {activeModule || isOnInstellingen ? (
           <main
-            className={`flex-1 px-4 py-6 touch-keyboard-pb w-full mx-auto ${location.pathname === "/pools/logboek" || location.pathname === "/bikes" ? "" : "max-w-5xl"}`}
+            className={`flex-1 px-4 py-6 touch-keyboard-pb w-full mx-auto ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"}`}
           >
             <Routes>
               {/* Taken module */}
