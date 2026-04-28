@@ -167,6 +167,158 @@ function MaintenanceModal({
   );
 }
 
+// ── Fiets rij met inline bewerking ─────────────────────────────────────────────
+
+function BikeRow({
+  b,
+  types,
+  onSave,
+  onStartMaintenance,
+  onResolveMaintenance,
+}: {
+  b: Bike;
+  types: BikeType[];
+  onSave: (id: number, data: { number: string; name: string; type_id: number; is_reserve: boolean }) => Promise<void>;
+  onStartMaintenance: (b: Bike) => void;
+  onResolveMaintenance: (b: Bike) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [number, setNumber] = useState(b.number);
+  const [name, setName] = useState(b.name);
+  const [typeId, setTypeId] = useState(b.type_id);
+  const [isReserve, setIsReserve] = useState(b.is_reserve);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const s = STATUS_LABELS[b.status];
+
+  async function save() {
+    setSaving(true);
+    setError(null);
+    try {
+      await onSave(b.id, { number: number.trim(), name: name.trim(), type_id: typeId, is_reserve: isReserve });
+      setEditing(false);
+    } catch (err: unknown) {
+      const msg = (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail;
+      setError(msg || "Opslaan mislukt");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function cancel() {
+    setNumber(b.number);
+    setName(b.name);
+    setTypeId(b.type_id);
+    setIsReserve(b.is_reserve);
+    setError(null);
+    setEditing(false);
+  }
+
+  if (editing) {
+    return (
+      <tr className="border-b bg-blue-50">
+        <td className="py-2 px-4">
+          <input
+            type="text"
+            value={number}
+            onChange={(e) => setNumber(e.target.value)}
+            className="w-20 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            autoFocus
+          />
+        </td>
+        <td className="py-2 px-4">
+          <input
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+          />
+        </td>
+        <td className="py-2 px-4">
+          <select
+            value={typeId}
+            onChange={(e) => setTypeId(parseInt(e.target.value))}
+            className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+          >
+            {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
+        </td>
+        <td className="py-2 px-4">
+          <input
+            type="checkbox"
+            checked={isReserve}
+            onChange={(e) => setIsReserve(e.target.checked)}
+          />
+        </td>
+        <td className="py-2 px-4 text-gray-500 text-sm">{b.total_rental_days}d</td>
+        <td className="py-2 px-4">
+          <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.cls}`}>{s.label}</span>
+        </td>
+        <td className="py-2 px-4">
+          <div className="flex flex-col gap-1">
+            <div className="flex gap-2">
+              <button
+                onClick={save}
+                disabled={saving || !number.trim() || !name.trim()}
+                className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              >
+                {saving ? "..." : "Opslaan"}
+              </button>
+              <button
+                onClick={cancel}
+                className="text-xs text-gray-500 px-3 py-1 rounded-lg border hover:bg-gray-50"
+              >
+                Annuleer
+              </button>
+            </div>
+            {error && <p className="text-xs text-red-600">{error}</p>}
+          </div>
+        </td>
+      </tr>
+    );
+  }
+
+  return (
+    <tr className="border-b hover:bg-gray-50 group">
+      <td className="py-3 px-4 font-medium">{b.number}</td>
+      <td className="py-3 px-4">{b.name}</td>
+      <td className="py-3 px-4 text-gray-500">{b.type_name}</td>
+      <td className="py-3 px-4">{b.is_reserve ? "✓" : ""}</td>
+      <td className="py-3 px-4 text-gray-500">{b.total_rental_days}d</td>
+      <td className="py-3 px-4">
+        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.cls}`}>{s.label}</span>
+      </td>
+      <td className="py-3 px-4">
+        <div className="flex gap-3 opacity-0 group-hover:opacity-100 transition-opacity">
+          <button
+            onClick={() => setEditing(true)}
+            className="text-xs text-blue-600 hover:underline"
+          >
+            Bewerken
+          </button>
+          {b.status === "available" && (
+            <button
+              onClick={() => onStartMaintenance(b)}
+              className="text-xs text-orange-600 hover:underline"
+            >
+              🔧 Onderhoud
+            </button>
+          )}
+          {b.status === "maintenance" && (
+            <button
+              onClick={() => onResolveMaintenance(b)}
+              className="text-xs text-green-600 hover:underline"
+            >
+              ✓ Afronden
+            </button>
+          )}
+        </div>
+      </td>
+    </tr>
+  );
+}
+
 // ── Fietstype rij met inline bewerking ─────────────────────────────────────────
 
 function BikeTypeRow({
@@ -551,6 +703,11 @@ export default function BikeBeheer() {
     load();
   }
 
+  async function saveBike(id: number, data: { number: string; name: string; type_id: number; is_reserve: boolean }) {
+    await bikeApi.update(id, data);
+    load();
+  }
+
   async function deleteType(id: number) {
     if (!window.confirm("Fietstype verwijderen?")) return;
     try {
@@ -616,39 +773,16 @@ export default function BikeBeheer() {
                 </tr>
               </thead>
               <tbody>
-                {bikes.map((b) => {
-                  const s = STATUS_LABELS[b.status];
-                  return (
-                    <tr key={b.id} className="border-b hover:bg-gray-50">
-                      <td className="py-3 px-4 font-medium">{b.number}</td>
-                      <td className="py-3 px-4">{b.name}</td>
-                      <td className="py-3 px-4 text-gray-500">{b.type_name}</td>
-                      <td className="py-3 px-4">{b.is_reserve ? "✓" : ""}</td>
-                      <td className="py-3 px-4 text-gray-500">{b.total_rental_days}d</td>
-                      <td className="py-3 px-4">
-                        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.cls}`}>{s.label}</span>
-                      </td>
-                      <td className="py-3 px-4">
-                        {b.status === "available" && (
-                          <button
-                            onClick={() => setMaintenanceBike(b)}
-                            className="text-xs text-orange-600 hover:underline"
-                          >
-                            🔧 Onderhoud
-                          </button>
-                        )}
-                        {b.status === "maintenance" && (
-                          <button
-                            onClick={() => resolveMaintenanceBike(b)}
-                            className="text-xs text-green-600 hover:underline"
-                          >
-                            ✓ Afronden
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {bikes.map((b) => (
+                  <BikeRow
+                    key={b.id}
+                    b={b}
+                    types={types}
+                    onSave={saveBike}
+                    onStartMaintenance={setMaintenanceBike}
+                    onResolveMaintenance={resolveMaintenanceBike}
+                  />
+                ))}
               </tbody>
             </table>
           </div>
