@@ -4,7 +4,7 @@ import { bikeApi, bikeReservationApi, formatDateNL, type Bike, type BikeReservat
 
 // ── Gedeelde helpers ──────────────────────────────────────────────────────────
 
-type FilterStatus = "planned" | "rented" | "completed" | "cancelled" | "all";
+type FilterStatus = "planned" | "rented" | "completed" | "cancelled";
 
 interface DisplayStatus {
   label: string;
@@ -349,31 +349,34 @@ const FILTER_LABELS: Record<FilterStatus, string> = {
   rented: "Verhuurd",
   completed: "Voltooid",
   cancelled: "Geannuleerd",
-  all: "Alles",
 };
+
+const ALL_FILTERS: FilterStatus[] = ["planned", "rented", "completed", "cancelled"];
+
+function reservationMatchesFilter(r: BikeReservation, today: string): FilterStatus {
+  if (r.status === "completed") return "completed";
+  if (r.status === "cancelled") return "cancelled";
+  if (r.start_date > today) return "planned";
+  return "rented";
+}
 
 function ReservationList({ reservations, onNavigate }: { reservations: BikeReservation[]; onNavigate: (id: number) => void }) {
   const navigate = useNavigate();
-  const [filter, setFilter] = useState<FilterStatus>("rented");
+  const [selected, setSelected] = useState<Set<FilterStatus>>(() => new Set(["planned", "rented"]));
   const [search, setSearch] = useState("");
+
+  function toggle(s: FilterStatus) {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(s)) next.delete(s);
+      else next.add(s);
+      return next;
+    });
+  }
 
   const filtered = useMemo(() => {
     const today = todayDateStr();
-    let arr = reservations;
-    switch (filter) {
-      case "planned":
-        arr = arr.filter((r) => r.status === "active" && r.start_date > today);
-        break;
-      case "rented":
-        arr = arr.filter((r) => r.status === "active" && r.start_date <= today);
-        break;
-      case "completed":
-        arr = arr.filter((r) => r.status === "completed");
-        break;
-      case "cancelled":
-        arr = arr.filter((r) => r.status === "cancelled");
-        break;
-    }
+    let arr = reservations.filter((r) => selected.has(reservationMatchesFilter(r, today)));
     if (search) {
       const q = search.toLowerCase();
       arr = arr.filter(
@@ -384,22 +387,26 @@ function ReservationList({ reservations, onNavigate }: { reservations: BikeReser
       );
     }
     return [...arr].sort((a, b) => a.start_date.localeCompare(b.start_date));
-  }, [reservations, filter, search]);
+  }, [reservations, selected, search]);
 
   return (
     <div>
       <div className="flex flex-wrap gap-3 mb-4">
-        {(["planned", "rented", "completed", "cancelled", "all"] as const).map((s) => (
-          <button
-            key={s}
-            onClick={() => setFilter(s)}
-            className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-              filter === s ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
-            }`}
-          >
-            {FILTER_LABELS[s]}
-          </button>
-        ))}
+        {ALL_FILTERS.map((s) => {
+          const active = selected.has(s);
+          return (
+            <button
+              key={s}
+              onClick={() => toggle(s)}
+              aria-pressed={active}
+              className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
+                active ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+              }`}
+            >
+              {active ? "✓ " : ""}{FILTER_LABELS[s]}
+            </button>
+          );
+        })}
         <input
           type="text"
           placeholder="Zoek op naam, kamer of #..."
