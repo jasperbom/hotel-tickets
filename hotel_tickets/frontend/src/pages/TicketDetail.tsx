@@ -36,6 +36,8 @@ export default function TicketDetail() {
   const [photos, setPhotos] = useState<{ filename: string }[]>([]);
   const [uploading, setUploading] = useState(false);
   const [viewingPhoto, setViewingPhoto] = useState<string | null>(null);
+  const [newSubtaskLabel, setNewSubtaskLabel] = useState("");
+  const [addingSubtask, setAddingSubtask] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const usersMap = Object.fromEntries(users.map((u) => [u.ha_user_id, u.display_name]));
@@ -78,6 +80,21 @@ export default function TicketDetail() {
     if (!id) return;
     const r = await ticketApi.updateSubtask(id, index, !currentDone);
     setTicket((prev) => prev ? { ...prev, subtasks: r.data.subtasks } : prev);
+  }
+
+  async function addSubtask(e: React.FormEvent) {
+    e.preventDefault();
+    if (!id) return;
+    const label = newSubtaskLabel.trim();
+    if (!label) return;
+    setAddingSubtask(true);
+    try {
+      const r = await ticketApi.addSubtask(id, label);
+      setTicket((prev) => prev ? { ...prev, subtasks: r.data.subtasks } : prev);
+      setNewSubtaskLabel("");
+    } finally {
+      setAddingSubtask(false);
+    }
   }
 
   async function claimTicket() {
@@ -324,15 +341,17 @@ export default function TicketDetail() {
       </div>
 
       {/* Subtaken */}
-      {ticket.subtasks && ticket.subtasks.length > 0 && (
+      {((ticket.subtasks && ticket.subtasks.length > 0) || ticket.status !== "closed") && (
         <div className="card space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Subtaken</h2>
-            <span className="text-xs text-gray-400">
-              {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length} gedaan
-            </span>
+            {ticket.subtasks && ticket.subtasks.length > 0 && (
+              <span className="text-xs text-gray-400">
+                {ticket.subtasks.filter((s) => s.done).length}/{ticket.subtasks.length} gedaan
+              </span>
+            )}
           </div>
-          {ticket.subtasks.map((subtask, idx) => (
+          {ticket.subtasks?.map((subtask, idx) => (
             <button
               key={idx}
               type="button"
@@ -354,6 +373,24 @@ export default function TicketDetail() {
               </span>
             </button>
           ))}
+          {ticket.status !== "closed" && (
+            <form onSubmit={addSubtask} className="flex gap-2 pt-1">
+              <input
+                type="text"
+                value={newSubtaskLabel}
+                onChange={(e) => setNewSubtaskLabel(e.target.value)}
+                placeholder="Subtaak toevoegen..."
+                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              />
+              <button
+                type="submit"
+                disabled={addingSubtask || !newSubtaskLabel.trim()}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              >
+                Toevoegen
+              </button>
+            </form>
+          )}
         </div>
       )}
 

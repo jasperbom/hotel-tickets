@@ -59,6 +59,10 @@ class SubtaskUpdate(BaseModel):
     done: bool
 
 
+class SubtaskAdd(BaseModel):
+    label: str
+
+
 class TicketOut(BaseModel):
     id: str
     title: str
@@ -308,6 +312,35 @@ async def delete_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = De
 
 
 # --- Subtaken ---
+
+@router.post("/{ticket_id}/subtasks")
+async def add_subtask(
+    ticket_id: str,
+    body: SubtaskAdd,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Voeg een nieuwe subtaak toe aan een bestaand ticket."""
+    label = body.label.strip()
+    if not label:
+        raise HTTPException(status_code=400, detail="Subtaak mag niet leeg zijn")
+
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    if ticket.status == Status.closed:
+        raise HTTPException(status_code=400, detail="Subtaken kunnen niet toegevoegd worden aan een gesloten ticket")
+
+    try:
+        subtasks = json.loads(ticket.subtasks) if ticket.subtasks else []
+    except Exception:
+        subtasks = []
+
+    subtasks.append({"label": label, "done": False, "done_by": None, "done_at": None})
+    ticket.subtasks = json.dumps(subtasks)
+    ticket.updated_at = datetime.now(timezone.utc)
+    return {"ok": True, "subtasks": subtasks}
+
 
 @router.patch("/{ticket_id}/subtasks")
 async def update_subtask(

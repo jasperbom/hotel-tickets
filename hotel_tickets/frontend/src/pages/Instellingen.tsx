@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi,
+  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, recurringApi,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
+  type RecurringTemplate,
 } from "../api/client";
 
 type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl";
@@ -257,6 +258,7 @@ function ZwembadConfigPanel() {
   const [editValues, setEditValues] = useState<Record<string, Partial<PoolConfigItem>>>({});
   const [saving, setSaving] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
+  const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
 
   useEffect(() => {
     poolApi.getConfigs().then((r) => {
@@ -265,10 +267,28 @@ function ZwembadConfigPanel() {
       for (const c of r.data) vals[c.pool_id] = { ...c };
       setEditValues(vals);
     }).finally(() => setLoading(false));
+    recurringApi.list().then((r) => setTemplates(r.data)).catch(() => {});
   }, []);
 
   function setField(poolId: string, key: string, val: string) {
     setEditValues((v) => ({ ...v, [poolId]: { ...v[poolId], [key]: val || null } }));
+  }
+
+  function TemplateSelect({ poolId, field, value }: { poolId: string; field: keyof PoolConfigItem; value: string | null | undefined }) {
+    return (
+      <select
+        value={value ?? ""}
+        onChange={(e) => setField(poolId, field as string, e.target.value)}
+        className="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+      >
+        <option value="">— Geen herhalende taak gekoppeld —</option>
+        {templates
+          .filter((t) => t.is_active)
+          .map((t) => (
+            <option key={t.id} value={t.id}>{t.title}</option>
+          ))}
+      </select>
+    );
   }
 
   async function handleSave(poolId: string) {
@@ -303,6 +323,7 @@ function ZwembadConfigPanel() {
                 <input type="text" value={vals.filter_nfc_tag_id ?? ""} placeholder="bijv. 04:A2:F3:1A:..."
                   onChange={(e) => setField(cfg.pool_id, "filter_nfc_tag_id", e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <TemplateSelect poolId={cfg.pool_id} field="filter_template_id" value={vals.filter_template_id} />
               </div>
               {isZwembad && (
                 <div>
@@ -310,6 +331,7 @@ function ZwembadConfigPanel() {
                   <input type="text" value={vals.filter_nfc_tag_id_r ?? ""} placeholder="bijv. 04:B7:E1:2C:..."
                     onChange={(e) => setField(cfg.pool_id, "filter_nfc_tag_id_r", e.target.value)}
                     className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  <TemplateSelect poolId={cfg.pool_id} field="filter_template_id_r" value={vals.filter_template_id_r} />
                 </div>
               )}
               <div className="pt-3 mt-1 border-t border-gray-100">
@@ -320,18 +342,21 @@ function ZwembadConfigPanel() {
                 <input type="text" value={vals.chloor_nfc_tag_id ?? ""} placeholder="bijv. 04:C8:D2:3E:..."
                   onChange={(e) => setField(cfg.pool_id, "chloor_nfc_tag_id", e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <TemplateSelect poolId={cfg.pool_id} field="chloor_template_id" value={vals.chloor_template_id} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">NFC tag ID — Zuur tank vervangen</label>
                 <input type="text" value={vals.zuur_nfc_tag_id ?? ""} placeholder="bijv. 04:D9:E3:4F:..."
                   onChange={(e) => setField(cfg.pool_id, "zuur_nfc_tag_id", e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <TemplateSelect poolId={cfg.pool_id} field="zuur_template_id" value={vals.zuur_template_id} />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">NFC tag ID — Vlokmiddel bijgevuld</label>
                 <input type="text" value={vals.vlokmiddel_nfc_tag_id ?? ""} placeholder="bijv. 04:EA:F4:50:..."
                   onChange={(e) => setField(cfg.pool_id, "vlokmiddel_nfc_tag_id", e.target.value)}
                   className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                <TemplateSelect poolId={cfg.pool_id} field="vlokmiddel_template_id" value={vals.vlokmiddel_template_id} />
               </div>
             </div>
             <div className="flex items-center gap-3">

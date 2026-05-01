@@ -59,6 +59,41 @@ def _filterspoeling_value(config: PoolConfig, tag_id: str) -> str | None:
     return None
 
 
+# Mapping NFC-tag-kolom → het bijbehorende sjabloon-koppelingsveld op PoolConfig
+POOL_TEMPLATE_FIELD = {
+    "chloor_nfc_tag_id": "chloor_template_id",
+    "zuur_nfc_tag_id": "zuur_template_id",
+    "vlokmiddel_nfc_tag_id": "vlokmiddel_template_id",
+    "filter_nfc_tag_id": "filter_template_id",
+    "filter_nfc_tag_id_r": "filter_template_id_r",
+}
+
+
+async def _get_pool_linked_template_id(tag_id: str, db: AsyncSession) -> str | None:
+    """Zoekt of deze NFC-tag in een pool-config staat en geeft het gekoppelde
+    herhalend-sjabloon-id terug (None als de tag niet bekend is of geen koppeling
+    geconfigureerd is). Hiermee sluit een NFC-scan ook automatisch de gekoppelde
+    herhalende taak af zonder dat de tag-ID dubbel ingevoerd hoeft te worden."""
+    result = await db.execute(
+        select(PoolConfig).where(
+            or_(
+                PoolConfig.chloor_nfc_tag_id == tag_id,
+                PoolConfig.zuur_nfc_tag_id == tag_id,
+                PoolConfig.vlokmiddel_nfc_tag_id == tag_id,
+                PoolConfig.filter_nfc_tag_id == tag_id,
+                PoolConfig.filter_nfc_tag_id_r == tag_id,
+            )
+        )
+    )
+    config = result.scalars().first()
+    if not config:
+        return None
+    for tag_column, template_column in POOL_TEMPLATE_FIELD.items():
+        if getattr(config, tag_column) == tag_id:
+            return getattr(config, template_column)
+    return None
+
+
 async def _handle_pool_scan(
     body: NfcScanRequest,
     db: AsyncSession,
@@ -157,6 +192,17 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
         select(RecurringTemplate).where(RecurringTemplate.nfc_tag_id == body.tag_id)
     )
     templates = list(result.scalars().all())
+    template_ids_seen = {t.id for t in templates}
+
+    # Pool-koppeling: als deze tag in een pool-config staat én er een sjabloon
+    # aan gehangen is, voeg die toe aan de af te ronden sjablonen. Zo hoeft de
+    # tag-ID niet ook nog handmatig op het sjabloon ingevoerd te worden.
+    pool_template_id = await _get_pool_linked_template_id(body.tag_id, db)
+    if pool_template_id and pool_template_id not in template_ids_seen:
+        linked = await db.get(RecurringTemplate, pool_template_id)
+        if linked is not None:
+            templates.append(linked)
+            template_ids_seen.add(linked.id)
 
     # Zwembad-match: registreert pool-log en geeft eigen bedank-push. Bij
     # dezelfde tag ook een taak: push onderdrukken zodat er maar één melding

@@ -64,6 +64,11 @@ async def _run_migrations(conn):
         ("pool_configs", "chloor_nfc_tag_id", "VARCHAR(255)"),
         ("pool_configs", "zuur_nfc_tag_id", "VARCHAR(255)"),
         ("pool_configs", "vlokmiddel_nfc_tag_id", "VARCHAR(255)"),
+        ("pool_configs", "filter_template_id", "VARCHAR(36)"),
+        ("pool_configs", "filter_template_id_r", "VARCHAR(36)"),
+        ("pool_configs", "chloor_template_id", "VARCHAR(36)"),
+        ("pool_configs", "zuur_template_id", "VARCHAR(36)"),
+        ("pool_configs", "vlokmiddel_template_id", "VARCHAR(36)"),
     ]
     for table, column, col_def in column_migrations:
         if not await _column_exists(conn, table, column):

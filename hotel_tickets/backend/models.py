@@ -143,6 +143,13 @@ class PoolConfig(Base):
     chloor_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
     zuur_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
     vlokmiddel_nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
+    # Optionele koppeling naar herhalende sjablonen die automatisch afgesloten
+    # worden wanneer de bijbehorende NFC-tag gescand wordt.
+    filter_template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("recurring_templates.id"))
+    filter_template_id_r: Mapped[str | None] = mapped_column(String(36), ForeignKey("recurring_templates.id"))
+    chloor_template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("recurring_templates.id"))
+    zuur_template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("recurring_templates.id"))
+    vlokmiddel_template_id: Mapped[str | None] = mapped_column(String(36), ForeignKey("recurring_templates.id"))
 
 
 class PoolIncident(Base):

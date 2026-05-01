@@ -493,6 +493,11 @@ class PoolConfigOut(BaseModel):
     chloor_nfc_tag_id: Optional[str] = None
     zuur_nfc_tag_id: Optional[str] = None
     vlokmiddel_nfc_tag_id: Optional[str] = None
+    filter_template_id: Optional[str] = None
+    filter_template_id_r: Optional[str] = None
+    chloor_template_id: Optional[str] = None
+    zuur_template_id: Optional[str] = None
+    vlokmiddel_template_id: Optional[str] = None
 
     class Config:
         from_attributes = True
@@ -505,6 +510,11 @@ class PoolConfigUpdate(BaseModel):
     chloor_nfc_tag_id: Optional[str] = None
     zuur_nfc_tag_id: Optional[str] = None
     vlokmiddel_nfc_tag_id: Optional[str] = None
+    filter_template_id: Optional[str] = None
+    filter_template_id_r: Optional[str] = None
+    chloor_template_id: Optional[str] = None
+    zuur_template_id: Optional[str] = None
+    vlokmiddel_template_id: Optional[str] = None
 
 
 @router.get("/config", response_model=list[PoolConfigOut])
