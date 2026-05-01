@@ -7,7 +7,7 @@ from pydantic import BaseModel
 from croniter import croniter
 
 from ..database import get_db
-from ..models import RecurringTemplate, Category, Priority, Ticket, Status, new_uuid
+from ..models import RecurringTemplate, Category, Priority, Ticket, Status, PoolConfig, new_uuid
 from ..auth import RequireUser
 from ..services.ha_entities import sync_ticket_sensors
 
@@ -199,6 +199,14 @@ async def delete_template(template_id: str, user: RequireUser, db: AsyncSession 
 
     from ..scheduler import remove_template
     await remove_template(template.id)
+
+    # Pool-koppelingen die naar dit sjabloon verwijzen leegmaken zodat er
+    # geen dode references blijven staan.
+    pool_result = await db.execute(select(PoolConfig))
+    for cfg in pool_result.scalars().all():
+        for col in ("filter_template_id", "filter_template_id_r", "chloor_template_id", "zuur_template_id", "vlokmiddel_template_id"):
+            if getattr(cfg, col) == template.id:
+                setattr(cfg, col, None)
 
     await db.delete(template)
 
