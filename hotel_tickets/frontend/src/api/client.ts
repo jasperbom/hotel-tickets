@@ -200,6 +200,8 @@ export const ticketApi = {
     api.delete(`/tickets/${ticketId}/comments/${commentId}`),
   updateSubtask: (id: string, index: number, done: boolean) =>
     api.patch<{ ok: boolean; subtasks: Subtask[] }>(`/tickets/${id}/subtasks`, { index, done }),
+  addSubtask: (id: string, label: string) =>
+    api.post<{ ok: boolean; subtasks: Subtask[] }>(`/tickets/${id}/subtasks`, { label }),
   listPhotos: (id: string) => api.get<{ filename: string }[]>(`/tickets/${id}/photos`),
   uploadPhoto: (id: string, file: File) => {
     const form = new FormData();
