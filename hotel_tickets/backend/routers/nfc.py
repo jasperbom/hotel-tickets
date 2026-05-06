@@ -69,11 +69,15 @@ POOL_TEMPLATE_FIELD = {
 }
 
 
-async def _get_pool_linked_template_id(tag_id: str, db: AsyncSession) -> str | None:
-    """Zoekt of deze NFC-tag in een pool-config staat en geeft het gekoppelde
-    herhalend-sjabloon-id terug (None als de tag niet bekend is of geen koppeling
-    geconfigureerd is). Hiermee sluit een NFC-scan ook automatisch de gekoppelde
-    herhalende taak af zonder dat de tag-ID dubbel ingevoerd hoeft te worden."""
+async def _get_pool_linked_template_ids(tag_id: str, db: AsyncSession) -> list[str]:
+    """Geef alle herhalend-sjabloon-id's terug die via een pool-config aan deze
+    NFC-tag gekoppeld zijn. Een lege lijst betekent dat de tag niet bekend is bij
+    een pool-config of dat er geen sjabloon aan gehangen is.
+
+    Scant álle pool-configs en álle tag-kolommen per config: zo wordt een
+    sjabloon gevonden ook als hetzelfde tag-ID per ongeluk in meerdere kolommen
+    of pools staat, of wanneer de eerste matchende kolom geen sjabloon-koppeling
+    heeft maar een andere wel."""
     result = await db.execute(
         select(PoolConfig).where(
             or_(
@@ -85,13 +89,17 @@ async def _get_pool_linked_template_id(tag_id: str, db: AsyncSession) -> str | N
             )
         )
     )
-    config = result.scalars().first()
-    if not config:
-        return None
-    for tag_column, template_column in POOL_TEMPLATE_FIELD.items():
-        if getattr(config, tag_column) == tag_id:
-            return getattr(config, template_column)
-    return None
+    template_ids: list[str] = []
+    seen: set[str] = set()
+    for config in result.scalars().all():
+        for tag_column, template_column in POOL_TEMPLATE_FIELD.items():
+            if getattr(config, tag_column) != tag_id:
+                continue
+            tpl_id = getattr(config, template_column)
+            if tpl_id and tpl_id not in seen:
+                template_ids.append(tpl_id)
+                seen.add(tpl_id)
+    return template_ids
 
 
 async def _handle_pool_scan(
@@ -197,8 +205,9 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
     # Pool-koppeling: als deze tag in een pool-config staat én er een sjabloon
     # aan gehangen is, voeg die toe aan de af te ronden sjablonen. Zo hoeft de
     # tag-ID niet ook nog handmatig op het sjabloon ingevoerd te worden.
-    pool_template_id = await _get_pool_linked_template_id(body.tag_id, db)
-    if pool_template_id and pool_template_id not in template_ids_seen:
+    for pool_template_id in await _get_pool_linked_template_ids(body.tag_id, db):
+        if pool_template_id in template_ids_seen:
+            continue
         linked = await db.get(RecurringTemplate, pool_template_id)
         if linked is not None:
             templates.append(linked)
