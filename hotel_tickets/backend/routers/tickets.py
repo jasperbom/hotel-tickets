@@ -11,7 +11,7 @@ from sqlalchemy import select, and_, or_, case
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
-from ..models import Ticket, TicketComment, Category, Status, Priority, Role, UserRole, BikeReservation
+from ..models import Ticket, TicketComment, TicketPin, Category, Status, Priority, Role, UserRole, BikeReservation
 from ..auth import RequireUser, CurrentUser
 from ..services.notifications import notify_ticket_assigned, notify_ticket_created, notify_urgent_ticket
 from ..services.ha_entities import sync_ticket_sensors
@@ -81,6 +81,7 @@ class TicketOut(BaseModel):
     notify_when_free: bool
     subtasks: list | None = None
     photos: list[str] | None = None
+    pinned: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -171,16 +172,57 @@ async def list_tickets(
     if location_id:
         filters.append(Ticket.location_id == location_id)
 
-    priority_sort = case(
-        (Ticket.priority == "urgent", 0),
-        (Ticket.priority == "high", 1),
-        (Ticket.priority == "medium", 2),
-        (Ticket.priority == "low", 3),
-        else_=4,
+    # Bepaal sortering: bij filter op uitsluitend 'closed' sorteren we puur op sluitingsdatum.
+    only_closed = (
+        status_param is not None
+        and all(s.strip() == "closed" for s in status_param.split(",") if s.strip())
     )
-    stmt = select(Ticket).where(and_(*filters)).order_by(priority_sort, Ticket.created_at.desc()).limit(limit).offset(offset)
+
+    if only_closed:
+        stmt = (
+            select(Ticket)
+            .where(and_(*filters))
+            .order_by(Ticket.closed_at.desc().nulls_last(), Ticket.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
+    else:
+        priority_sort = case(
+            (Ticket.priority == "urgent", 0),
+            (Ticket.priority == "high", 1),
+            (Ticket.priority == "medium", 2),
+            (Ticket.priority == "low", 3),
+            else_=4,
+        )
+        stmt = (
+            select(Ticket)
+            .where(and_(*filters))
+            .order_by(priority_sort, Ticket.created_at.desc())
+            .limit(limit)
+            .offset(offset)
+        )
     result = await db.execute(stmt)
-    return result.scalars().all()
+    tickets = result.scalars().all()
+
+    # Pinned-vlag per ticket bepalen voor huidige gebruiker
+    pinned_ids: set[str] = set()
+    if tickets:
+        pin_result = await db.execute(
+            select(TicketPin.ticket_id).where(
+                and_(
+                    TicketPin.ha_user_id == user.ha_user_id,
+                    TicketPin.ticket_id.in_([t.id for t in tickets]),
+                )
+            )
+        )
+        pinned_ids = {row[0] for row in pin_result.all()}
+
+    out: list[TicketOut] = []
+    for t in tickets:
+        item = TicketOut.model_validate(t)
+        item.pinned = t.id in pinned_ids
+        out.append(item)
+    return out
 
 
 @router.post("/", response_model=TicketOut, status_code=status.HTTP_201_CREATED)
@@ -236,7 +278,30 @@ async def get_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Depen
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
-    return ticket
+    item = TicketOut.model_validate(ticket)
+    pin = await db.get(TicketPin, (user.ha_user_id, ticket_id))
+    item.pinned = pin is not None
+    return item
+
+
+@router.post("/{ticket_id}/pin", status_code=status.HTTP_204_NO_CONTENT)
+async def pin_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Pin een ticket bovenaan in 'Mijn openstaande tickets' voor de huidige gebruiker."""
+    ticket = await db.get(Ticket, ticket_id)
+    if not ticket:
+        raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    existing = await db.get(TicketPin, (user.ha_user_id, ticket_id))
+    if existing:
+        return
+    db.add(TicketPin(ha_user_id=user.ha_user_id, ticket_id=ticket_id))
+
+
+@router.delete("/{ticket_id}/pin", status_code=status.HTTP_204_NO_CONTENT)
+async def unpin_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Verwijder de persoonlijke pin van een ticket."""
+    pin = await db.get(TicketPin, (user.ha_user_id, ticket_id))
+    if pin:
+        await db.delete(pin)
 
 
 @router.patch("/{ticket_id}", response_model=TicketOut)

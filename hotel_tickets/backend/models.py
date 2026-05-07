@@ -62,6 +62,15 @@ class Ticket(Base):
     recurring_template: Mapped["RecurringTemplate | None"] = relationship("RecurringTemplate", back_populates="tickets")
 
 
+class TicketPin(Base):
+    """Persoonlijke pin per gebruiker — gepinde tickets staan bovenaan in 'Mijn openstaande tickets'."""
+    __tablename__ = "ticket_pins"
+
+    ha_user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
+    ticket_id: Mapped[str] = mapped_column(String(36), ForeignKey("tickets.id", ondelete="CASCADE"), primary_key=True)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class TicketComment(Base):
     __tablename__ = "ticket_comments"
 

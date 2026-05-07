@@ -17,16 +17,19 @@ const STATUS_LABELS = { open: "Open", in_progress: "In behandeling", closed: "Ge
 export default function Dashboard() {
   const [summary, setSummary] = useState<ReportSummary | null>(null);
   const [recentTickets, setRecentTickets] = useState<Ticket[]>([]);
+  const [recentClosed, setRecentClosed] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
       reportApi.summary(),
-      ticketApi.list({ limit: "5" }),
+      ticketApi.list({ limit: "5", status: "open,in_progress" }),
+      ticketApi.list({ limit: "5", status: "closed" }),
     ])
-      .then(([s, t]) => {
+      .then(([s, t, c]) => {
         setSummary(s.data);
         setRecentTickets(t.data);
+        setRecentClosed(c.data);
       })
       .finally(() => setLoading(false));
   }, []);
@@ -111,10 +114,10 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Recente tickets */}
+      {/* Recente openstaande tickets */}
       <div className="card">
         <div className="flex items-center justify-between mb-4">
-          <h2 className="font-semibold">Recente tickets</h2>
+          <h2 className="font-semibold">Recente openstaande tickets</h2>
           <Link to="/tickets" className="text-sm text-blue-600 hover:underline">
             Alle tickets →
           </Link>
@@ -135,7 +138,38 @@ export default function Dashboard() {
             </Link>
           ))}
           {recentTickets.length === 0 && (
-            <p className="py-8 text-center text-gray-500 text-sm">Geen tickets gevonden</p>
+            <p className="py-8 text-center text-gray-500 text-sm">Geen openstaande tickets</p>
+          )}
+        </div>
+      </div>
+
+      {/* Recent gesloten tickets — gesorteerd op sluitingsdatum */}
+      <div className="card">
+        <div className="flex items-center justify-between mb-4">
+          <h2 className="font-semibold">Recent gesloten tickets</h2>
+          <Link to="/tickets?status=closed" className="text-sm text-blue-600 hover:underline">
+            Alle gesloten →
+          </Link>
+        </div>
+        <div className="divide-y divide-gray-100">
+          {recentClosed.map((ticket) => (
+            <Link key={ticket.id} to={`/tickets/${ticket.id}`} className="flex items-center gap-3 py-3 hover:bg-gray-50 -mx-4 px-4 transition-colors">
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm truncate">{ticket.title}</p>
+                <div className="flex gap-1.5 mt-1">
+                  <StatusBadge status={ticket.status} />
+                  <CategoryBadge category={ticket.category} />
+                </div>
+              </div>
+              <span className="text-xs text-gray-400 shrink-0">
+                {ticket.closed_at
+                  ? format(parseUTC(ticket.closed_at), "dd:MM HH:mm", { locale: nl })
+                  : format(parseUTC(ticket.created_at), "dd:MM", { locale: nl })}
+              </span>
+            </Link>
+          ))}
+          {recentClosed.length === 0 && (
+            <p className="py-8 text-center text-gray-500 text-sm">Nog geen gesloten tickets</p>
           )}
         </div>
       </div>

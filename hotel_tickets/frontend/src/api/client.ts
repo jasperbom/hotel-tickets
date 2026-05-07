@@ -78,6 +78,7 @@ export interface Ticket {
   subtasks: Subtask[] | null;
   photos: string[] | null;
   comment_count?: number;
+  pinned?: boolean;
 }
 
 export interface Comment {
@@ -192,6 +193,8 @@ export const ticketApi = {
   update: (id: string, data: Partial<Ticket>) => api.patch<Ticket>(`/tickets/${id}`, data),
   claim: (id: string) => api.post<Ticket>(`/tickets/${id}/claim`),
   remove: (id: string) => api.delete(`/tickets/${id}`),
+  pin: (id: string) => api.post(`/tickets/${id}/pin`),
+  unpin: (id: string) => api.delete(`/tickets/${id}/pin`),
   getComments: (id: string) => api.get<Comment[]>(`/tickets/${id}/comments`),
   addComment: (id: string, body: string) => api.post<Comment>(`/tickets/${id}/comments`, { body }),
   updateComment: (ticketId: string, commentId: string, body: string) =>

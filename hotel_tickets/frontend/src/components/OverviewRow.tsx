@@ -37,6 +37,9 @@ export type OverviewRowProps = {
   actionSlot?: ReactNode;
   onComplete?: () => void;
   completeTitle?: string;
+
+  pinned?: boolean;
+  onTogglePin?: () => void;
 };
 
 function OccupiedChip({ occupied }: { occupied: boolean | null | undefined }) {
@@ -71,6 +74,8 @@ export function OverviewRow(props: OverviewRowProps) {
     actionSlot,
     onComplete,
     completeTitle = "Afronden",
+    pinned,
+    onTogglePin,
   } = props;
 
   const borderClass = borderOverride ?? PRIORITY_BORDER[priority];
@@ -88,6 +93,18 @@ export function OverviewRow(props: OverviewRowProps) {
         {/* Regel 1 op mobiel: kamer + bezet/vrij + status + urgentie + datum */}
         <div className="flex items-center gap-2 flex-wrap min-w-0 sm:contents">
           <div className="flex items-center gap-1 shrink-0 min-w-0 sm:w-28 sm:shrink-0 sm:order-1">
+            {onTogglePin && (
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTogglePin(); }}
+                title={pinned ? "Verwijder uit favorieten" : "Pin bovenaan"}
+                aria-label={pinned ? "Verwijder uit favorieten" : "Pin bovenaan"}
+                className="shrink-0 text-base leading-none w-5 h-5 flex items-center justify-center hover:scale-110 transition-transform"
+              >
+                <span className={pinned ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}>
+                  {pinned ? "★" : "☆"}
+                </span>
+              </button>
+            )}
             {titleIcon && <span className="text-base shrink-0">{titleIcon}</span>}
             {roomName ? (
               <span className="font-bold text-base text-blue-900 truncate">{roomName}</span>

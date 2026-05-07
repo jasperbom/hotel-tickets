@@ -11,10 +11,12 @@ type FieldDef = {
   bewaking?: { min: number; max: number };
   /** Adviesbereik — toont een info-ballon met streefwaarde */
   advies?: string;
+  /** Verplicht veld — krijgt een rood sterretje */
+  required?: boolean;
 };
 
 const WAARDES: FieldDef[] = [
-  { key: "water_temp", label: "Water temperatuur (°C)", type: "number", step: "0.1" },
+  { key: "water_temp", label: "Water temperatuur (°C)", type: "number", step: "0.1", required: true },
   {
     key: "ph",
     label: "pH",
@@ -22,6 +24,7 @@ const WAARDES: FieldDef[] = [
     step: "0.01",
     bewaking: { min: 4.0, max: 9.0 },
     advies: "Streefwaarde: tussen 7,0 en 7,6",
+    required: true,
   },
   {
     key: "vbc_in",
@@ -30,6 +33,7 @@ const WAARDES: FieldDef[] = [
     step: "0.01",
     bewaking: { min: 0.0, max: 2.0 },
     advies: "Streefwaarde: tussen 0,5 en 1,5 mg/l",
+    required: true,
   },
   {
     key: "vbc_uit",
@@ -38,6 +42,7 @@ const WAARDES: FieldDef[] = [
     step: "0.01",
     bewaking: { min: 0.0, max: 2.0 },
     advies: "Streefwaarde: tussen 0,5 en 1,5 mg/l",
+    required: true,
   },
   {
     key: "tbc",
@@ -45,14 +50,15 @@ const WAARDES: FieldDef[] = [
     type: "number",
     step: "0.01",
     bewaking: { min: 0.0, max: 2.5 },
+    required: true,
   },
 ];
 
 const AUTOMATEN: FieldDef[] = [
-  { key: "ph_automaat", label: "pH", type: "number", step: "0.01" },
-  { key: "vbc_automaat", label: "VBC", type: "number", step: "0.01" },
+  { key: "ph_automaat", label: "pH", type: "number", step: "0.01", required: true },
+  { key: "vbc_automaat", label: "VBC", type: "number", step: "0.01", required: true },
   { key: "watermeter", label: "Watermeter", type: "number", step: "0.1" },
-  { key: "flow", label: "Flow", type: "number", step: "0.01" },
+  { key: "flow", label: "Flow", type: "number", step: "0.01", required: true },
 ];
 
 const ALL_INPUT_FIELDS = [...WAARDES, ...AUTOMATEN];
@@ -146,8 +152,11 @@ export default function PoolNieuweMeting() {
   const now = new Date();
   const draft = loadDraft();
   const [poolId, setPoolId] = useState<PoolId>(draft?.poolId ?? initialPool);
-  const [datum, setDatum] = useState(draft?.datum ?? now.toISOString().slice(0, 10));
-  const [tijd, setTijd] = useState(draft?.tijd ?? now.toTimeString().slice(0, 5));
+  // Datum en tijd worden bij iedere nieuwe meting op "nu" gezet, ook als er
+  // nog een concept met oude datum/tijd in localStorage staat. Zo voorkomen we
+  // dat een meting per ongeluk met een oude tijd wordt opgeslagen.
+  const [datum, setDatum] = useState(now.toISOString().slice(0, 10));
+  const [tijd, setTijd] = useState(now.toTimeString().slice(0, 5));
   const [values, setValues] = useState<Record<string, any>>(
     draft?.values ?? {
       doorzicht: "",
@@ -292,6 +301,7 @@ export default function PoolNieuweMeting() {
       <div key={f.key}>
         <label className="block text-xs font-medium text-gray-600 mb-0.5">
           {f.label}
+          {f.required && <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>}
           {f.advies && <InfoBallon text={f.advies} />}
         </label>
         <input
@@ -312,6 +322,7 @@ export default function PoolNieuweMeting() {
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-xl font-bold">Nieuwe meting</h1>
+      <p className="text-xs text-gray-500">Velden met <span className="text-red-500 font-bold">*</span> zijn verplicht.</p>
 
       {/* Bad-kiezer bovenaan — altijd zichtbaar zodat duidelijk is voor welk bad de meting is */}
       <div className="bg-white rounded-2xl shadow p-4">
@@ -342,7 +353,10 @@ export default function PoolNieuweMeting() {
           <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Algemeen</h2>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Datum</label>
+              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                Datum
+                <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+              </label>
               <input
                 type="date"
                 className="w-full border rounded-lg px-2 py-1.5 text-sm"
@@ -352,7 +366,10 @@ export default function PoolNieuweMeting() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Tijd</label>
+              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                Tijd
+                <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+              </label>
               <input
                 type="time"
                 className="w-full border rounded-lg px-2 py-1.5 text-sm"
@@ -370,7 +387,10 @@ export default function PoolNieuweMeting() {
           <div className="grid grid-cols-3 gap-x-3 gap-y-2">
             {renderField(WAARDES[0])}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Doorzicht</label>
+              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                Doorzicht
+                <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+              </label>
               <select
                 className="w-full border rounded-lg px-2 py-1.5 text-sm"
                 value={values.doorzicht || ""}
@@ -435,7 +455,10 @@ export default function PoolNieuweMeting() {
           <div className="grid grid-cols-3 gap-x-3 gap-y-2">
             {isAfter17 && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-0.5">Aantal zwemmers</label>
+                <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                  Aantal zwemmers
+                  <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+                </label>
                 <input
                   type="number"
                   step="1"
@@ -447,7 +470,10 @@ export default function PoolNieuweMeting() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Gemeten door</label>
+              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                Gemeten door
+                <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
+              </label>
               <input
                 type="text"
                 className="w-full border rounded-lg px-2 py-1.5 text-sm"
