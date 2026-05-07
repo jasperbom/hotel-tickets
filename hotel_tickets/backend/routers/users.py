@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from croniter import croniter
 
 from ..database import get_db
-from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate, TicketComment
+from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate, TicketComment, TicketPin
 from ..auth import RequireUser
 
 router = APIRouter(prefix="/users", tags=["users"])
@@ -90,6 +90,14 @@ async def get_my_overview(
         select(Ticket).where(and_(*mine_filters)).order_by(_priority_sort, Ticket.created_at)
     )
     my_tickets = mine_result.scalars().all()
+
+    # Pinned-set bepalen voor huidige gebruiker en pinned tickets bovenaan plaatsen
+    pinned_result = await db.execute(
+        select(TicketPin.ticket_id).where(TicketPin.ha_user_id == uid)
+    )
+    pinned_ids = {row[0] for row in pinned_result.all()}
+    if pinned_ids:
+        my_tickets = sorted(my_tickets, key=lambda t: 0 if t.id in pinned_ids else 1)
 
     # Beschikbare tickets: open, niet toegewezen, gefilterd op afdeling (altijd als dept gezet), geen herhalende taken
     avail_filters = [Ticket.status == Status.open, Ticket.assigned_to.is_(None), Ticket.recurring_template_id.is_(None)]
@@ -246,9 +254,9 @@ async def get_my_overview(
             "team_open": total_open or 0,
             "urgent": urgent_count or 0,
         },
-        "urgent_tickets": [_ticket_dict(t, comment_count_map) for t in urgent_tickets],
-        "my_tickets": [_ticket_dict(t, comment_count_map) for t in my_tickets],
-        "available_tickets": [_ticket_dict(t, comment_count_map) for t in available],
+        "urgent_tickets": [_ticket_dict(t, comment_count_map, pinned_ids) for t in urgent_tickets],
+        "my_tickets": [_ticket_dict(t, comment_count_map, pinned_ids) for t in my_tickets],
+        "available_tickets": [_ticket_dict(t, comment_count_map, pinned_ids) for t in available],
         "today_recurring": today_recurring,
         "upcoming_recurring": upcoming_5,
     }
@@ -277,7 +285,7 @@ def _template_dict(t: RecurringTemplate, next_run: datetime, active_ticket: "Tic
     return result
 
 
-def _ticket_dict(t: Ticket, comment_counts: dict[str, int] | None = None) -> dict:
+def _ticket_dict(t: Ticket, comment_counts: dict[str, int] | None = None, pinned_ids: set[str] | None = None) -> dict:
     subtasks = None
     if t.subtasks:
         try:
@@ -309,6 +317,7 @@ def _ticket_dict(t: Ticket, comment_counts: dict[str, int] | None = None) -> dic
         "subtasks": subtasks,
         "photos": photos,
         "comment_count": (comment_counts or {}).get(t.id, 0),
+        "pinned": t.id in pinned_ids if pinned_ids else False,
     }
 
 

@@ -8,9 +8,11 @@ interface Props {
   ticket: Ticket;
   users?: Record<string, string>;     // ha_user_id -> display_name
   locations?: Record<string, string>; // id -> name
+  /** Aantal andere tickets op dezelfde locatie in de huidige lijst (excl. dit ticket) */
+  relatedCount?: number;
 }
 
-export default function TicketCard({ ticket, users = {}, locations = {} }: Props) {
+export default function TicketCard({ ticket, users = {}, locations = {}, relatedCount = 0 }: Props) {
   const locationName = ticket.location_id ? locations[ticket.location_id] : null;
 
   return (
@@ -22,11 +24,21 @@ export default function TicketCard({ ticket, users = {}, locations = {} }: Props
           <div className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2">
             <span className="text-lg">🚪</span>
             <span className="font-bold text-base tracking-wide">{locationName}</span>
+            {ticket.pinned && <span className="text-yellow-300 text-base" title="Gepind">★</span>}
+            {relatedCount > 0 && (
+              <span
+                className="ml-auto text-xs font-semibold bg-white/20 text-white px-2 py-0.5 rounded-full"
+                title={`Nog ${relatedCount} ticket${relatedCount === 1 ? "" : "s"} op deze locatie`}
+              >
+                +{relatedCount} hier
+              </span>
+            )}
           </div>
         ) : (
           <div className="flex items-center gap-2 bg-gray-100 text-gray-400 px-4 py-2">
             <span className="text-lg">📍</span>
             <span className="text-sm italic">Geen locatie opgegeven</span>
+            {ticket.pinned && <span className="ml-auto text-yellow-500 text-base" title="Gepind">★</span>}
           </div>
         )}
 

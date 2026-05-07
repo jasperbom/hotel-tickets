@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { ticketApi, locationApi, userApi, type Ticket, type Category, type Status, type Priority } from "../api/client";
+import { ticketApi, locationApi, userApi, type Ticket, type Status } from "../api/client";
 import TicketCard from "../components/TicketCard";
 
 const DEPARTMENTS = [
@@ -24,6 +24,8 @@ const PRIORITIES = [
   { value: "low", label: "Laag" },
 ];
 
+const NO_LOCATION_KEY = "__no_location__";
+
 export default function TicketList() {
   const [searchParams] = useSearchParams();
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -43,6 +45,13 @@ export default function TicketList() {
   );
   const [priority, setPriority] = useState(urlPriority || "");
   const [assignedToMe, setAssignedToMe] = useState(urlAssigned === "me");
+  const [search, setSearch] = useState("");
+  const [groupByLocation, setGroupByLocation] = useState(() => localStorage.getItem("ht_tickets_group") === "1");
+  const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+
+  useEffect(() => {
+    localStorage.setItem("ht_tickets_group", groupByLocation ? "1" : "0");
+  }, [groupByLocation]);
 
   function toggleStatus(value: Status) {
     setSelectedStatuses((prev) =>
@@ -72,11 +81,74 @@ export default function TicketList() {
       .finally(() => setLoading(false));
   }, [department, selectedStatuses, priority, assignedToMe]);
 
+  // Tickets filteren op zoekterm (titel of beschrijving)
+  const filteredTickets = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    let list = tickets;
+    if (q) {
+      list = tickets.filter((t) =>
+        t.title.toLowerCase().includes(q) ||
+        (t.description?.toLowerCase().includes(q) ?? false)
+      );
+    }
+    // Pinned tickets bovenaan, behalve wanneer alleen op gesloten gefilterd wordt
+    // (dan moet sortering puur op sluitingsdatum blijven).
+    const onlyClosed = selectedStatuses.length === 1 && selectedStatuses[0] === "closed";
+    if (onlyClosed) return list;
+    return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
+  }, [tickets, search, selectedStatuses]);
+
+  // Aantal tickets per locatie (voor "+N hier"-badge)
+  const locationCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const t of filteredTickets) {
+      if (!t.location_id) continue;
+      map[t.location_id] = (map[t.location_id] || 0) + 1;
+    }
+    return map;
+  }, [filteredTickets]);
+
+  // Groeperen per locatie (bewaar volgorde van eerste verschijning)
+  const grouped = useMemo(() => {
+    if (!groupByLocation) return null;
+    const groups: { key: string; locationName: string; tickets: Ticket[] }[] = [];
+    const idx: Record<string, number> = {};
+    for (const t of filteredTickets) {
+      const key = t.location_id ?? NO_LOCATION_KEY;
+      if (idx[key] === undefined) {
+        idx[key] = groups.length;
+        groups.push({
+          key,
+          locationName: t.location_id ? (locations[t.location_id] ?? t.location_id) : "Geen locatie",
+          tickets: [],
+        });
+      }
+      groups[idx[key]].tickets.push(t);
+    }
+    return groups;
+  }, [groupByLocation, filteredTickets, locations]);
+
+  function toggleGroup(key: string) {
+    setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Tickets</h1>
         <Link to="/tickets/new" className="btn-primary">+ Nieuw</Link>
+      </div>
+
+      {/* Zoekbalk */}
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+        <input
+          type="search"
+          placeholder="Zoek in titel of omschrijving…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
       </div>
 
       {/* Filters */}
@@ -103,7 +175,7 @@ export default function TicketList() {
           })}
         </div>
 
-        {/* Afdeling + prioriteit + mijn tickets */}
+        {/* Afdeling + prioriteit + mijn tickets + groepeer */}
         <div className="flex flex-wrap gap-2">
           <select
             value={department}
@@ -130,6 +202,18 @@ export default function TicketList() {
             {assignedToMe && <span className="text-xs mr-1">✓</span>}
             Mijn tickets
           </button>
+          <button
+            onClick={() => setGroupByLocation(!groupByLocation)}
+            className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+              groupByLocation
+                ? "bg-purple-600 text-white border-purple-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
+            }`}
+            title="Tickets gegroepeerd per kamer/locatie tonen"
+          >
+            {groupByLocation && <span className="text-xs mr-1">✓</span>}
+            📁 Groepeer per locatie
+          </button>
         </div>
       </div>
 
@@ -137,20 +221,62 @@ export default function TicketList() {
         <div className="flex items-center justify-center h-40">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
         </div>
+      ) : filteredTickets.length === 0 ? (
+        <div className="card py-12 text-center text-gray-500">
+          <p className="text-lg">Geen tickets gevonden</p>
+          {search && <p className="text-sm mt-2">Geen resultaat voor "{search}"</p>}
+          <Link to="/tickets/new" className="mt-3 inline-block text-blue-600 hover:underline text-sm">
+            Maak het eerste ticket aan →
+          </Link>
+        </div>
+      ) : grouped ? (
+        <div className="space-y-3">
+          {grouped.map((group) => {
+            const collapsed = !!collapsedGroups[group.key];
+            const isNoLocation = group.key === NO_LOCATION_KEY;
+            return (
+              <div key={group.key} className="space-y-2">
+                <button
+                  onClick={() => toggleGroup(group.key)}
+                  className="w-full flex items-center gap-2 px-3 py-2 bg-purple-50 hover:bg-purple-100 rounded-xl border border-purple-200"
+                >
+                  <span className="text-base">{collapsed ? "▶" : "▼"}</span>
+                  <span className="text-base">{isNoLocation ? "📋" : "📍"}</span>
+                  <span className={`font-semibold ${isNoLocation ? "text-gray-500 italic" : "text-purple-900"}`}>
+                    {group.locationName}
+                  </span>
+                  <span className="ml-auto text-xs font-semibold bg-purple-200 text-purple-800 px-2 py-0.5 rounded-full">
+                    {group.tickets.length}
+                  </span>
+                </button>
+                {!collapsed && (
+                  <div className="space-y-3 pl-2">
+                    {group.tickets.map((ticket) => (
+                      <TicketCard
+                        key={ticket.id}
+                        ticket={ticket}
+                        users={users}
+                        locations={locations}
+                        relatedCount={ticket.location_id ? Math.max(0, (locationCounts[ticket.location_id] || 1) - 1) : 0}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
       ) : (
         <div className="space-y-3">
-          {tickets.length === 0 ? (
-            <div className="card py-12 text-center text-gray-500">
-              <p className="text-lg">Geen tickets gevonden</p>
-              <Link to="/tickets/new" className="mt-3 inline-block text-blue-600 hover:underline text-sm">
-                Maak het eerste ticket aan →
-              </Link>
-            </div>
-          ) : (
-            tickets.map((ticket) => (
-              <TicketCard key={ticket.id} ticket={ticket} users={users} locations={locations} />
-            ))
-          )}
+          {filteredTickets.map((ticket) => (
+            <TicketCard
+              key={ticket.id}
+              ticket={ticket}
+              users={users}
+              locations={locations}
+              relatedCount={ticket.location_id ? Math.max(0, (locationCounts[ticket.location_id] || 1) - 1) : 0}
+            />
+          ))}
         </div>
       )}
     </div>

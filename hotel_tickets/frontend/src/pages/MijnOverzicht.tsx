@@ -58,13 +58,21 @@ export default function MijnOverzicht() {
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
-  const [showAllToday, setShowAllToday] = useState(false);
+  const [showAllToday, setShowAllToday] = useState(() => localStorage.getItem("ht_show_all_today") === "1");
   const [deptFilter, setDeptFilter] = useState<Category | "">(() => {
     const saved = localStorage.getItem("ht_dept_filter");
     if (saved === "technical" || saved === "housekeeping" || saved === "reception") return saved;
     return "";
   });
-  const [showUpcoming, setShowUpcoming] = useState(false);
+  const [showUpcoming, setShowUpcoming] = useState(() => localStorage.getItem("ht_show_upcoming") === "1");
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_upcoming", showUpcoming ? "1" : "0");
+  }, [showUpcoming]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_all_today", showAllToday ? "1" : "0");
+  }, [showAllToday]);
   const todaySectionRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
 
@@ -116,6 +124,15 @@ export default function MijnOverzicht() {
   async function closeTicket(ticketId: string, ticketTitle: string) {
     if (!window.confirm(`Ticket "${ticketTitle}" sluiten?`)) return;
     await ticketApi.update(ticketId, { status: "closed" });
+    await loadData(deptFilter);
+  }
+
+  async function togglePin(ticket: Ticket) {
+    if (ticket.pinned) {
+      await ticketApi.unpin(ticket.id);
+    } else {
+      await ticketApi.pin(ticket.id);
+    }
     await loadData(deptFilter);
   }
 
@@ -239,6 +256,14 @@ export default function MijnOverzicht() {
               +{today_recurring.length - 3} meer tonen
             </button>
           )}
+          {showAllToday && today_recurring.length > 3 && (
+            <button
+              onClick={() => setShowAllToday(false)}
+              className="mt-2 text-sm text-gray-500 hover:text-gray-700 hover:underline w-full text-center py-1"
+            >
+              ▲ Inklappen
+            </button>
+          )}
         </section>
       )}
 
@@ -262,7 +287,7 @@ export default function MijnOverzicht() {
         ) : (
           <div className="space-y-2">
             {my_tickets.map((t) => (
-              <MyTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={() => closeTicket(t.id, t.title)} />
+              <MyTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={() => closeTicket(t.id, t.title)} onTogglePin={() => togglePin(t)} />
             ))}
           </div>
         )}
@@ -295,20 +320,30 @@ export default function MijnOverzicht() {
             <button
               onClick={() => setShowUpcoming(!showUpcoming)}
               className="flex items-center gap-2"
+              aria-expanded={showUpcoming}
+              title={showUpcoming ? "Inklappen" : "Uitklappen"}
             >
               <span className="text-purple-600 text-lg">🔁</span>
               <h2 className="font-semibold text-gray-900">Aankomende taken</h2>
               <span className="text-xs font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{upcoming_recurring.length}</span>
-              <span className="text-gray-400 text-sm">{showUpcoming ? "▲" : "▼"}</span>
+              <span className="text-gray-400 text-sm">{showUpcoming ? "▲ Inklappen" : "▼ Uitklappen"}</span>
             </button>
             <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
           </div>
           {showUpcoming && (
-            <div className="space-y-2">
-              {upcoming_recurring.map((t) => (
-                <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={() => completeRecurring(t.id, t.title)} />
-              ))}
-            </div>
+            <>
+              <div className="space-y-2">
+                {upcoming_recurring.map((t) => (
+                  <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={() => completeRecurring(t.id, t.title)} />
+                ))}
+              </div>
+              <button
+                onClick={() => setShowUpcoming(false)}
+                className="mt-2 text-sm text-gray-500 hover:text-gray-700 hover:underline w-full text-center py-1"
+              >
+                ▲ Inklappen
+              </button>
+            </>
           )}
         </section>
       )}
@@ -393,7 +428,7 @@ function roomsModeExtras(
   };
 }
 
-function MyTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void }) {
+function MyTicketRow({ ticket, locationName, occupied, onClose, onTogglePin }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void; onTogglePin: () => void }) {
   return (
     <OverviewRow
       to={`/tickets/${ticket.id}`}
@@ -409,6 +444,8 @@ function MyTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Tick
       commentCount={ticket.comment_count}
       onComplete={onClose}
       completeTitle="Ticket sluiten"
+      pinned={ticket.pinned}
+      onTogglePin={onTogglePin}
     />
   );
 }

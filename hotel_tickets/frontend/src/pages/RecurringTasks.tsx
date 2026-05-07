@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { recurringApi, locationApi, type RecurringTemplate, type Category, type Priority, type SubtaskMode } from "../api/client";
 import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
@@ -41,6 +41,7 @@ export default function RecurringTasks() {
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [newSubtask, setNewSubtask] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+  const [search, setSearch] = useState("");
 
   useEffect(() => {
     Promise.all([recurringApi.list(), locationApi.list()])
@@ -130,9 +131,19 @@ export default function RecurringTasks() {
     )
   ).sort((a, b) => a.localeCompare(b, "nl"));
 
-  const groupedTemplates = (() => {
+  const filteredTemplates = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    if (!q) return templates;
+    return templates.filter((t) =>
+      t.title.toLowerCase().includes(q) ||
+      (t.description?.toLowerCase().includes(q) ?? false) ||
+      (t.folder?.toLowerCase().includes(q) ?? false)
+    );
+  }, [templates, search]);
+
+  const groupedTemplates = useMemo(() => {
     const groups = new Map<string, RecurringTemplate[]>();
-    for (const t of templates) {
+    for (const t of filteredTemplates) {
       const key = folderKey(t);
       const list = groups.get(key) ?? [];
       list.push(t);
@@ -148,7 +159,7 @@ export default function RecurringTasks() {
       label: key === NO_FOLDER_KEY ? NO_FOLDER_LABEL : key,
       templates: groups.get(key)!,
     }));
-  })();
+  }, [filteredTemplates]);
 
   function toggleFolder(key: string) {
     setCollapsedFolders((prev) => ({ ...prev, [key]: !prev[key] }));
@@ -159,6 +170,18 @@ export default function RecurringTasks() {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Terugkerende taken</h1>
         <button onClick={() => setShowForm(true)} className="btn-primary">+ Nieuw sjabloon</button>
+      </div>
+
+      {/* Zoekbalk */}
+      <div className="relative">
+        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+        <input
+          type="search"
+          placeholder="Zoek in taken (titel, omschrijving of map)…"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+        />
       </div>
 
       {/* Formulier */}
@@ -345,6 +368,10 @@ export default function RecurringTasks() {
       ) : templates.length === 0 ? (
         <div className="card py-12 text-center text-gray-500">
           Geen terugkerende taken. Maak een sjabloon aan.
+        </div>
+      ) : filteredTemplates.length === 0 ? (
+        <div className="card py-12 text-center text-gray-500">
+          Geen taken gevonden voor "{search}"
         </div>
       ) : (
         <div className="space-y-5">

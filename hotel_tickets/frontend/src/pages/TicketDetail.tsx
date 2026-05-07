@@ -161,6 +161,16 @@ export default function TicketDetail() {
     navigate("/tickets");
   }
 
+  async function togglePin() {
+    if (!id || !ticket) return;
+    if (ticket.pinned) {
+      await ticketApi.unpin(id);
+    } else {
+      await ticketApi.pin(id);
+    }
+    setTicket((prev) => prev ? { ...prev, pinned: !prev.pinned } : prev);
+  }
+
   if (!ticket) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -194,13 +204,25 @@ export default function TicketDetail() {
               }}
             />
           ) : (
-            <h1
-              className="text-xl font-bold text-gray-900 cursor-text hover:bg-gray-50 rounded px-0.5 -mx-0.5"
-              onClick={() => { setEditingField("title"); setEditValue(ticket.title); }}
-              title="Klik om te bewerken"
-            >
-              {ticket.title}
-            </h1>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={togglePin}
+                title={ticket.pinned ? "Verwijder uit favorieten" : "Pin bovenaan in mijn overzicht"}
+                aria-label={ticket.pinned ? "Verwijder pin" : "Pin ticket"}
+                className="shrink-0 text-2xl leading-none hover:scale-110 transition-transform"
+              >
+                <span className={ticket.pinned ? "text-yellow-500" : "text-gray-300 hover:text-yellow-400"}>
+                  {ticket.pinned ? "★" : "☆"}
+                </span>
+              </button>
+              <h1
+                className="text-xl font-bold text-gray-900 cursor-text hover:bg-gray-50 rounded px-0.5 -mx-0.5 flex-1 min-w-0"
+                onClick={() => { setEditingField("title"); setEditValue(ticket.title); }}
+                title="Klik om te bewerken"
+              >
+                {ticket.title}
+              </h1>
+            </div>
           )}
           <div className="flex flex-wrap gap-1.5 mt-2">
             <StatusBadge status={ticket.status} />
