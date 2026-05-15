@@ -181,11 +181,21 @@ async def get_my_overview(
             if tid not in active_by_template:
                 active_by_template[tid] = ticket
 
+    def _next_run_for(t: RecurringTemplate, after: datetime) -> datetime:
+        # Interval-modus: gebruik het opgeslagen next_due_at zodat de taak
+        # alleen verschijnt op de dag dat hij echt weer moet (en niet steeds
+        # zichtbaar blijft als de cron toevallig elke dag zou triggeren).
+        if t.interval_days and t.next_due_at:
+            nd = t.next_due_at
+            if nd.tzinfo is not None:
+                nd = nd.replace(tzinfo=None)
+            return nd
+        return croniter(t.cron_expression, after).get_next(datetime)
+
     for t in dept_templates:
         try:
             base_dt = datetime.combine(today, datetime.min.time()) - timedelta(seconds=1)
-            cron = croniter(t.cron_expression, base_dt)
-            next_run = cron.get_next(datetime)
+            next_run = _next_run_for(t, base_dt)
             has_open = t.id in templates_with_open
 
             if next_run.date() == today:
@@ -212,8 +222,7 @@ async def get_my_overview(
 
                 # Voor upcoming: toon de volgende uitvoering na vandaag als vandaag al afgerond
                 if all_done:
-                    cron_future = croniter(t.cron_expression, datetime.now())
-                    future_run = cron_future.get_next(datetime)
+                    future_run = _next_run_for(t, datetime.now())
                     upcoming_recurring.append((future_run, _template_dict(t, future_run)))
                 else:
                     upcoming_recurring.append((next_run, _template_dict(t, next_run)))

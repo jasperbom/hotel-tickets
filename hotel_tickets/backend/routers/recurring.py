@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, func
@@ -10,6 +10,7 @@ from ..database import get_db
 from ..models import RecurringTemplate, Category, Priority, Ticket, Status, PoolConfig, new_uuid
 from ..auth import RequireUser
 from ..services.ha_entities import sync_ticket_sensors
+from ..scheduler import mark_template_completed, calc_next_due_after_completion
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
@@ -23,6 +24,7 @@ class TemplateCreate(BaseModel):
     assign_to: str | None = None
     cron_expression: str
     advance_days: int = 0
+    interval_days: int | None = None
     is_active: bool = True
     nfc_tag_id: str | None = None
     subtask_mode: str = "none"  # none | subtasks | rooms
@@ -41,6 +43,7 @@ class TemplateUpdate(BaseModel):
     assign_to: str | None = None
     cron_expression: str | None = None
     advance_days: int | None = None
+    interval_days: int | None = None
     is_active: bool | None = None
     nfc_tag_id: str | None = None
     subtask_mode: str | None = None
@@ -60,6 +63,7 @@ class TemplateOut(BaseModel):
     assign_to: str | None
     cron_expression: str
     advance_days: int
+    interval_days: int | None
     is_active: bool
     nfc_tag_id: str | None
     subtask_mode: str
@@ -68,6 +72,7 @@ class TemplateOut(BaseModel):
     emoji: str | None
     folder: str | None
     next_run: str | None = None
+    next_due_at: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -103,6 +108,20 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
             subtask_items = json.loads(template.subtask_items)
         except Exception:
             subtask_items = []
+    # Interval-modus: 'next_run' komt uit next_due_at. Cron-modus: bereken
+    # vanuit de cron, maar pak next_due_at als die later valt (bv. omdat de
+    # taak vroeger via NFC is afgevinkt).
+    if template.interval_days and template.next_due_at:
+        next_run_str = template.next_due_at.isoformat()
+    else:
+        next_run_str = _calc_next_run(template.cron_expression)
+        if template.next_due_at and next_run_str:
+            try:
+                cron_next = datetime.fromisoformat(next_run_str)
+                if template.next_due_at.replace(tzinfo=None) > cron_next.replace(tzinfo=None):
+                    next_run_str = template.next_due_at.isoformat()
+            except Exception:
+                pass
     return {
         "id": template.id,
         "title": template.title,
@@ -113,6 +132,7 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
         "assign_to": template.assign_to,
         "cron_expression": template.cron_expression,
         "advance_days": template.advance_days,
+        "interval_days": template.interval_days,
         "is_active": template.is_active,
         "nfc_tag_id": template.nfc_tag_id,
         "subtask_mode": template.subtask_mode or "none",
@@ -120,7 +140,8 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
         "notify_when_free": template.notify_when_free,
         "emoji": template.emoji,
         "folder": template.folder,
-        "next_run": _calc_next_run(template.cron_expression),
+        "next_run": next_run_str,
+        "next_due_at": template.next_due_at.isoformat() if template.next_due_at else None,
     }
 
 
@@ -142,6 +163,11 @@ async def create_template(body: TemplateCreate, user: RequireUser, db: AsyncSess
     data = body.model_dump()
     data["subtask_items"] = json.dumps(data["subtask_items"]) if data.get("subtask_items") else None
     template = RecurringTemplate(**data)
+    # Voor interval-sjablonen meteen een eerste next_due_at zetten: nu + interval.
+    # Zo verschijnt het eerste ticket pas na één volledige cyclus (gebruiker kan
+    # 'Start nu' gebruiken om er direct eentje aan te maken).
+    if template.interval_days and template.interval_days > 0:
+        template.next_due_at = datetime.now(timezone.utc) + timedelta(days=template.interval_days)
     db.add(template)
     await db.flush()
 
@@ -177,11 +203,21 @@ async def update_template(
     if body.cron_expression:
         _validate_cron(body.cron_expression)
 
+    old_interval = template.interval_days
     updates = body.model_dump(exclude_none=True)
     if "subtask_items" in updates:
         updates["subtask_items"] = json.dumps(updates["subtask_items"]) if updates["subtask_items"] else None
     for field, value in updates.items():
         setattr(template, field, value)
+
+    # Interval-instelling gewijzigd → next_due_at opnieuw bepalen zodat de
+    # nieuwe cadans direct effect heeft.
+    if "interval_days" in updates and old_interval != template.interval_days:
+        if template.interval_days and template.interval_days > 0:
+            template.next_due_at = datetime.now(timezone.utc) + timedelta(days=template.interval_days)
+        else:
+            # Terug naar cron-modus: laat de cron de planning bepalen.
+            template.next_due_at = None
 
     from ..scheduler import reschedule_template
     await reschedule_template(template)
@@ -317,6 +353,11 @@ async def complete_template(template_id: str, body: CompleteRequest = CompleteRe
         )
         db.add(ticket)
         closed_ids.append(ticket.id)
+
+    # Volgende uitvoering plannen (interval: now + interval_days, cron:
+    # eerstvolgende cron-tick na nu). Alleen als er geen andere openstaande
+    # tickets meer zijn (bij kamer-modus kunnen die er nog wel zijn).
+    await mark_template_completed(template, db, closed_at=now)
 
     await sync_ticket_sensors(db)
     return {"ok": True, "closed_ticket_ids": closed_ids}

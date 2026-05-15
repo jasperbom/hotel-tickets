@@ -16,6 +16,7 @@ const EMPTY_FORM = {
   location_id: null as string | null,
   cron_expression: DEFAULT_CRON,
   advance_days: 0,
+  interval_days: null as number | null,
   is_active: true,
   nfc_tag_id: "",
   notify_when_free: false,
@@ -75,7 +76,7 @@ export default function RecurringTasks() {
 
   async function saveTemplate() {
     if (!form.title.trim()) return;
-    const payload = {
+    const payload: Partial<RecurringTemplate> = {
       ...form,
       nfc_tag_id: form.nfc_tag_id || null,
       emoji: null,
@@ -112,6 +113,7 @@ export default function RecurringTasks() {
       location_id: template.location_id,
       cron_expression: template.cron_expression,
       advance_days: template.advance_days,
+      interval_days: template.interval_days,
       is_active: template.is_active,
       nfc_tag_id: template.nfc_tag_id || "",
       notify_when_free: template.notify_when_free,
@@ -338,7 +340,8 @@ export default function RecurringTasks() {
             <label className="block text-sm font-medium text-gray-700 mb-2">Schema</label>
             <RecurrenceEditor
               value={form.cron_expression}
-              onChange={(cron) => setForm({ ...form, cron_expression: cron })}
+              intervalDays={form.interval_days}
+              onChange={(cron, intervalDays) => setForm({ ...form, cron_expression: cron, interval_days: intervalDays })}
             />
           </div>
 
@@ -424,7 +427,7 @@ export default function RecurringTasks() {
                             <div className="flex gap-1.5 mt-1 flex-wrap items-center">
                               <CategoryBadge category={t.category} />
                               <PriorityBadge priority={t.priority} />
-                              <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression)}</span>
+                              <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression, t.interval_days)}</span>
                             </div>
                           </div>
                           <div className="flex gap-2 shrink-0">

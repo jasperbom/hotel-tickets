@@ -1,6 +1,6 @@
 import { useState } from "react";
 
-type Freq = "daily" | "weekly" | "monthly" | "every_x_months";
+type Freq = "daily" | "weekly" | "monthly" | "every_x_months" | "interval";
 
 const FIXED_HOUR = 8;
 const FIXED_MINUTE = 0;
@@ -21,12 +21,17 @@ function ordinal(n: number): string {
   return n === 1 ? "1ste" : `${n}e`;
 }
 
-export function cronToHuman(cron: string): string {
+export function cronToHuman(cron: string, intervalDays?: number | null): string {
+  if (intervalDays && intervalDays > 0) {
+    return intervalDays === 1
+      ? "Elke dag na laatste uitvoering"
+      : `Elke ${intervalDays} dagen na laatste uitvoering`;
+  }
   const { freq, weekDays, monthDay, everyXMonths } = parseCron(cron);
-  return humanLabel(freq, weekDays, monthDay, everyXMonths);
+  return humanLabel(freq, weekDays, monthDay, everyXMonths, intervalDays ?? 7);
 }
 
-function humanLabel(freq: Freq, weekDays: number[], monthDay: number, everyXMonths: number): string {
+function humanLabel(freq: Freq, weekDays: number[], monthDay: number, everyXMonths: number, intervalDays: number): string {
   switch (freq) {
     case "daily":   return "Elke dag";
     case "weekly": {
@@ -38,6 +43,10 @@ function humanLabel(freq: Freq, weekDays: number[], monthDay: number, everyXMont
     }
     case "monthly":        return `Elke ${ordinal(monthDay)} van de maand`;
     case "every_x_months": return `Elke ${everyXMonths} maanden (${ordinal(monthDay)})`;
+    case "interval":
+      return intervalDays === 1
+        ? "Elke dag na laatste uitvoering"
+        : `Elke ${intervalDays} dagen na laatste uitvoering`;
   }
 }
 
@@ -50,6 +59,10 @@ function buildCron(freq: Freq, weekDays: number[], monthDay: number, everyXMonth
       return `${m} ${h} * * ${weekDays.length ? [...weekDays].sort((a,b)=>a-b).join(",") : "1"}`;
     case "monthly":        return `${m} ${h} ${monthDay} * *`;
     case "every_x_months": return `${m} ${h} ${monthDay} */${everyXMonths} *`;
+    // Interval-modus: cron speelt geen rol meer, maar we slaan toch een veilige
+    // standaard op zodat oude lezers (advance_days, etc.) niet stuk gaan en de
+    // backend hem als fallback kan accepteren.
+    case "interval":       return `${m} ${h} * * *`;
   }
 }
 
@@ -75,7 +88,8 @@ function parseCron(cron: string): { freq: Freq; weekDays: number[]; monthDay: nu
 
 interface Props {
   value: string;
-  onChange: (cron: string) => void;
+  intervalDays: number | null;
+  onChange: (cron: string, intervalDays: number | null) => void;
 }
 
 const FREQ_OPTIONS: { key: Freq; label: string; icon: string }[] = [
@@ -83,22 +97,27 @@ const FREQ_OPTIONS: { key: Freq; label: string; icon: string }[] = [
   { key: "weekly",         label: "Wekelijks",        icon: "📅" },
   { key: "monthly",        label: "Maandelijks",      icon: "🗓️" },
   { key: "every_x_months", label: "Elke X maanden",  icon: "📆" },
+  { key: "interval",       label: "Na laatste keer",  icon: "🔄" },
 ];
 
-export default function RecurrenceEditor({ value, onChange }: Props) {
+export default function RecurrenceEditor({ value, intervalDays, onChange }: Props) {
   const parsed = parseCron(value || "0 8 * * *");
-  const [freq,          setFreq]          = useState<Freq>(parsed.freq);
+  const initialFreq: Freq = intervalDays && intervalDays > 0 ? "interval" : parsed.freq;
+  const [freq,          setFreq]          = useState<Freq>(initialFreq);
   const [weekDays,      setWeekDays]      = useState<number[]>(parsed.weekDays.length ? parsed.weekDays : [1]);
   const [monthDay,      setMonthDay]      = useState(parsed.monthDay || 1);
   const [everyXMonths,  setEveryXMonths]  = useState(parsed.everyXMonths || 1);
+  const [interval,      setInterval]      = useState<number>(intervalDays && intervalDays > 0 ? intervalDays : 7);
 
-  function emit(f: Freq, wd: number[], md: number, xm: number) {
-    onChange(buildCron(f, wd, md, xm));
+  function emit(f: Freq, wd: number[], md: number, xm: number, iv: number) {
+    const cron = buildCron(f, wd, md, xm);
+    const intervalOut = f === "interval" ? Math.max(1, iv) : null;
+    onChange(cron, intervalOut);
   }
 
   function handleFreq(f: Freq) {
     setFreq(f);
-    emit(f, weekDays, monthDay, everyXMonths);
+    emit(f, weekDays, monthDay, everyXMonths, interval);
   }
 
   function toggleWeekDay(idx: number) {
@@ -107,21 +126,27 @@ export default function RecurrenceEditor({ value, onChange }: Props) {
       : [...weekDays, idx];
     const safe = next.length === 0 ? [idx] : next;
     setWeekDays(safe);
-    emit(freq, safe, monthDay, everyXMonths);
+    emit(freq, safe, monthDay, everyXMonths, interval);
   }
 
   function handleMonthDay(d: number) {
     setMonthDay(d);
-    emit(freq, weekDays, d, everyXMonths);
+    emit(freq, weekDays, d, everyXMonths, interval);
   }
 
   function handleEveryXMonths(x: number) {
     const safe = Math.min(12, Math.max(1, x));
     setEveryXMonths(safe);
-    emit(freq, weekDays, monthDay, safe);
+    emit(freq, weekDays, monthDay, safe, interval);
   }
 
-  const summary = humanLabel(freq, weekDays, monthDay, everyXMonths);
+  function handleInterval(x: number) {
+    const safe = Math.max(1, Math.min(365, x));
+    setInterval(safe);
+    emit(freq, weekDays, monthDay, everyXMonths, safe);
+  }
+
+  const summary = humanLabel(freq, weekDays, monthDay, everyXMonths, interval);
 
   return (
     <div className="space-y-4">
@@ -129,7 +154,7 @@ export default function RecurrenceEditor({ value, onChange }: Props) {
       {/* Frequentie */}
       <div>
         <p className="text-sm font-medium text-gray-700 mb-2">Hoe vaak?</p>
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {FREQ_OPTIONS.map(opt => (
             <button
               key={opt.key}
@@ -210,6 +235,29 @@ export default function RecurrenceEditor({ value, onChange }: Props) {
             />
             <span className="text-sm text-gray-500">maanden</span>
           </div>
+        </div>
+      )}
+
+      {/* Interval na laatste uitvoering */}
+      {freq === "interval" && (
+        <div>
+          <p className="text-sm font-medium text-gray-700 mb-2">Elke hoeveel dagen na de laatste uitvoering?</p>
+          <div className="flex items-center gap-3">
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={interval}
+              onChange={e => handleInterval(parseInt(e.target.value) || 1)}
+              className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm text-center font-mono"
+            />
+            <span className="text-sm text-gray-500">dagen</span>
+          </div>
+          <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+            🔁 De taak verschijnt pas weer X dagen <em>nadat</em> je hem hebt afgevinkt
+            (bv. via NFC-scan). Vinkt je 'm vroeger af? Dan schuift de volgende ook
+            mee. Ideaal voor filterspoeling: geen lege of stale tickets.
+          </p>
         </div>
       )}
 
