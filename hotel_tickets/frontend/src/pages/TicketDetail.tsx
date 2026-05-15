@@ -324,35 +324,35 @@ export default function TicketDetail() {
 
       {/* Info: Aangemaakt door / Gesloten door / Toegewezen aan */}
       <div className="card space-y-2 text-sm">
-        <div className="flex items-center gap-2 text-gray-600">
-          <span className="text-base">✏️</span>
-          <span>Aangemaakt door</span>
-          <span className="font-semibold text-gray-900">
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-600">
+          <span className="text-base shrink-0">✏️</span>
+          <span className="whitespace-nowrap">Aangemaakt door</span>
+          <span className="font-semibold text-gray-900 whitespace-nowrap">
             {usersMap[ticket.created_by] || (ticket.created_by === "system" ? "Home Assistant" : ticket.created_by)}
           </span>
-          <span className="text-gray-400">·</span>
-          <span className="text-gray-400">{format(parseUTC(ticket.created_at), "dd:MM:yyyy HH:mm", { locale: nl })}</span>
+          <span className="text-gray-400 hidden sm:inline">·</span>
+          <span className="text-gray-400 whitespace-nowrap">{format(parseUTC(ticket.created_at), "dd-MM-yyyy HH:mm", { locale: nl })}</span>
         </div>
 
         {ticket.closed_by && ticket.closed_at && (
-          <div className="flex items-center gap-2 text-gray-600">
-            <span className="text-base">✅</span>
-            <span>Gesloten door</span>
-            <span className="font-semibold text-gray-900">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-600">
+            <span className="text-base shrink-0">✅</span>
+            <span className="whitespace-nowrap">Gesloten door</span>
+            <span className="font-semibold text-gray-900 whitespace-nowrap">
               {usersMap[ticket.closed_by] || ticket.closed_by}
             </span>
-            <span className="text-gray-400">·</span>
-            <span className="text-gray-400">{format(parseUTC(ticket.closed_at!), "dd:MM:yyyy HH:mm", { locale: nl })}</span>
+            <span className="text-gray-400 hidden sm:inline">·</span>
+            <span className="text-gray-400 whitespace-nowrap">{format(parseUTC(ticket.closed_at!), "dd-MM-yyyy HH:mm", { locale: nl })}</span>
           </div>
         )}
 
-        <div className="flex items-center gap-2 text-gray-600">
-          <span className="text-base">👤</span>
-          <span>Toegewezen aan</span>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-gray-600">
+          <span className="text-base shrink-0">👤</span>
+          <span className="whitespace-nowrap">Toegewezen aan</span>
           <select
             value={ticket.assigned_to || ""}
             onChange={(e) => updateField({ assigned_to: e.target.value || null })}
-            className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white"
+            className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white min-w-0 max-w-full"
           >
             <option value="">— Niet toegewezen —</option>
             {users.map((u) => (
