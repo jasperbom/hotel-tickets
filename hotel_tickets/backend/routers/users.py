@@ -87,7 +87,7 @@ async def get_my_overview(
     if dept and user.is_admin:
         mine_filters.append(Ticket.category == dept)
     mine_result = await db.execute(
-        select(Ticket).where(and_(*mine_filters)).order_by(_priority_sort, Ticket.created_at)
+        select(Ticket).where(and_(*mine_filters)).order_by(_priority_sort, Ticket.sort_order, Ticket.created_at)
     )
     my_tickets = mine_result.scalars().all()
 

@@ -60,6 +60,7 @@ async def _run_migrations(conn):
         ("recurring_templates", "next_due_at", "DATETIME"),
         ("ticket_comments", "updated_at", "DATETIME"),
         ("tickets", "photos", "TEXT"),
+        ("tickets", "sort_order", "INTEGER NOT NULL DEFAULT 0"),
         ("bike_reservations", "key_given_at", "DATETIME"),
         ("bike_reservations", "key_returned_at", "DATETIME"),
         ("bike_reservations", "key_ticket_id", "VARCHAR(36)"),

@@ -57,6 +57,7 @@ class Ticket(Base):
     notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
     subtasks: Mapped[str | None] = mapped_column(Text)  # JSON: [{label, done, done_by, done_at}]
     photos: Mapped[str | None] = mapped_column(Text)  # JSON: ["filename1.jpg", ...]
+    sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
 
     comments: Mapped[list["TicketComment"]] = relationship("TicketComment", back_populates="ticket", cascade="all, delete-orphan")
     recurring_template: Mapped["RecurringTemplate | None"] = relationship("RecurringTemplate", back_populates="tickets")
