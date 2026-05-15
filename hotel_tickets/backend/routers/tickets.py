@@ -11,10 +11,11 @@ from sqlalchemy import select, and_, or_, case
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
-from ..models import Ticket, TicketComment, TicketPin, Category, Status, Priority, Role, UserRole, BikeReservation
+from ..models import Ticket, TicketComment, TicketPin, Category, Status, Priority, Role, UserRole, BikeReservation, RecurringTemplate
 from ..auth import RequireUser, CurrentUser
 from ..services.notifications import notify_ticket_assigned, notify_ticket_created, notify_urgent_ticket
 from ..services.ha_entities import sync_ticket_sensors
+from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
 
 import logging
@@ -323,6 +324,11 @@ async def update_ticket(
     if body.status == Status.closed and not ticket.closed_at:
         ticket.closed_at = datetime.now(timezone.utc)
         ticket.closed_by = user.ha_user_id
+        # Recurring template: volgende uitvoering plannen zodat de taak pas
+        # weer opduikt op de dag dat hij echt moet gebeuren.
+        if ticket.recurring_template_id:
+            template = await db.get(RecurringTemplate, ticket.recurring_template_id)
+            await mark_template_completed(template, db, closed_at=ticket.closed_at)
         # Sync: als dit een sleutelticket is, registreer sleutelterugave op de reservering
         res_result = await db.execute(select(BikeReservation).where(BikeReservation.key_ticket_id == ticket_id))
         linked_res = res_result.scalar_one_or_none()

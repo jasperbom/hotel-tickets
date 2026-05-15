@@ -22,6 +22,7 @@ from ..models import (
 )
 from ..services.notifications import notify_push
 from ..services.ha_entities import sync_ticket_sensors
+from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
 
 router = APIRouter(prefix="/nfc", tags=["nfc"])
@@ -269,6 +270,11 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
                 closed_by=closed_by,
             )
             db.add(ticket)
+
+        # Plan de volgende ticket zodat de taak pas weer opduikt op de dag
+        # dat hij echt uitgevoerd moet worden (interval-modus: closed_at +
+        # interval_days, cron-modus: eerstvolgende cron-tick na closed_at).
+        await mark_template_completed(template, db, closed_at=now)
 
         closed_titles.append(template.title)
         if primary_ticket is None:

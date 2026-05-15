@@ -113,9 +113,11 @@ export interface RecurringTemplate {
   assign_to: string | null;
   cron_expression: string;
   advance_days: number;
+  interval_days: number | null;
   is_active: boolean;
   nfc_tag_id: string | null;
   next_run: string | null;
+  next_due_at: string | null;
   subtask_mode: SubtaskMode;
   subtask_items: string[] | null;
   notify_when_free: boolean;

@@ -97,6 +97,13 @@ class RecurringTemplate(Base):
     cron_expression: Mapped[str] = mapped_column(String(100), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True)
     advance_days: Mapped[int] = mapped_column(Integer, default=0)
+    # Interval-modus: als gevuld, wordt de volgende ticket X dagen na de laatste
+    # afronding gepland (cron_expression wordt dan genegeerd voor scheduling).
+    interval_days: Mapped[int | None] = mapped_column(Integer)
+    # Tijdstip waarop de scheduler de eerstvolgende ticket mag aanmaken. Wordt
+    # bijgewerkt bij elke afronding (NFC of handmatig) zodat de taak pas weer
+    # opduikt op de dag dat hij echt moet gebeuren.
+    next_due_at: Mapped[datetime | None] = mapped_column(DateTime)
     nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
     subtask_mode: Mapped[str] = mapped_column(String(20), default="none")  # none | subtasks | rooms
     subtask_items: Mapped[str | None] = mapped_column(Text)  # JSON: [label, ...] or [area_id, ...]

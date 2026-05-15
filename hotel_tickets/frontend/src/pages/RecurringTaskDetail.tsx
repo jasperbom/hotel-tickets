@@ -197,7 +197,7 @@ export default function RecurringTaskDetail() {
       <div className="card space-y-3">
         <div className="flex items-center gap-2 text-sm text-gray-600">
           <span>🔁</span>
-          <span>{cronToHuman(template.cron_expression)}</span>
+          <span>{cronToHuman(template.cron_expression, template.interval_days)}</span>
         </div>
 
         {/* Status banner */}

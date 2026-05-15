@@ -2,7 +2,7 @@
 APScheduler voor het automatisch aanmaken van tickets op basis van recurring templates.
 """
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from croniter import croniter
@@ -16,8 +16,80 @@ def get_scheduler() -> AsyncIOScheduler:
     return _scheduler
 
 
+def calc_next_due_after_completion(template, closed_at: datetime) -> datetime | None:
+    """Bereken het tijdstip waarop de volgende ticket aangemaakt mag worden,
+    gegeven dat de taak nu (op ``closed_at``) is afgerond.
+
+    - Interval-modus (``interval_days`` gevuld): closed_at + interval_days.
+    - Cron-modus: de eerstvolgende cron-tick *na* closed_at. Zo verschijnt de
+      taak pas weer op de eerstvolgende geplande dag, ook als je 'm vroeger
+      hebt afgevinkt.
+    """
+    if closed_at.tzinfo is None:
+        closed_at = closed_at.replace(tzinfo=timezone.utc)
+    if template.interval_days and template.interval_days > 0:
+        return closed_at + timedelta(days=template.interval_days)
+    if template.cron_expression:
+        try:
+            return croniter(template.cron_expression, closed_at).get_next(datetime)
+        except Exception:
+            return None
+    return None
+
+
+async def mark_template_completed(template, db, closed_at: datetime | None = None) -> None:
+    """Aan te roepen wanneer een ticket van dit sjabloon afgerond wordt.
+
+    Werkt ``next_due_at`` bij zodat de scheduler de volgende ticket pas op de
+    juiste dag aanmaakt. Idempotent: als er nog open tickets zijn voor dit
+    sjabloon, doen we niets (de afronding telt pas als álle tickets gesloten
+    zijn).
+    """
+    from sqlalchemy import select, and_, func
+    from .models import Ticket, Status
+
+    if template is None:
+        return
+
+    open_count = await db.scalar(
+        select(func.count()).select_from(Ticket).where(
+            and_(
+                Ticket.recurring_template_id == template.id,
+                Ticket.status != Status.closed,
+            )
+        )
+    )
+    if open_count and open_count > 0:
+        return
+
+    when = closed_at or datetime.now(timezone.utc)
+    next_due = calc_next_due_after_completion(template, when)
+    if next_due is not None:
+        template.next_due_at = next_due
+
+
+async def _template_has_open_ticket(template_id: str, db) -> bool:
+    from sqlalchemy import select, and_, func
+    from .models import Ticket, Status
+
+    count = await db.scalar(
+        select(func.count()).select_from(Ticket).where(
+            and_(
+                Ticket.recurring_template_id == template_id,
+                Ticket.status != Status.closed,
+            )
+        )
+    )
+    return bool(count and count > 0)
+
+
 async def _create_ticket_from_template(template_id: str) -> None:
-    """Job functie die wordt aangeroepen door APScheduler."""
+    """Job functie die wordt aangeroepen door APScheduler.
+
+    Idempotent: maakt geen nieuw ticket aan als er al een openstaand ticket is
+    voor dit sjabloon, of als ``next_due_at`` nog in de toekomst ligt (bv.
+    omdat de taak vroeg via NFC is afgevinkt).
+    """
     import json
     from .database import AsyncSessionLocal
     from .models import RecurringTemplate, Ticket
@@ -26,6 +98,25 @@ async def _create_ticket_from_template(template_id: str) -> None:
     async with AsyncSessionLocal() as db:
         template = await db.get(RecurringTemplate, template_id)
         if not template or not template.is_active:
+            return
+
+        now = datetime.now(timezone.utc)
+        if template.next_due_at is not None:
+            due = template.next_due_at
+            if due.tzinfo is None:
+                due = due.replace(tzinfo=timezone.utc)
+            if now < due:
+                logger.info(
+                    "Sjabloon '%s' overgeslagen: next_due_at %s ligt in de toekomst",
+                    template.title, due.isoformat(),
+                )
+                return
+
+        if await _template_has_open_ticket(template_id, db):
+            logger.info(
+                "Sjabloon '%s' overgeslagen: er staat al een ticket open",
+                template.title,
+            )
             return
 
         if template.subtask_mode == "rooms" and template.subtask_items:
@@ -243,6 +334,53 @@ def start_bike_key_watcher() -> None:
         name="Fietssleutel terugave tickets",
     )
     logger.info("Bike key return job gepland (dagelijks 07:00)")
+
+
+async def _interval_template_watcher() -> None:
+    """Maakt tickets aan voor interval-gebaseerde sjablonen wanneer hun
+    ``next_due_at`` bereikt is.
+
+    Cron-gebaseerde sjablonen worden hier niet aangeraakt — die volgen hun
+    eigen cron-job. Sjablonen zónder ``interval_days`` worden overgeslagen.
+    Sjablonen mét ``interval_days`` maar zónder ``next_due_at`` (bv. net
+    aangemaakt vóór de migratie) krijgen direct een eerste ticket.
+    """
+    from sqlalchemy import select
+    from .database import AsyncSessionLocal
+    from .models import RecurringTemplate
+
+    async with AsyncSessionLocal() as db:
+        result = await db.execute(
+            select(RecurringTemplate).where(
+                RecurringTemplate.is_active == True,           # noqa: E712
+                RecurringTemplate.interval_days.isnot(None),
+            )
+        )
+        templates = result.scalars().all()
+        now = datetime.now(timezone.utc)
+        for tpl in templates:
+            due = tpl.next_due_at
+            if due is not None:
+                if due.tzinfo is None:
+                    due = due.replace(tzinfo=timezone.utc)
+                if now < due:
+                    continue
+            # _create_ticket_from_template doet zelf de idempotency-check
+            await _create_ticket_from_template(tpl.id)
+
+
+def start_interval_watcher() -> None:
+    """Plan de interval-watcher in — draait elk kwartier en pikt sjablonen op
+    die op interval-basis een nieuwe ticket nodig hebben."""
+    _scheduler.add_job(
+        _interval_template_watcher,
+        trigger="interval",
+        minutes=15,
+        id="interval_template_watcher",
+        replace_existing=True,
+        name="Interval template watcher",
+    )
+    logger.info("Interval template watcher gestart (elk kwartier)")
 
 
 async def load_all_templates() -> None:
