@@ -13,7 +13,7 @@ from pydantic import BaseModel, field_validator
 from ..database import get_db
 from ..models import Ticket, TicketComment, TicketPin, Category, Status, Priority, Role, UserRole, BikeReservation, RecurringTemplate
 from ..auth import RequireUser, CurrentUser
-from ..services.notifications import notify_ticket_assigned, notify_ticket_created, notify_urgent_ticket
+from ..services.notifications import notify_ticket_assigned, notify_ticket_created, notify_urgent_ticket, notify_new_department_ticket
 from ..services.ha_entities import sync_ticket_sensors
 from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
@@ -269,6 +269,34 @@ async def create_ticket(
         admin_services = [u.ha_notify_service for u in admins_result.scalars().all() if u.ha_notify_service]
         if admin_services:
             await notify_urgent_ticket(ticket.title, admin_services, ticket_url)
+
+    # Push naar medewerkers in dezelfde afdeling die opt-in hebben gegeven —
+    # admins worden expliciet overgeslagen ('admins blijven zoals het is').
+    # Als ze een device_tracker hebben gekoppeld wordt alleen gepusht wanneer
+    # die op 'home' staat (= op het wifi-netwerk).
+    dept_result = await db.execute(
+        select(UserRole).where(
+            and_(
+                UserRole.role != Role.admin,
+                UserRole.department == ticket.category,
+                UserRole.notify_new_ticket == True,
+                UserRole.notify_push == True,
+                UserRole.ha_notify_service.isnot(None),
+            )
+        )
+    )
+    creator_id = ticket.created_by
+    recipients = [
+        {"service": u.ha_notify_service, "device_tracker": u.ha_device_tracker}
+        for u in dept_result.scalars().all()
+        # Skip de aanmaker en de directe toegewezene — die krijgen geen dubbele push.
+        if u.ha_user_id != creator_id and u.ha_user_id != ticket.assigned_to
+    ]
+    if recipients:
+        category_label = {
+            "technical": "TD", "housekeeping": "Huishouding", "reception": "Receptie",
+        }.get(ticket.category.value, ticket.category.value)
+        await notify_new_department_ticket(ticket.title, category_label, recipients, ticket_url)
 
     await sync_ticket_sensors(db)
     return ticket

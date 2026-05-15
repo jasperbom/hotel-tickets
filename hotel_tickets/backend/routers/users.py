@@ -23,6 +23,8 @@ class UserRoleCreate(BaseModel):
     notify_push: bool = True
     notify_email: bool = False
     ha_notify_service: str | None = None
+    ha_device_tracker: str | None = None
+    notify_new_ticket: bool = False
 
 
 class UserRoleUpdate(BaseModel):
@@ -33,6 +35,8 @@ class UserRoleUpdate(BaseModel):
     notify_push: bool | None = None
     notify_email: bool | None = None
     ha_notify_service: str | None = None
+    ha_device_tracker: str | None = None
+    notify_new_ticket: bool | None = None
 
 
 class UserRoleOut(BaseModel):
@@ -44,6 +48,8 @@ class UserRoleOut(BaseModel):
     notify_push: bool
     notify_email: bool
     ha_notify_service: str | None
+    ha_device_tracker: str | None
+    notify_new_ticket: bool
 
     model_config = {"from_attributes": True}
 

@@ -6,7 +6,7 @@ import smtplib
 import logging
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
-from .ha_client import call_service
+from .ha_client import call_service, get_sensor_state
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,51 @@ async def notify_ticket_created(ticket_title: str, category: str) -> None:
         title=f"Nieuw ticket: {category}",
         message=ticket_title,
     )
+
+
+async def _is_on_wifi(device_tracker: str | None) -> bool:
+    """True wanneer geen tracker gekoppeld is (geen filter) óf state == 'home'."""
+    if not device_tracker:
+        return True
+    try:
+        state = await get_sensor_state(device_tracker)
+    except Exception as e:
+        logger.warning(f"Device tracker uitlezen mislukt voor {device_tracker}: {e}")
+        return False
+    if not state:
+        return False
+    return str(state.get("state", "")).lower() == "home"
+
+
+async def notify_new_department_ticket(
+    ticket_title: str,
+    category_label: str,
+    recipients: list[dict],
+    ticket_url: str | None = None,
+) -> None:
+    """Stuur een push naar elke medewerker met opt-in voor nieuwe-ticket meldingen.
+
+    `recipients` is een lijst dicts met keys: `service` (notify.<...>),
+    `device_tracker` (optioneel entity_id). Als `device_tracker` gevuld is wordt
+    de push alleen verstuurd wanneer de tracker-state 'home' is.
+    """
+    if not recipients:
+        return
+    title = f"Nieuw ticket: {category_label}"
+    data: dict = {"tag": "new_department_ticket"}
+    if ticket_url:
+        data["url"] = ticket_url
+    for r in recipients:
+        service = r.get("service")
+        if not service:
+            continue
+        if not await _is_on_wifi(r.get("device_tracker")):
+            logger.info(
+                "[notif] Push overgeslagen voor %s — device_tracker %s niet thuis",
+                service, r.get("device_tracker"),
+            )
+            continue
+        await notify_push(service, title, ticket_title, data=data)
 
 
 async def notify_urgent_ticket(
