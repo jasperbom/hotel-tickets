@@ -125,7 +125,7 @@ export default function NewTicket() {
             <button
               type="button"
               onClick={() => setMultiRoom(false)}
-              className={`flex-1 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+              className={`flex-1 py-1.5 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
                 !multiRoom ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"
               }`}
             >
@@ -134,7 +134,7 @@ export default function NewTicket() {
             <button
               type="button"
               onClick={() => setMultiRoom(true)}
-              className={`flex-1 py-1.5 rounded-lg border text-sm font-medium transition-all ${
+              className={`flex-1 py-1.5 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
                 multiRoom ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"
               }`}
             >
