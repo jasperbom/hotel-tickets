@@ -285,6 +285,34 @@ async def get_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Depen
     return item
 
 
+class ReorderRequest(BaseModel):
+    ticket_ids: list[str]
+
+
+@router.post("/reorder", status_code=status.HTTP_204_NO_CONTENT)
+async def reorder_tickets(body: ReorderRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Update sort_order voor een lijst tickets van de huidige gebruiker.
+
+    De volgorde in `ticket_ids` bepaalt de nieuwe sort_order. We gebruiken
+    negatieve waarden (positie 0 → -N, ... positie N-1 → -1) zodat nieuwe
+    tickets met de standaardwaarde 0 onderaan hun prioriteitsgroep verschijnen.
+    """
+    if not body.ticket_ids:
+        return
+    result = await db.execute(
+        select(Ticket).where(
+            Ticket.id.in_(body.ticket_ids),
+            Ticket.assigned_to == user.ha_user_id,
+        )
+    )
+    tickets_by_id = {t.id: t for t in result.scalars().all()}
+    n = len(body.ticket_ids)
+    for idx, ticket_id in enumerate(body.ticket_ids):
+        t = tickets_by_id.get(ticket_id)
+        if t is not None:
+            t.sort_order = idx - n
+
+
 @router.post("/{ticket_id}/pin", status_code=status.HTTP_204_NO_CONTENT)
 async def pin_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
     """Pin een ticket bovenaan in 'Mijn openstaande tickets' voor de huidige gebruiker."""

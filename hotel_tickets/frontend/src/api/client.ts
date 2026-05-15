@@ -79,6 +79,7 @@ export interface Ticket {
   photos: string[] | null;
   comment_count?: number;
   pinned?: boolean;
+  sort_order?: number;
 }
 
 export interface Comment {
@@ -197,6 +198,7 @@ export const ticketApi = {
   remove: (id: string) => api.delete(`/tickets/${id}`),
   pin: (id: string) => api.post(`/tickets/${id}/pin`),
   unpin: (id: string) => api.delete(`/tickets/${id}/pin`),
+  reorder: (ticket_ids: string[]) => api.post(`/tickets/reorder`, { ticket_ids }),
   getComments: (id: string) => api.get<Comment[]>(`/tickets/${id}/comments`),
   addComment: (id: string, body: string) => api.post<Comment>(`/tickets/${id}/comments`, { body }),
   updateComment: (ticketId: string, commentId: string, body: string) =>

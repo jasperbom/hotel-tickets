@@ -1,10 +1,26 @@
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import api, { ticketApi, locationApi, recurringApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
 import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
 import { OverviewRow, type ExtraRoom } from "../components/OverviewRow";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 interface Overview {
   user: {
@@ -134,6 +150,30 @@ export default function MijnOverzicht() {
       await ticketApi.pin(ticket.id);
     }
     await loadData(deptFilter);
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
+
+  function handleMyTicketsDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (!overview) return;
+    const tickets = overview.my_tickets;
+    const activeTicket = tickets.find((t) => t.id === active.id);
+    const overTicket = tickets.find((t) => t.id === over.id);
+    if (!activeTicket || !overTicket) return;
+    // Alleen herschikken binnen dezelfde prioriteit én pin-status.
+    if (activeTicket.priority !== overTicket.priority) return;
+    if (!!activeTicket.pinned !== !!overTicket.pinned) return;
+    const oldIndex = tickets.findIndex((t) => t.id === active.id);
+    const newIndex = tickets.findIndex((t) => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const newOrder = arrayMove(tickets, oldIndex, newIndex);
+    setOverview({ ...overview, my_tickets: newOrder });
+    ticketApi.reorder(newOrder.map((t) => t.id)).catch(() => loadData(deptFilter));
   }
 
   async function completeRecurring(taskId: string, taskTitle: string) {
@@ -285,11 +325,22 @@ export default function MijnOverzicht() {
             <p className="text-sm">Geen openstaande tickets. Goed werk!</p>
           </div>
         ) : (
-          <div className="space-y-2">
-            {my_tickets.map((t) => (
-              <MyTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={() => closeTicket(t.id, t.title)} onTogglePin={() => togglePin(t)} />
-            ))}
-          </div>
+          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMyTicketsDragEnd}>
+            <SortableContext items={my_tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+              <div className="space-y-2">
+                {my_tickets.map((t) => (
+                  <SortableMyTicketRow
+                    key={t.id}
+                    ticket={t}
+                    locationName={t.location_id ? locations[t.location_id] : undefined}
+                    occupied={t.location_id ? keycards[t.location_id] : undefined}
+                    onClose={() => closeTicket(t.id, t.title)}
+                    onTogglePin={() => togglePin(t)}
+                  />
+                ))}
+              </div>
+            </SortableContext>
+          </DndContext>
         )}
       </section>
 
@@ -447,6 +498,41 @@ function MyTicketRow({ ticket, locationName, occupied, onClose, onTogglePin }: {
       pinned={ticket.pinned}
       onTogglePin={onTogglePin}
     />
+  );
+}
+
+function SortableMyTicketRow(props: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void; onTogglePin: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.ticket.id });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: "relative",
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-stretch gap-1">
+      <button
+        {...attributes}
+        {...listeners}
+        type="button"
+        aria-label="Versleep om volgorde te wijzigen"
+        title="Versleep om volgorde te wijzigen"
+        className="shrink-0 cursor-grab active:cursor-grabbing touch-none w-5 flex items-center justify-center text-gray-300 hover:text-gray-500 select-none"
+      >
+        <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
+          <circle cx="2.5" cy="3" r="1.2" />
+          <circle cx="2.5" cy="8" r="1.2" />
+          <circle cx="2.5" cy="13" r="1.2" />
+          <circle cx="7.5" cy="3" r="1.2" />
+          <circle cx="7.5" cy="8" r="1.2" />
+          <circle cx="7.5" cy="13" r="1.2" />
+        </svg>
+      </button>
+      <div className="flex-1 min-w-0">
+        <MyTicketRow {...props} />
+      </div>
+    </div>
   );
 }
 
