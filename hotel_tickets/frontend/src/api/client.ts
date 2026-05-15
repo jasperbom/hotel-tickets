@@ -100,6 +100,8 @@ export interface UserRole {
   notify_push: boolean;
   notify_email: boolean;
   ha_notify_service: string | null;
+  ha_device_tracker: string | null;
+  notify_new_ticket: boolean;
 }
 
 export type SubtaskMode = "none" | "subtasks" | "rooms";

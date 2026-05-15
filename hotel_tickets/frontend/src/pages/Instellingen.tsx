@@ -135,7 +135,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserRole>>({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "technician" as Role, email: "", ha_notify_service: "" });
+  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "technician" as Role, email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
 
   useEffect(() => {
     userApi.list().then((r) => setUsers(r.data)).finally(() => setLoading(false));
@@ -156,7 +156,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   async function createUser() {
     const r = await userApi.create({ ...newForm, notify_push: true, notify_email: !!newForm.email });
     setUsers((prev) => [...prev, r.data]);
-    setNewForm({ ha_user_id: "", display_name: "", role: "technician", email: "", ha_notify_service: "" });
+    setNewForm({ ha_user_id: "", display_name: "", role: "technician", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
     setShowNew(false);
   }
 
@@ -186,6 +186,14 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
             <input placeholder="HA notify service" value={newForm.ha_notify_service}
               onChange={(e) => setNewForm({ ...newForm, ha_notify_service: e.target.value })}
               className="col-span-2 border rounded px-2 py-1 text-sm" />
+            <input placeholder="HA device_tracker (bijv. device_tracker.iphone_dennis)" value={newForm.ha_device_tracker}
+              onChange={(e) => setNewForm({ ...newForm, ha_device_tracker: e.target.value })}
+              className="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+            <label className="col-span-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={newForm.notify_new_ticket}
+                onChange={(e) => setNewForm({ ...newForm, notify_new_ticket: e.target.checked })} />
+              <span>Push bij elk nieuw ticket in mijn afdeling{newForm.ha_device_tracker ? " (alleen op wifi)" : ""}</span>
+            </label>
           </div>
           <div className="flex gap-2">
             <button onClick={createUser} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
@@ -217,6 +225,13 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                       placeholder="E-mail" className="border rounded px-2 py-1 text-sm" />
                     <input value={editForm.ha_notify_service || ""} onChange={(e) => setEditForm({ ...editForm, ha_notify_service: e.target.value })}
                       placeholder="Notify service" className="border rounded px-2 py-1 text-sm" />
+                    <input value={editForm.ha_device_tracker || ""} onChange={(e) => setEditForm({ ...editForm, ha_device_tracker: e.target.value })}
+                      placeholder="device_tracker entity (optioneel)" className="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+                    <label className="col-span-2 flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={!!editForm.notify_new_ticket}
+                        onChange={(e) => setEditForm({ ...editForm, notify_new_ticket: e.target.checked })} />
+                      <span>Push bij elk nieuw ticket in mijn afdeling{editForm.ha_device_tracker ? " (alleen op wifi)" : ""}</span>
+                    </label>
                   </div>
                   <div className="flex gap-2">
                     <button onClick={() => saveEdit(user.ha_user_id)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
