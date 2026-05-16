@@ -188,14 +188,18 @@ async def get_my_overview(
                 active_by_template[tid] = ticket
 
     def _next_run_for(t: RecurringTemplate, after: datetime) -> datetime:
-        # Interval-modus: gebruik het opgeslagen next_due_at zodat de taak
-        # alleen verschijnt op de dag dat hij echt weer moet (en niet steeds
-        # zichtbaar blijft als de cron toevallig elke dag zou triggeren).
-        if t.interval_days and t.next_due_at:
+        # Respecteer next_due_at als die in de toekomst ligt — ook in cron-modus.
+        # Anders blijft een net-afgeronde taak nog als 'verlopen' verschijnen
+        # omdat croniter de cron-tick van vandaag teruggeeft, terwijl
+        # mark_template_completed next_due_at al naar de volgende cyclus heeft
+        # doorgeschoven (bv. wanneer een achterblijver van vorige week vandaag
+        # wordt afgesloten in kamer-modus).
+        if t.next_due_at:
             nd = t.next_due_at
             if nd.tzinfo is not None:
                 nd = nd.replace(tzinfo=None)
-            return nd
+            if nd > after:
+                return nd
         return croniter(t.cron_expression, after).get_next(datetime)
 
     for t in dept_templates:
