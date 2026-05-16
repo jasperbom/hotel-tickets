@@ -208,6 +208,21 @@ async def get_my_overview(
             next_run = _next_run_for(t, base_dt)
             has_open = t.id in templates_with_open
 
+            # Als de cyclus al doorgeschoven is naar ná vandaag (next_due_at
+            # ligt in een toekomstige dag) is het sjabloon afgerond voor nu —
+            # nooit als 'vandaag/verlopen' tonen, ook niet als er nog een open
+            # ticket bestaat (bv. via 'Start nu' of heropende ticket).
+            nd_naive = None
+            if t.next_due_at:
+                nd_naive = t.next_due_at
+                if nd_naive.tzinfo is not None:
+                    nd_naive = nd_naive.replace(tzinfo=None)
+            cycle_advanced = nd_naive is not None and nd_naive.date() > today
+
+            if cycle_advanced:
+                upcoming_recurring.append((nd_naive, _template_dict(t, nd_naive)))
+                continue
+
             if next_run.date() == today:
                 # Tel het aantal vandaag gesloten tickets voor dit sjabloon
                 closed_today_count = await db.scalar(
