@@ -9,8 +9,8 @@ import { StatusBadge, CategoryBadge } from "../components/StatusBadge";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 
-const CATEGORY_COLORS = { technical: "#8b5cf6", housekeeping: "#14b8a6", reception: "#6366f1" };
-const CATEGORY_LABELS = { technical: "TD", housekeeping: "Huishouding", reception: "Receptie" };
+const CATEGORY_COLORS = { technical: "#8b5cf6", housekeeping: "#14b8a6", reception: "#6366f1", service: "#f97316", kitchen: "#f43f5e", sales: "#f59e0b", garden: "#10b981" };
+const CATEGORY_LABELS = { technical: "TD", housekeeping: "Huishouding", reception: "Receptie", service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin" };
 const STATUS_COLORS = { open: "#eab308", in_progress: "#3b82f6", closed: "#22c55e" };
 const STATUS_LABELS = { open: "Open", in_progress: "In behandeling", closed: "Gesloten" };
 

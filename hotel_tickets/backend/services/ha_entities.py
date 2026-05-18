@@ -35,6 +35,10 @@ async def sync_ticket_sensors(db: AsyncSession) -> None:
             (Category.technical, "technical_open", "Open technische tickets"),
             (Category.housekeeping, "housekeeping_open", "Open huishoudingstickets"),
             (Category.reception, "reception_open", "Open receptietickets"),
+            (Category.service, "service_open", "Open bedieningstickets"),
+            (Category.kitchen, "kitchen_open", "Open keukentickets"),
+            (Category.sales, "sales_open", "Open sales-tickets"),
+            (Category.garden, "garden_open", "Open tuintickets"),
         ]:
             count = await db.scalar(
                 select(func.count()).where(

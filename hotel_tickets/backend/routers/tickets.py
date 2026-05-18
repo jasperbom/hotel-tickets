@@ -333,6 +333,7 @@ async def create_ticket(
     if recipients:
         category_label = {
             "technical": "TD", "housekeeping": "Huishouding", "reception": "Receptie",
+            "service": "Bediening", "kitchen": "Keuken", "sales": "Sales", "garden": "Tuin",
         }.get(ticket.category.value, ticket.category.value)
         await notify_new_department_ticket(ticket.title, category_label, recipients, ticket_url)
 

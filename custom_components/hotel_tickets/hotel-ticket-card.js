@@ -5,7 +5,7 @@
  * Gebruik in dashboard YAML:
  *   type: custom:hotel-ticket-card
  *   title: Ticket aanmaken       # optioneel
- *   default_category: technical  # optioneel: technical | housekeeping | reception
+ *   default_category: technical  # optioneel: technical | housekeeping | reception | service | kitchen | sales | garden
  *   default_priority: medium     # optioneel: low | medium | high | urgent
  */
 
@@ -13,6 +13,10 @@ const CATEGORIES = [
   { value: "technical",    label: "TD" },
   { value: "housekeeping", label: "Huishouding" },
   { value: "reception",    label: "Receptie" },
+  { value: "service",      label: "Bediening" },
+  { value: "kitchen",      label: "Keuken" },
+  { value: "sales",        label: "Sales" },
+  { value: "garden",       label: "Tuin" },
 ];
 
 const PRIORITIES = [
