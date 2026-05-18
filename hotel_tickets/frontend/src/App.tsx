@@ -283,7 +283,7 @@ export default function App() {
   const canSeeBikes =
     bikesModuleRoles === "all" ||
     (bikesModuleRoles === "reception" &&
-      (currentUser?.role === "reception" || isAdminOrSupervisor)) ||
+      (currentUser?.department === "reception" || isAdminOrSupervisor)) ||
     (bikesModuleRoles === "admin_supervisor" && isAdminOrSupervisor);
 
   const visibleModules = MODULES.filter(

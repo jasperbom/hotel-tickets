@@ -80,6 +80,29 @@ async def _run_migrations(conn):
             logger.info("Migratie: %s.%s toevoegen", table, column)
             await conn.exec_driver_sql(f"ALTER TABLE {table} ADD COLUMN {column} {col_def}")
 
+    # Data-migratie v1.4.61: scheid 'rang' en 'afdeling'. De oude rol-waarden
+    # technician/housekeeping/reception waren een combinatie van rol en
+    # afdeling; vanaf nu is role = admin/supervisor/employee en is department
+    # een aparte kolom (technical/housekeeping/reception). Vul department uit
+    # de oude role als die nog leeg is, en hernoem dan de oude waarden naar
+    # 'employee'. Idempotent: na één run matchen de WHERE-clauses niets meer.
+    await conn.exec_driver_sql(
+        "UPDATE user_roles SET department = 'technical' "
+        "WHERE role = 'technician' AND department IS NULL"
+    )
+    await conn.exec_driver_sql(
+        "UPDATE user_roles SET department = 'housekeeping' "
+        "WHERE role = 'housekeeping' AND department IS NULL"
+    )
+    await conn.exec_driver_sql(
+        "UPDATE user_roles SET department = 'reception' "
+        "WHERE role = 'reception' AND department IS NULL"
+    )
+    await conn.exec_driver_sql(
+        "UPDATE user_roles SET role = 'employee' "
+        "WHERE role IN ('technician', 'housekeeping', 'reception')"
+    )
+
     # Reset custom emoji's van recurring templates naar NULL (altijd 🔁 gebruiken)
     await conn.exec_driver_sql("UPDATE recurring_templates SET emoji = NULL WHERE emoji IS NOT NULL")
 

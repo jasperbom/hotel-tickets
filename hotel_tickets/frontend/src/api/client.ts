@@ -50,7 +50,7 @@ export function formatDateNL(isoDate: string | null | undefined): string {
 export type Category = "technical" | "housekeeping" | "reception";
 export type Status = "open" | "in_progress" | "closed";
 export type Priority = "low" | "medium" | "high" | "urgent";
-export type Role = "admin" | "supervisor" | "technician" | "housekeeping" | "reception";
+export type Role = "admin" | "supervisor" | "employee";
 
 export interface Subtask {
   label: string;

@@ -122,11 +122,13 @@ function NotificatieInstellingen() {
 }
 
 const ROLE_LABELS: Record<Role, string> = {
-  admin: "Admin", supervisor: "Supervisor", technician: "Technicus",
-  housekeeping: "Huishouding", reception: "Receptie",
+  admin: "Admin", supervisor: "Supervisor", employee: "Medewerker",
 };
 const DEPT_LABELS: Record<Category, string> = {
   technical: "TD", housekeeping: "Huishouding", reception: "Receptie",
+};
+const DEPT_FULL_LABELS: Record<Category, string> = {
+  technical: "Technische dienst", housekeeping: "Huishouding", reception: "Receptie",
 };
 
 function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
@@ -135,7 +137,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserRole>>({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "technician" as Role, email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
 
   useEffect(() => {
     userApi.list().then((r) => setUsers(r.data)).finally(() => setLoading(false));
@@ -154,9 +156,15 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function createUser() {
-    const r = await userApi.create({ ...newForm, notify_push: true, notify_email: !!newForm.email });
+    const payload = {
+      ...newForm,
+      department: newForm.department === "" ? null : newForm.department,
+      notify_push: true,
+      notify_email: !!newForm.email,
+    };
+    const r = await userApi.create(payload);
     setUsers((prev) => [...prev, r.data]);
-    setNewForm({ ha_user_id: "", display_name: "", role: "technician", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+    setNewForm({ ha_user_id: "", display_name: "", role: "employee", department: "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
     setShowNew(false);
   }
 
@@ -179,6 +187,11 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
             <select value={newForm.role} onChange={(e) => setNewForm({ ...newForm, role: e.target.value as Role })}
               className="border rounded px-2 py-1 text-sm bg-white">
               {(Object.keys(ROLE_LABELS) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
+            </select>
+            <select value={newForm.department} onChange={(e) => setNewForm({ ...newForm, department: e.target.value as Category | "" })}
+              className="border rounded px-2 py-1 text-sm bg-white">
+              <option value="">— Afdeling kiezen —</option>
+              {(Object.keys(DEPT_FULL_LABELS) as Category[]).map((d) => <option key={d} value={d}>{DEPT_FULL_LABELS[d]}</option>)}
             </select>
             <input placeholder="E-mail (optioneel)" value={newForm.email}
               onChange={(e) => setNewForm({ ...newForm, email: e.target.value })}
@@ -220,6 +233,18 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                       </select>
                     ) : (
                       <span className="border rounded px-2 py-1 text-sm bg-gray-50 text-gray-500">{ROLE_LABELS[user.role]}</span>
+                    )}
+                    {isAdmin ? (
+                      <select value={editForm.department ?? user.department ?? ""}
+                        onChange={(e) => setEditForm({ ...editForm, department: (e.target.value || null) as Category | null })}
+                        className="border rounded px-2 py-1 text-sm bg-white">
+                        <option value="">— Geen afdeling —</option>
+                        {(Object.keys(DEPT_FULL_LABELS) as Category[]).map((d) => <option key={d} value={d}>{DEPT_FULL_LABELS[d]}</option>)}
+                      </select>
+                    ) : (
+                      <span className="border rounded px-2 py-1 text-sm bg-gray-50 text-gray-500">
+                        {user.department ? DEPT_FULL_LABELS[user.department] : "Geen afdeling"}
+                      </span>
                     )}
                     <input value={editForm.email || ""} onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
                       placeholder="E-mail" className="border rounded px-2 py-1 text-sm" />
