@@ -108,18 +108,40 @@ async def notify_ticket_created(ticket_title: str, category: str) -> None:
     )
 
 
+# States van device_tracker / person entities die als 'niet aanwezig' tellen.
+# Elke andere state (incl. 'home' of een eigen zone-naam zoals 'Hotel') betekent
+# dat de medewerker in een HA-zone zit en dus een push krijgt.
+_AWAY_STATES = {"not_home", "away", "unavailable", "unknown", "none", ""}
+
+
 async def _is_on_wifi(device_tracker: str | None) -> bool:
-    """True wanneer geen tracker gekoppeld is (geen filter) óf state == 'home'."""
+    """True wanneer geen tracker gekoppeld is, óf de tracker in een HA-zone zit.
+
+    Een device_tracker rapporteert 'home' wanneer het toestel binnen de HA
+    home-zone is (typisch: aangesloten op het hotel-wifi). Wanneer de HA
+    home-zone niet samenvalt met het hotel kan de state ook een andere
+    zone-naam zijn (bv. 'Hotel'). Beide tellen als 'aanwezig'.
+    """
     if not device_tracker:
         return True
     try:
         state = await get_sensor_state(device_tracker)
     except Exception as e:
-        logger.warning(f"Device tracker uitlezen mislukt voor {device_tracker}: {e}")
+        logger.warning("[notif] device_tracker %s uitlezen mislukt: %s", device_tracker, e)
         return False
     if not state:
+        logger.warning(
+            "[notif] device_tracker %s bestaat niet in HA — controleer de "
+            "entity-id in Instellingen.", device_tracker,
+        )
         return False
-    return str(state.get("state", "")).lower() == "home"
+    raw = str(state.get("state", "")).strip().lower()
+    is_present = raw not in _AWAY_STATES
+    logger.info(
+        "[notif] device_tracker %s state=%r → %s",
+        device_tracker, raw, "aanwezig" if is_present else "afwezig",
+    )
+    return is_present
 
 
 async def notify_new_department_ticket(
@@ -132,10 +154,15 @@ async def notify_new_department_ticket(
 
     `recipients` is een lijst dicts met keys: `service` (notify.<...>),
     `device_tracker` (optioneel entity_id). Als `device_tracker` gevuld is wordt
-    de push alleen verstuurd wanneer de tracker-state 'home' is.
+    de push alleen verstuurd wanneer de tracker-state een aanwezig-zone is.
     """
     if not recipients:
+        logger.info("[notif] geen recipients voor afdelings-ticket %r", ticket_title)
         return
+    logger.info(
+        "[notif] %d recipient(s) voor afdelings-ticket %r",
+        len(recipients), ticket_title,
+    )
     title = f"Nieuw ticket: {category_label}"
     data: dict = {"tag": "new_department_ticket"}
     if ticket_url:
@@ -144,12 +171,14 @@ async def notify_new_department_ticket(
         service = r.get("service")
         if not service:
             continue
-        if not await _is_on_wifi(r.get("device_tracker")):
+        device_tracker = r.get("device_tracker")
+        if not await _is_on_wifi(device_tracker):
             logger.info(
-                "[notif] Push overgeslagen voor %s — device_tracker %s niet thuis",
-                service, r.get("device_tracker"),
+                "[notif] push overgeslagen voor %s — device_tracker %s niet aanwezig",
+                service, device_tracker,
             )
             continue
+        logger.info("[notif] push naar %s (device_tracker=%s)", service, device_tracker)
         await notify_push(service, title, ticket_title, data=data)
 
 

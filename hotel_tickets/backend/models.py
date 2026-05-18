@@ -200,9 +200,10 @@ class UserRole(Base):
     notify_push: Mapped[bool] = mapped_column(Boolean, default=True)
     notify_email: Mapped[bool] = mapped_column(Boolean, default=False)
     ha_notify_service: Mapped[str | None] = mapped_column(String(255))  # bijv. "notify.mobile_app_iphone"
-    # Optioneel: device_tracker entity-id. Als gevuld worden 'nieuwe ticket'-
-    # push notificaties alleen verstuurd wanneer dit tracker-state 'home' is
-    # (d.w.z. de medewerker zit op het wifi-netwerk van het hotel).
+    # Optioneel: device_tracker (of person) entity-id. Als gevuld worden 'nieuwe
+    # ticket'-push notificaties alleen verstuurd wanneer dit tracker in een
+    # HA-zone zit (state 'home' of een andere zone-naam) — d.w.z. de medewerker
+    # is in de buurt van het hotel, typisch op het wifi-netwerk.
     ha_device_tracker: Mapped[str | None] = mapped_column(String(255))
     # Opt-in: push krijgen bij elk nieuw ticket in de eigen afdeling.
     notify_new_ticket: Mapped[bool] = mapped_column(Boolean, default=False)
