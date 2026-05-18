@@ -126,9 +126,11 @@ const ROLE_LABELS: Record<Role, string> = {
 };
 const DEPT_LABELS: Record<Category, string> = {
   technical: "TD", housekeeping: "Huishouding", reception: "Receptie",
+  service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin",
 };
 const DEPT_FULL_LABELS: Record<Category, string> = {
   technical: "Technische dienst", housekeeping: "Huishouding", reception: "Receptie",
+  service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin",
 };
 
 function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {

@@ -136,6 +136,10 @@ const DEPT_LABELS: Record<Category, string> = {
   technical: "TD",
   housekeeping: "Huishouding",
   reception: "Receptie",
+  service: "Bediening",
+  kitchen: "Keuken",
+  sales: "Sales",
+  garden: "Tuin",
 };
 
 export default function Settings() {

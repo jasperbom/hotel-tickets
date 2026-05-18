@@ -14,6 +14,10 @@ class Category(str, PyEnum):
     technical = "technical"
     housekeeping = "housekeeping"
     reception = "reception"
+    service = "service"
+    kitchen = "kitchen"
+    sales = "sales"
+    garden = "garden"
 
 
 class Status(str, PyEnum):

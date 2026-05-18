@@ -5,8 +5,8 @@ import {
 } from "recharts";
 import { reportApi, type ReportSummary, type TimelinePoint } from "../api/client";
 
-const CATEGORY_COLORS = { technical: "#8b5cf6", housekeeping: "#14b8a6", reception: "#6366f1" };
-const CATEGORY_LABELS = { technical: "TD", housekeeping: "Huishouding", reception: "Receptie" };
+const CATEGORY_COLORS = { technical: "#8b5cf6", housekeeping: "#14b8a6", reception: "#6366f1", service: "#f97316", kitchen: "#f43f5e", sales: "#f59e0b", garden: "#10b981" };
+const CATEGORY_LABELS = { technical: "TD", housekeeping: "Huishouding", reception: "Receptie", service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin" };
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);

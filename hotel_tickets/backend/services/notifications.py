@@ -31,17 +31,6 @@ async def notify_push(ha_notify_service: str, title: str, message: str, data: di
         logger.warning(f"Push notificatie mislukt naar {ha_notify_service}: {e}")
 
 
-async def notify_persistent(title: str, message: str, notification_id: str | None = None) -> None:
-    """Maak een persistent notification aan in HA."""
-    try:
-        payload = {"title": title, "message": message}
-        if notification_id:
-            payload["notification_id"] = notification_id
-        await call_service("persistent_notification", "create", payload)
-    except Exception as e:
-        logger.warning(f"Persistent notificatie mislukt: {e}")
-
-
 def send_email(to: str, subject: str, body: str) -> None:
     """Stuur een e-mail via SMTP (synchroon, gebruik in executor)."""
     if not SMTP_ENABLED or not SMTP_HOST or not to:
@@ -76,8 +65,6 @@ async def notify_ticket_assigned(
         data = {"url": ticket_url} if ticket_url else None
         await notify_push(assignee_service, title, message, data=data)
 
-    await notify_persistent(title, message, notification_id=f"ticket_assigned_{assignee_service}")
-
     if assignee_email:
         import asyncio
         link = f'<p><a href="{ticket_url}">Open ticket</a></p>' if ticket_url else ""
@@ -97,14 +84,6 @@ async def notify_room_free(ticket_title: str, location_name: str, assignee_servi
         title=f"🔓 {location_name} is nu vrij",
         message=f"Je kunt nu aan de slag: {ticket_title}",
         data=data,
-    )
-
-
-async def notify_ticket_created(ticket_title: str, category: str) -> None:
-    """Maak een algemene persistent notificatie bij nieuw ticket."""
-    await notify_persistent(
-        title=f"Nieuw ticket: {category}",
-        message=ticket_title,
     )
 
 

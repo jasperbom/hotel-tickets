@@ -51,7 +51,13 @@ const DEPT_LABELS: Record<Category, string> = {
   technical: "TD",
   housekeeping: "Huishouding",
   reception: "Receptie",
+  service: "Bediening",
+  kitchen: "Keuken",
+  sales: "Sales",
+  garden: "Tuin",
 };
+
+const ALL_CATEGORIES: Category[] = ["technical", "housekeeping", "reception", "service", "kitchen", "sales", "garden"];
 
 const PRIORITY_ORDER: Record<string, number> = {
   urgent: 0,
@@ -75,7 +81,7 @@ export default function MijnOverzicht() {
   const [showAllToday, setShowAllToday] = useState(() => localStorage.getItem("ht_show_all_today") === "1");
   const [deptFilter, setDeptFilter] = useState<Category | "">(() => {
     const saved = localStorage.getItem("ht_dept_filter");
-    if (saved === "technical" || saved === "housekeeping" || saved === "reception") return saved;
+    if (saved && (ALL_CATEGORIES as string[]).includes(saved)) return saved as Category;
     return "";
   });
   const [showUpcoming, setShowUpcoming] = useState(() => localStorage.getItem("ht_show_upcoming") === "1");
@@ -210,7 +216,7 @@ export default function MijnOverzicht() {
       {/* Afdelingsfilter voor admin/supervisor */}
       {isManager && (
         <div className="flex gap-2 flex-wrap">
-          {([["", "Alle afdelingen"], ["technical", "TD"], ["housekeeping", "Huishouding"], ["reception", "Receptie"]] as const).map(([val, label]) => (
+          {([["", "Alle afdelingen"], ...ALL_CATEGORIES.map((c) => [c, DEPT_LABELS[c]] as [Category, string])] as Array<[Category | "", string]>).map(([val, label]) => (
             <button
               key={val}
               onClick={() => changeDeptFilter(val as Category | "")}

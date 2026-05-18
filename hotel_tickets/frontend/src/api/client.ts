@@ -47,7 +47,7 @@ export function formatDateNL(isoDate: string | null | undefined): string {
 
 // --- Types ---
 
-export type Category = "technical" | "housekeeping" | "reception";
+export type Category = "technical" | "housekeeping" | "reception" | "service" | "kitchen" | "sales" | "garden";
 export type Status = "open" | "in_progress" | "closed";
 export type Priority = "low" | "medium" | "high" | "urgent";
 export type Role = "admin" | "supervisor" | "employee";

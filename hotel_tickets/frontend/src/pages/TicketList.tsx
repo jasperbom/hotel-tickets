@@ -8,6 +8,10 @@ const DEPARTMENTS = [
   { value: "technical", label: "TD" },
   { value: "housekeeping", label: "Huishouding" },
   { value: "reception", label: "Receptie" },
+  { value: "service", label: "Bediening" },
+  { value: "kitchen", label: "Keuken" },
+  { value: "sales", label: "Sales" },
+  { value: "garden", label: "Tuin" },
 ];
 
 const STATUS_OPTIONS: { value: Status; label: string }[] = [

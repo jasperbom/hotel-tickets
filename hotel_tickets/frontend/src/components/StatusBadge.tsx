@@ -30,12 +30,20 @@ const CATEGORY_LABELS: Record<Category, string> = {
   technical: "TD",
   housekeeping: "Huishouding",
   reception: "Receptie",
+  service: "Bediening",
+  kitchen: "Keuken",
+  sales: "Sales",
+  garden: "Tuin",
 };
 
 const CATEGORY_COLORS: Record<Category, string> = {
   technical: "bg-purple-100 text-purple-700",
   housekeeping: "bg-teal-100 text-teal-700",
   reception: "bg-indigo-100 text-indigo-700",
+  service: "bg-orange-100 text-orange-700",
+  kitchen: "bg-rose-100 text-rose-700",
+  sales: "bg-amber-100 text-amber-700",
+  garden: "bg-emerald-100 text-emerald-700",
 };
 
 export function StatusBadge({ status }: { status: Status }) {

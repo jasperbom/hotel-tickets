@@ -242,6 +242,10 @@ export default function RecurringTasks() {
                 <option value="technical">TD</option>
                 <option value="housekeeping">Huishouding</option>
                 <option value="reception">Receptie</option>
+                <option value="service">Bediening</option>
+                <option value="kitchen">Keuken</option>
+                <option value="sales">Sales</option>
+                <option value="garden">Tuin</option>
               </select>
             </div>
             <div>
