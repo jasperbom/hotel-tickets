@@ -13,7 +13,7 @@ from pydantic import BaseModel, field_validator
 from ..database import get_db
 from ..models import Ticket, TicketComment, TicketPin, Category, Status, Priority, Role, UserRole, BikeReservation, RecurringTemplate
 from ..auth import RequireUser, CurrentUser
-from ..services.notifications import notify_ticket_assigned, notify_ticket_created, notify_urgent_ticket, notify_new_department_ticket
+from ..services.notifications import notify_ticket_assigned, notify_urgent_ticket, notify_new_department_ticket
 from ..services.ha_entities import sync_ticket_sensors
 from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
@@ -253,7 +253,6 @@ async def create_ticket(
     await db.flush()
 
     # Notificaties
-    await notify_ticket_created(ticket.title, ticket.category.value)
     base_url = await get_ticket_base_url(db)
     ticket_url = f"{base_url}/#/tickets/{ticket.id}"
     if body.assigned_to:

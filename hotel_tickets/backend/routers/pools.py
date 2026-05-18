@@ -17,7 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import RequireUser
 from ..database import get_db
 from ..models import PoolLog, PoolId, PoolConfig, PoolIncident, UserRole, Role
-from ..services.notifications import notify_push, notify_persistent
+from ..services.notifications import notify_push
 
 logger = logging.getLogger(__name__)
 
@@ -623,7 +623,6 @@ async def create_incident(
         for admin in admins_q.scalars().all():
             if admin.ha_notify_service:
                 await notify_push(admin.ha_notify_service, title, message)
-        await notify_persistent(title, message, notification_id=f"pool_incident_{row.id}")
     except Exception as exc:
         logger.warning("Admin notificatie voor ongewoon voorval mislukt: %s", exc)
 
