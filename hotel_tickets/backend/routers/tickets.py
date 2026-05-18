@@ -285,13 +285,26 @@ async def create_ticket(
             )
         )
     )
+    dept_candidates = dept_result.scalars().all()
     creator_id = ticket.created_by
     recipients = [
         {"service": u.ha_notify_service, "device_tracker": u.ha_device_tracker}
-        for u in dept_result.scalars().all()
+        for u in dept_candidates
         # Skip de aanmaker en de directe toegewezene — die krijgen geen dubbele push.
         if u.ha_user_id != creator_id and u.ha_user_id != ticket.assigned_to
     ]
+    logger.info(
+        "[notif] dept-push %s: %d kandidaten (notify_new_ticket+push aan, "
+        "afdeling=%s, geen admin), %d na uitsluiten aanmaker/toegewezene",
+        ticket.id, len(dept_candidates), ticket.category.value, len(recipients),
+    )
+    if dept_candidates and not recipients:
+        logger.info(
+            "[notif] alle kandidaten uitgesloten (aanmaker=%s, toegewezene=%s); "
+            "kandidaat-ids=%s",
+            creator_id, ticket.assigned_to,
+            [u.ha_user_id for u in dept_candidates],
+        )
     if recipients:
         category_label = {
             "technical": "TD", "housekeeping": "Huishouding", "reception": "Receptie",
