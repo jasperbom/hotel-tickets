@@ -305,6 +305,34 @@ async def create_ticket(
             creator_id, ticket.assigned_to,
             [u.ha_user_id for u in dept_candidates],
         )
+    if not dept_candidates:
+        # Diagnose: laat zien WAAROM er niemand door de filter komt. Pak alle
+        # opt-in-medewerkers (los van afdeling/role) en log welke filter ze
+        # laat afvallen.
+        diag_result = await db.execute(
+            select(UserRole).where(UserRole.notify_new_ticket == True)
+        )
+        diag_users = diag_result.scalars().all()
+        if not diag_users:
+            logger.info(
+                "[notif] diag: geen enkele medewerker heeft notify_new_ticket aan"
+            )
+        for u in diag_users:
+            reasons = []
+            if u.role == Role.admin:
+                reasons.append("role=admin (uitgesloten)")
+            if u.department != ticket.category:
+                dept_val = u.department.value if u.department else None
+                reasons.append(f"afdeling={dept_val!r} ≠ {ticket.category.value!r}")
+            if not u.notify_push:
+                reasons.append("notify_push=False")
+            if not u.ha_notify_service:
+                reasons.append("ha_notify_service leeg")
+            logger.info(
+                "[notif] diag: user=%s display=%r → %s",
+                u.ha_user_id, u.display_name,
+                ", ".join(reasons) if reasons else "zou moeten matchen (?!)",
+            )
     if recipients:
         category_label = {
             "technical": "TD", "housekeeping": "Huishouding", "reception": "Receptie",
