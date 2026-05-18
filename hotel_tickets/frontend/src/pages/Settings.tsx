@@ -129,9 +129,7 @@ function NotificationSettings() {
 const ROLE_LABELS: Record<Role, string> = {
   admin: "Admin",
   supervisor: "Supervisor",
-  technician: "Technicus",
-  housekeeping: "Huishouding",
-  reception: "Receptie",
+  employee: "Medewerker",
 };
 
 const DEPT_LABELS: Record<Category, string> = {
@@ -147,7 +145,7 @@ export default function Settings() {
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserRole>>({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "technician" as Role, email: "", ha_notify_service: "" });
+  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "employee" as Role, email: "", ha_notify_service: "" });
 
   const isAdmin = me?.role === "admin" || me?.role === "supervisor";
 
@@ -177,7 +175,7 @@ export default function Settings() {
       notify_email: !!newForm.email,
     });
     setUsers((prev) => [...prev, r.data]);
-    setNewForm({ ha_user_id: "", display_name: "", role: "technician", email: "", ha_notify_service: "" });
+    setNewForm({ ha_user_id: "", display_name: "", role: "employee", email: "", ha_notify_service: "" });
     setShowNew(false);
   }
 

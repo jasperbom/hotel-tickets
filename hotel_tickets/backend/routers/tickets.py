@@ -270,14 +270,14 @@ async def create_ticket(
         if admin_services:
             await notify_urgent_ticket(ticket.title, admin_services, ticket_url)
 
-    # Push naar medewerkers in dezelfde afdeling die opt-in hebben gegeven —
-    # admins worden expliciet overgeslagen ('admins blijven zoals het is').
-    # Als ze een device_tracker hebben gekoppeld wordt alleen gepusht wanneer
-    # die op 'home' staat (= op het wifi-netwerk).
+    # Push naar iedereen in dezelfde afdeling die opt-in heeft gegeven —
+    # rang (admin/supervisor/employee) speelt geen rol meer: een admin die
+    # voor de TD werkt krijgt nu óók de pushes van zijn eigen afdeling.
+    # Als er een device_tracker is gekoppeld wordt alleen gepusht wanneer de
+    # tracker in een HA-zone zit (= meestal: op het hotel-wifi).
     dept_result = await db.execute(
         select(UserRole).where(
             and_(
-                UserRole.role != Role.admin,
                 UserRole.department == ticket.category,
                 UserRole.notify_new_ticket == True,
                 UserRole.notify_push == True,
@@ -295,7 +295,7 @@ async def create_ticket(
     ]
     logger.info(
         "[notif] dept-push %s: %d kandidaten (notify_new_ticket+push aan, "
-        "afdeling=%s, geen admin), %d na uitsluiten aanmaker/toegewezene",
+        "afdeling=%s), %d na uitsluiten aanmaker/toegewezene",
         ticket.id, len(dept_candidates), ticket.category.value, len(recipients),
     )
     if dept_candidates and not recipients:
@@ -319,8 +319,6 @@ async def create_ticket(
             )
         for u in diag_users:
             reasons = []
-            if u.role == Role.admin:
-                reasons.append("role=admin (uitgesloten)")
             if u.department != ticket.category:
                 dept_val = u.department.value if u.department else None
                 reasons.append(f"afdeling={dept_val!r} ≠ {ticket.category.value!r}")

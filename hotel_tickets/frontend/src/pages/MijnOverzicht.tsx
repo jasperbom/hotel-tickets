@@ -44,9 +44,7 @@ interface Overview {
 const ROLE_LABELS: Record<Role, string> = {
   admin: "Beheerder",
   supervisor: "Supervisor",
-  technician: "Technicus",
-  housekeeping: "Huishouding",
-  reception: "Receptie",
+  employee: "Medewerker",
 };
 
 const DEPT_LABELS: Record<Category, string> = {

@@ -113,7 +113,7 @@ async def get_current_user(
             admin_count = await db.scalar(
                 select(func.count()).where(UserRole.role == Role.admin)
             )
-            initial_role = Role.admin if admin_count == 0 else Role.technician
+            initial_role = Role.admin if admin_count == 0 else Role.employee
             if initial_role == Role.admin:
                 logger.info("[auth] Eerste gebruiker %s krijgt automatisch admin-rol", ha_user_id)
             user_role = UserRole(

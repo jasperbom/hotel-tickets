@@ -32,9 +32,7 @@ class Priority(str, PyEnum):
 class Role(str, PyEnum):
     admin = "admin"
     supervisor = "supervisor"
-    technician = "technician"
-    housekeeping = "housekeeping"
-    reception = "reception"
+    employee = "employee"
 
 
 class Ticket(Base):
