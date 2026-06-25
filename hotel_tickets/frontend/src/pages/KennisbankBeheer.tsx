@@ -63,6 +63,7 @@ export default function KennisbankBeheer() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [entryCleaning, setEntryCleaning] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
@@ -280,6 +281,32 @@ export default function KennisbankBeheer() {
       setDocEditError("Opslaan mislukt. Probeer opnieuw.");
     } finally {
       setDocEditSaving(false);
+    }
+  }
+
+  /** Laat Claude het huidige kennis-item (titel + inhoud) herschrijven tot nette
+   * tekst en afdeling/onderwerp voorstellen. Werkt voor nieuwe én bestaande items. */
+  async function cleanupEntryForm() {
+    const raw = `${form.title}\n\n${form.answer}`.trim();
+    if (!raw) return;
+    setEntryCleaning(true);
+    setError("");
+    try {
+      const r = await knowledgeApi.aiCleanup(raw);
+      setForm((prev) => ({
+        ...prev,
+        title: r.data.title || prev.title,
+        answer: r.data.content || prev.answer,
+        category: (r.data.category as Category) || prev.category,
+        folder: r.data.folder || prev.folder,
+      }));
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Opschonen mislukt.";
+      setError(detail);
+    } finally {
+      setEntryCleaning(false);
     }
   }
 
@@ -1024,25 +1051,40 @@ export default function KennisbankBeheer() {
               </p>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex justify-end gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => {
-                  setShowForm(false);
-                  setAnsweringQuestionId(null);
-                  setFormImages([]);
-                }}
-                className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
-              >
-                Annuleren
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-              >
-                {saving ? "Opslaan..." : "Opslaan"}
-              </button>
+            <div className="flex items-center justify-between gap-2 pt-1">
+              {aiSettings?.ai_available ? (
+                <button
+                  type="button"
+                  onClick={cleanupEntryForm}
+                  disabled={entryCleaning || (!form.title.trim() && !form.answer.trim())}
+                  title="Laat de AI dit item herschrijven tot nette tekst en afdeling/onderwerp voorstellen"
+                  className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50"
+                >
+                  {entryCleaning ? "Bezig..." : "✨ Netjes maken"}
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowForm(false);
+                    setAnsweringQuestionId(null);
+                    setFormImages([]);
+                  }}
+                  className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+                >
+                  Annuleren
+                </button>
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {saving ? "Opslaan..." : "Opslaan"}
+                </button>
+              </div>
             </div>
           </form>
         </div>
