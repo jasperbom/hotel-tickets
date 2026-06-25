@@ -19,9 +19,9 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-haiku-4-5"
 
 _SYSTEM_PROMPT = (
-    "Je bent een vriendelijke interne kennisbot voor hotelpersoneel. Je voert een "
-    "gesprek en helpt de medewerker stap voor stap. Gebruik de eerdere berichten "
-    "in het gesprek als context.\n"
+    "Je bent Jaisper, een vriendelijke interne kennisbot voor hotelpersoneel. Je "
+    "voert een gesprek en helpt de medewerker stap voor stap. Gebruik de eerdere "
+    "berichten in het gesprek als context.\n"
     "Baseer je inhoudelijke antwoorden UITSLUITEND op de aangeleverde CONTEXT en "
     "wat al in het gesprek staat. Verzin geen feiten en gebruik geen kennis van "
     "buiten de context.\n"
@@ -36,6 +36,17 @@ _SYSTEM_PROMPT = (
     "(ook bij een verhelderende vraag of een deelantwoord).\n"
     "- Zet answered alleen op false als het gevraagde echt niet in de context of "
     "het gesprek staat; laat answer dan leeg."
+)
+
+
+_COVERAGE_PROMPT = (
+    "Je beoordeelt of een door een medewerker aangedragen OPLOSSING inhoudelijk "
+    "al gedekt wordt door de bestaande kennis (CONTEXT). Antwoord ALLEEN met een "
+    'JSON-object van exact deze vorm: {\"covered\": true|false}.\n'
+    "- covered=true als de oplossing in essentie hetzelfde zegt als wat al in de "
+    "context staat (geen nieuwe informatie).\n"
+    "- covered=false als de oplossing nieuwe of aanvullende informatie bevat die "
+    "nog niet in de context staat."
 )
 
 
@@ -121,3 +132,34 @@ async def answer_from_context(
         return None
 
     return {"answered": bool(data.get("answered")), "answer": (data.get("answer") or "").strip()}
+
+
+async def is_covered(solution: str, contexts: list[str], api_key: str, model: str) -> bool | None:
+    """Beoordeel of een aangedragen oplossing al door de bestaande kennis gedekt
+    wordt. Retourneert True/False, of None bij een fout/geen sleutel/geen context
+    (de router beslist dan zelf via een eenvoudige tekstvergelijking)."""
+    if not api_key or not contexts or not solution.strip():
+        return None
+    try:
+        from anthropic import AsyncAnthropic
+    except ImportError:
+        return None
+
+    client = AsyncAnthropic(api_key=api_key)
+    context_text = "\n\n---\n\n".join(contexts)
+    user_content = f"CONTEXT:\n{context_text}\n\nAANGEDRAGEN OPLOSSING:\n{solution.strip()}"
+    try:
+        resp = await client.messages.create(
+            model=model or DEFAULT_MODEL,
+            max_tokens=64,
+            system=_COVERAGE_PROMPT,
+            messages=[{"role": "user", "content": user_content}],
+        )
+    except Exception as exc:
+        logger.warning("Claude coverage-check mislukt: %s", exc)
+        return None
+    text = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")
+    data = _extract_json(text)
+    if data is None:
+        return None
+    return bool(data.get("covered"))
