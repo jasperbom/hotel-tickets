@@ -59,6 +59,23 @@
   .touch-keyboard-pb {
     padding-bottom: calc(50vh + env(safe-area-inset-bottom, 0px));
   }
+
+  /* Vaste-hoogte pagina's (bijv. de kennisbot-chat) zetten de body in `kb-fit`-
+     modus: de hele app-shell wordt op de zichtbare hoogte (--app-vh, gemeten via
+     de visualViewport) gepind en kan niet scrollen. Zo krimpt de hele pagina mee
+     wanneer het toetsenbord opent en blijft de bovenkant (navigatie) zichtbaar,
+     in plaats van dat de webview de inhoud omhoog duwt. */
+  body.kb-fit {
+    overflow: hidden;
+  }
+  body.kb-fit [data-app-root] {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--app-vh, 100dvh);
+    overflow: hidden;
+  }
 }
 
 @layer components {

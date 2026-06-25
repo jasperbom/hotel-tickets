@@ -24,40 +24,56 @@ export default function KennisBot() {
   const [solutionFor, setSolutionFor] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
-  const [kbInset, setKbInset] = useState(0);
 
-  // Houd de berichtenlijst onderaan wanneer er een bericht bijkomt of het
-  // toetsenbord opent. We scrollen alléén de lijst zelf — een scrollIntoView()
-  // zou op iOS de hele webview kunnen verschuiven en het invoerveld omhoog laten
-  // springen.
+  // Houd de berichtenlijst onderaan wanneer er een bericht bijkomt. We scrollen
+  // alléén de lijst zelf — een scrollIntoView() zou op iOS de hele webview
+  // kunnen verschuiven en het invoerveld omhoog laten springen.
   useEffect(() => {
     const el = listRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages, sending, kbInset]);
+  }, [messages, sending]);
 
   // Op iOS schuift het virtuele toetsenbord de layout-viewport niet in (anders dan
   // Android met interactive-widget=resizes-content): 100dvh blijft de volledige
-  // hoogte en het toetsenbord dekt het invoerveld af. We meten via de
-  // visualViewport hoeveel het toetsenbord onderaan afdekt en verkleinen het
-  // chatvenster met dat bedrag, zodat de invoerbalk netjes boven het toetsenbord
-  // blijft staan in plaats van te verspringen.
+  // hoogte en het toetsenbord dekt content af. Daardoor scrolt de webview de hele
+  // pagina omhoog (de bovenkant/navigatie verdwijnt) en springt de layout.
+  //
+  // Oplossing: zolang deze pagina open is, zetten we de hele app-shell vast op de
+  // hoogte van de zichtbare zone (visualViewport). Via de body-class `kb-fit`
+  // wordt de app-root op `--app-vh` gepind (zie index.css). Zo krimpt de hele
+  // pagina mee wanneer het toetsenbord opent: de navigatie blijft bovenaan staan
+  // en de invoerbalk zakt netjes tot vlak boven het toetsenbord.
   useEffect(() => {
+    const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    if (!isTouch) return;
     const vv = window.visualViewport;
-    if (!vv) return;
+    const root = document.documentElement;
+    document.body.classList.add("kb-fit");
     let raf = 0;
     const update = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(() => {
-        const overlap = window.innerHeight - vv.height - vv.offsetTop;
-        setKbInset(Math.max(0, Math.round(overlap)));
+        const h = vv ? vv.height : window.innerHeight;
+        root.style.setProperty("--app-vh", `${Math.round(h)}px`);
+        // Houd de layout-viewport bovenaan gepind zodat iOS de navigatie niet
+        // alsnog wegscrollt bij het focussen van het invoerveld.
+        window.scrollTo(0, 0);
+        const el = listRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
       });
     };
     update();
-    vv.addEventListener("resize", update);
-    vv.addEventListener("scroll", update);
+    if (vv) {
+      vv.addEventListener("resize", update);
+      vv.addEventListener("scroll", update);
+    }
     return () => {
-      vv.removeEventListener("resize", update);
-      vv.removeEventListener("scroll", update);
+      document.body.classList.remove("kb-fit");
+      root.style.removeProperty("--app-vh");
+      if (vv) {
+        vv.removeEventListener("resize", update);
+        vv.removeEventListener("scroll", update);
+      }
       cancelAnimationFrame(raf);
     };
   }, []);
@@ -172,7 +188,7 @@ export default function KennisBot() {
     <div
       data-no-kb-scroll
       className="flex flex-col max-w-2xl mx-auto"
-      style={{ height: `calc(100dvh - 7rem - ${kbInset}px)` }}
+      style={{ height: "calc(var(--app-vh, 100dvh) - 7rem)" }}
     >
       <div className="flex items-center gap-2 mb-3 shrink-0">
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">

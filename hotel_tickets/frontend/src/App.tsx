@@ -327,7 +327,7 @@ export default function App() {
   }
 
   return (
-    <div className="flex min-h-[100dvh]">
+    <div data-app-root className="flex min-h-[100dvh]">
       {/* Desktop zijbalk — verborgen op mobile */}
       <aside
         className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-[100dvh]"
