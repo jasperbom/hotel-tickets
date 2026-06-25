@@ -109,9 +109,15 @@ class EntryUpdate(BaseModel):
     is_published: Optional[bool] = None
 
 
+class ChatTurn(BaseModel):
+    role: str
+    content: str
+
+
 class AskRequest(BaseModel):
     question: str = Field(..., min_length=1)
     category: Optional[Category] = None
+    history: list[ChatTurn] = []
 
 
 class AskResponse(BaseModel):
@@ -254,14 +260,24 @@ async def _log_answered(
 async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
     # ── RAG-route: AI doorzoekt documenten + entries en formuleert een antwoord ──
     if await _ai_enabled(db):
-        chunks = await search_chunks(db, data.question, data.category)
-        entries = await knowledge_search.search(db, data.question, data.category)
+        # Retrieval-query: bij een vervolgvraag ook de vorige vraag meenemen
+        retrieval_q = data.question
+        last_user = next(
+            (t.content for t in reversed(data.history) if t.role == "user" and t.content), None
+        )
+        if last_user:
+            retrieval_q = f"{last_user} {data.question}"
+
+        chunks = await search_chunks(db, retrieval_q, data.category)
+        entries = await knowledge_search.search(db, retrieval_q, data.category)
         contexts: list[str] = list(chunks)
         for e in entries:
             contexts.append(f"{e.title}\n{e.answer}")
-        if contexts:
+
+        history = [{"role": t.role, "content": t.content} for t in data.history]
+        if contexts or history:
             result = await ai_client.answer_from_context(
-                data.question, contexts, await _ai_key(db), await _ai_model(db)
+                data.question, contexts, await _ai_key(db), await _ai_model(db), history=history
             )
             if result is not None:
                 if result["answered"] and result["answer"]:

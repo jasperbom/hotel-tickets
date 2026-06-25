@@ -19,18 +19,23 @@ logger = logging.getLogger(__name__)
 DEFAULT_MODEL = "claude-haiku-4-5"
 
 _SYSTEM_PROMPT = (
-    "Je bent een interne kennisbot voor hotelpersoneel. Beantwoord de vraag "
-    "UITSLUITEND op basis van de aangeleverde CONTEXT. Verzin niets en gebruik "
-    "geen kennis van buiten de context.\n"
+    "Je bent een vriendelijke interne kennisbot voor hotelpersoneel. Je voert een "
+    "gesprek en helpt de medewerker stap voor stap. Gebruik de eerdere berichten "
+    "in het gesprek als context.\n"
+    "Baseer je inhoudelijke antwoorden UITSLUITEND op de aangeleverde CONTEXT en "
+    "wat al in het gesprek staat. Verzin geen feiten en gebruik geen kennis van "
+    "buiten de context.\n"
     "Antwoord ALLEEN met een JSON-object van exact deze vorm, zonder code-fences "
     "of extra tekst eromheen:\n"
     '{\"answered\": true|false, \"answer\": \"...\"}\n'
-    "- Kun je de vraag volledig en betrouwbaar uit de context beantwoorden, zet "
-    "dan answered op true en geef een bondig, praktisch antwoord in het "
-    "Nederlands in answer.\n"
-    "- Staat het antwoord niet (duidelijk) in de context, zet dan answered op "
-    "false en laat answer leeg.\n"
-    "- Geef geen bronverwijzingen of meta-uitleg; alleen het antwoord zelf."
+    "- answer is je bericht aan de medewerker, in het Nederlands, in een "
+    "natuurlijke gesprekstoon. Geef bij procedures duidelijke, genummerde stappen "
+    "en houd het bondig. Je mag één verhelderende vervolgvraag stellen als dat "
+    "nodig is om verder te helpen.\n"
+    "- Zet answered op true zodra je inhoudelijk reageert op basis van de context "
+    "(ook bij een verhelderende vraag of een deelantwoord).\n"
+    "- Zet answered alleen op false als het gevraagde echt niet in de context of "
+    "het gesprek staat; laat answer dan leeg."
 )
 
 
@@ -65,14 +70,19 @@ def env_api_key() -> str:
 
 
 async def answer_from_context(
-    question: str, contexts: list[str], api_key: str, model: str
+    question: str,
+    contexts: list[str],
+    api_key: str,
+    model: str,
+    history: list[dict] | None = None,
 ) -> dict | None:
     """Vraag Claude een antwoord te formuleren uit de gegeven context-stukken.
 
-    `api_key` en `model` worden door de router bepaald (app-instelling, anders
-    addon-optie/omgeving). Retourneert {"answered": bool, "answer": str} of None
-    bij een fout / geen sleutel (de router valt dan terug op de wachtrij)."""
-    if not api_key or not contexts:
+    `history` is de voorgaande chatbeurten ([{role, content}, ...]) zodat de bot
+    vervolgvragen in context begrijpt. `api_key` en `model` worden door de router
+    bepaald (app-instelling, anders addon-optie/omgeving). Retourneert
+    {"answered": bool, "answer": str} of None bij een fout / geen sleutel."""
+    if not api_key or (not contexts and not history):
         return None
 
     try:
@@ -82,15 +92,23 @@ async def answer_from_context(
         return None
 
     client = AsyncAnthropic(api_key=api_key)
-    context_text = "\n\n---\n\n".join(contexts)
+    context_text = "\n\n---\n\n".join(contexts) if contexts else "(geen nieuwe context gevonden)"
     user_content = f"CONTEXT:\n{context_text}\n\nVRAAG: {question.strip()}"
+
+    messages: list[dict] = []
+    for turn in (history or [])[-10:]:
+        role = "assistant" if turn.get("role") == "assistant" else "user"
+        content = (turn.get("content") or "").strip()
+        if content:
+            messages.append({"role": role, "content": content})
+    messages.append({"role": "user", "content": user_content})
 
     try:
         resp = await client.messages.create(
             model=model or DEFAULT_MODEL,
             max_tokens=1024,
             system=_SYSTEM_PROMPT,
-            messages=[{"role": "user", "content": user_content}],
+            messages=messages,
         )
     except Exception as exc:
         logger.warning("Claude-aanroep mislukt: %s", exc)
