@@ -1,15 +1,14 @@
 ARG BUILD_FROM
 FROM $BUILD_FROM
 
-# Install Python and Node.js build deps
+# Python 3.13 komt uit de base-python image (zie build.yaml). We installeren
+# alleen Node.js (frontend build) + een C-toolchain als vangnet voor eventuele
+# packages zonder kant-en-klare wheel.
 RUN apk add --no-cache \
-    python3 \
-    py3-pip \
     nodejs \
     npm \
     gcc \
     musl-dev \
-    python3-dev \
     libffi-dev
 
 WORKDIR /app

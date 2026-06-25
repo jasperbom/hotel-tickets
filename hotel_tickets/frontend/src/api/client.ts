@@ -609,10 +609,18 @@ export interface KnowledgeEntry {
   keywords: string | null;
   category: Category | null;
   source_ticket_id: string | null;
+  images: string[];
   ask_count: number;
   is_published: boolean;
   created_at: string;
   updated_at: string;
+}
+
+export interface KnowledgeImportResult {
+  found: number;
+  imported: number;
+  skipped: number;
+  images: number;
 }
 
 export interface KnowledgeQuestion {
@@ -670,6 +678,25 @@ export const knowledgeApi = {
   fromTicket: (ticketId: string, data?: KnowledgeEntryInput) =>
     api.post<KnowledgeEntry>(`/knowledge/from-ticket/${ticketId}`, data ?? {}),
   stats: () => api.get<KnowledgeStats>("/knowledge/stats"),
+  imageUrl: (entryId: string, filename: string) =>
+    `${API_BASE}/knowledge/entries/${entryId}/images/${filename}`,
+  uploadImage: (entryId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<{ filename: string }>(`/knowledge/entries/${entryId}/images`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteImage: (entryId: string, filename: string) =>
+    api.delete(`/knowledge/entries/${entryId}/images/${filename}`),
+  importFile: (file: File, category?: Category | null) => {
+    const form = new FormData();
+    form.append("file", file);
+    const qs = category ? `?category=${category}` : "";
+    return api.post<KnowledgeImportResult>(`/knowledge/import${qs}`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {

@@ -231,6 +231,7 @@ class KnowledgeEntry(Base):
     answer: Mapped[str] = mapped_column(Text, nullable=False)        # de oplossing / het antwoord
     keywords: Mapped[str | None] = mapped_column(Text)              # extra trefwoorden / alternatieve formuleringen
     category: Mapped[Category | None] = mapped_column(Enum(Category))  # afdeling (optioneel filter, geen afscherming)
+    images: Mapped[str | None] = mapped_column(Text)               # JSON: ["bestand1.png", ...] (in het antwoord als markdown ![](bestand))
     source_ticket_id: Mapped[str | None] = mapped_column(String(36))  # indien gepromoveerd uit een gesloten ticket
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id
     ask_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # hoe vaak gematcht (prioritering)
