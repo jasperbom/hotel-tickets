@@ -137,9 +137,15 @@ class QuestionOut(BaseModel):
     status: KnowledgeQuestionStatus
     matched_entry_id: Optional[str] = None
     resolved_entry_id: Optional[str] = None
+    proposed_answer: Optional[str] = None
+    proposed_by: Optional[str] = None
     created_at: str
     resolved_at: Optional[str] = None
     resolved_by: Optional[str] = None
+
+
+class SolutionRequest(BaseModel):
+    solution: str = Field(..., min_length=1)
 
 
 class AnswerQueueRequest(BaseModel):
@@ -188,6 +194,8 @@ def _question_out(q: KnowledgeQuestion) -> dict:
         "status": q.status.value if isinstance(q.status, KnowledgeQuestionStatus) else q.status,
         "matched_entry_id": q.matched_entry_id,
         "resolved_entry_id": q.resolved_entry_id,
+        "proposed_answer": q.proposed_answer,
+        "proposed_by": q.proposed_by,
         "created_at": q.created_at.isoformat() if q.created_at else "",
         "resolved_at": q.resolved_at.isoformat() if q.resolved_at else None,
         "resolved_by": q.resolved_by,
@@ -310,6 +318,28 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
             source="entries",
         )
     return await _log_pending(db, data, user)
+
+
+@router.post("/questions/{question_id}/solution", status_code=200)
+async def submit_solution(
+    question_id: str,
+    data: SolutionRequest,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """De medewerker loste het zelf op en draagt de oplossing aan. Deze wordt op
+    de vraag bewaard en in de wachtrij gezet zodat een admin 'm kan beoordelen en
+    in de kennisbank kan opnemen."""
+    q = await db.get(KnowledgeQuestion, question_id)
+    if not q:
+        raise HTTPException(404, "Vraag niet gevonden")
+    q.proposed_answer = data.solution.strip()
+    q.proposed_by = user.ha_user_id
+    # Terug naar de review-wachtrij (tenzij al definitief afgehandeld)
+    if q.status != KnowledgeQuestionStatus.resolved:
+        q.status = KnowledgeQuestionStatus.pending
+    await db.flush()
+    return {"ok": True}
 
 
 # ── Kennisbank bladeren (alle medewerkers) ─────────────────────────────────────

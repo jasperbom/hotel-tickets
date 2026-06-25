@@ -632,6 +632,8 @@ export interface KnowledgeQuestion {
   status: KnowledgeQuestionStatus;
   matched_entry_id: string | null;
   resolved_entry_id: string | null;
+  proposed_answer: string | null;
+  proposed_by: string | null;
   created_at: string;
   resolved_at: string | null;
   resolved_by: string | null;
@@ -703,6 +705,8 @@ export const knowledgeApi = {
   updateEntry: (id: string, data: KnowledgeEntryInput) =>
     api.patch<KnowledgeEntry>(`/knowledge/entries/${id}`, data),
   removeEntry: (id: string) => api.delete(`/knowledge/entries/${id}`),
+  submitSolution: (questionId: string, solution: string) =>
+    api.post(`/knowledge/questions/${questionId}/solution`, { solution }),
   queue: () => api.get<KnowledgeQuestion[]>("/knowledge/queue"),
   answerQueue: (
     qid: string,

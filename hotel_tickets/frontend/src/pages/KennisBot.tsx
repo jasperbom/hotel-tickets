@@ -8,55 +8,88 @@ interface ChatMessage {
   content: string;
   kind?: "answer" | "no_answer";
   question?: string; // originele vraag (voor 'maak ticket')
+  questionId?: string; // id van de gelogde vraag (voor 'oplossing aandragen')
 }
 
 const WELCOME =
-  "Hoi! Ik ben de kennisbot. Stel je vraag of beschrijf waar je tegenaan loopt, " +
-  "dan help ik je stap voor stap op basis van onze eigen kennis.";
+  "Hoi! Ik ben Jaisper, de kennisbot. Stel je vraag of beschrijf waar je tegenaan " +
+  "loopt, dan help ik je stap voor stap op basis van onze eigen kennis.";
 
 export default function KennisBot() {
   const navigate = useNavigate();
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [input, setInput] = useState("");
   const [sending, setSending] = useState(false);
+  // Als gezet: het volgende bericht is de oplossing voor deze vraag-id
+  const [solutionFor, setSolutionFor] = useState<string | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
-  // Scroll mee naar beneden bij nieuwe berichten
   useEffect(() => {
     scrollRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, sending]);
 
   async function send() {
-    const q = input.trim();
-    if (!q || sending) return;
-    const userMsg: ChatMessage = { role: "user", content: q };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    const text = input.trim();
+    if (!text || sending) return;
+
+    // ── Oplossing-modus: medewerker beschrijft hoe hij/zij het oploste ──
+    if (solutionFor) {
+      setMessages((prev) => [...prev, { role: "user", content: text }]);
+      setInput("");
+      setSending(true);
+      const qid = solutionFor;
+      setSolutionFor(null);
+      try {
+        await knowledgeApi.submitSolution(qid, text);
+        setMessages((prev) => [
+          ...prev,
+          {
+            role: "bot",
+            content:
+              "Bedankt! Ik heb je oplossing klaargezet voor het beheer om aan de kennisbank " +
+              "toe te voegen. Zo kan ik anderen hier voortaan direct mee helpen. 🙌",
+          },
+        ]);
+      } catch {
+        setMessages((prev) => [
+          ...prev,
+          { role: "bot", content: "Het opslaan van de oplossing ging mis. Probeer het zo nog eens." },
+        ]);
+      } finally {
+        setSending(false);
+        taRef.current?.focus();
+      }
+      return;
+    }
+
+    // ── Normale vraag ──
+    const userMsg: ChatMessage = { role: "user", content: text };
+    setMessages((prev) => [...prev, userMsg]);
     setInput("");
     setSending(true);
 
-    // Bouw geschiedenis uit de vorige berichten (max 10 beurten)
     const history: ChatTurn[] = messages
       .slice(-10)
       .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }));
 
     try {
-      const res = await knowledgeApi.ask(q, null, history);
+      const res = await knowledgeApi.ask(text, null, history);
       const d = res.data;
       let botMsg: ChatMessage;
       if (d.answered) {
-        const content =
-          d.ai_answer || d.entries.map((e) => e.answer).join("\n\n") || "—";
+        const content = d.ai_answer || d.entries.map((e) => e.answer).join("\n\n") || "—";
         botMsg = { role: "bot", content, kind: "answer" };
       } else {
         botMsg = {
           role: "bot",
           kind: "no_answer",
-          question: q,
+          question: text,
+          questionId: d.question_id,
           content:
-            "Daar heb ik helaas geen antwoord op gevonden in onze kennisbank. " +
-            "Ik heb je vraag doorgegeven aan het beheer, zodat dit later beantwoord kan worden.",
+            "Daar heb ik helaas geen antwoord op gevonden in onze kennisbank. Ik heb je vraag " +
+            "doorgegeven aan het beheer. Heb je het zelf opgelost? Dan voeg ik de oplossing " +
+            "graag toe zodat ik anderen er voortaan mee kan helpen.",
         };
       }
       setMessages((prev) => [...prev, botMsg]);
@@ -69,6 +102,21 @@ export default function KennisBot() {
       setSending(false);
       taRef.current?.focus();
     }
+  }
+
+  function startSolution(questionId?: string) {
+    if (!questionId) return;
+    setSolutionFor(questionId);
+    setMessages((prev) => [
+      ...prev,
+      {
+        role: "bot",
+        content:
+          "Top dat je het zelf hebt opgelost! Wat was de oplossing? Beschrijf kort wat je hebt " +
+          "gedaan, dan zet ik het klaar voor het beheer.",
+      },
+    ]);
+    setTimeout(() => taRef.current?.focus(), 0);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLTextAreaElement>) {
@@ -86,7 +134,7 @@ export default function KennisBot() {
     <div className="flex flex-col h-[calc(100dvh-7rem)] max-w-2xl mx-auto">
       <div className="flex items-center gap-2 mb-3 shrink-0">
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-          Kennisbot
+          Jaisper
           <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
             Beta
           </span>
@@ -95,7 +143,6 @@ export default function KennisBot() {
 
       {/* Gespreksvenster */}
       <div className="flex-1 overflow-y-auto space-y-3 pr-1">
-        {/* Welkomstbericht */}
         <BotBubble>
           <p className="text-sm text-gray-700">{WELCOME}</p>
         </BotBubble>
@@ -112,12 +159,20 @@ export default function KennisBot() {
               {m.kind === "no_answer" ? (
                 <div className="space-y-2">
                   <p className="text-sm text-gray-700">{m.content}</p>
-                  <button
-                    onClick={() => makeTicket(m.question)}
-                    className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
-                  >
-                    Maak hier een ticket van
-                  </button>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      onClick={() => startSolution(m.questionId)}
+                      className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+                    >
+                      Ik heb het zelf opgelost
+                    </button>
+                    <button
+                      onClick={() => makeTicket(m.question)}
+                      className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50"
+                    >
+                      Maak hier een ticket van
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <div className="prose prose-sm max-w-none text-gray-700 break-words">
@@ -141,13 +196,21 @@ export default function KennisBot() {
 
       {/* Invoer */}
       <div className="shrink-0 pt-3">
+        {solutionFor && (
+          <div className="flex items-center justify-between text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2">
+            <span>Je beschrijft nu de oplossing voor het beheer.</span>
+            <button onClick={() => setSolutionFor(null)} className="underline">
+              Annuleren
+            </button>
+          </div>
+        )}
         <div className="flex items-end gap-2 bg-white rounded-2xl border border-gray-300 p-2 shadow-sm">
           <textarea
             ref={taRef}
             value={input}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={onKeyDown}
-            placeholder="Stel je vraag..."
+            placeholder={solutionFor ? "Beschrijf de oplossing..." : "Stel je vraag..."}
             rows={1}
             className="flex-1 resize-none border-0 focus:ring-0 focus:outline-none text-sm px-2 py-1.5 max-h-32"
           />
@@ -160,7 +223,7 @@ export default function KennisBot() {
           </button>
         </div>
         <p className="text-[11px] text-gray-400 text-center mt-1.5">
-          De bot antwoordt alleen op basis van onze eigen kennis.
+          Jaisper antwoordt alleen op basis van onze eigen kennis.
         </p>
       </div>
     </div>

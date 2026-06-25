@@ -124,7 +124,7 @@ export default function KennisbankBeheer() {
     setForm({
       id: null,
       title: q.question_text,
-      answer: "",
+      answer: q.proposed_answer ?? "", // voorvullen met de oplossing van de medewerker
       keywords: "",
       category: q.category ?? "",
     });
@@ -359,6 +359,14 @@ export default function KennisbankBeheer() {
               >
                 <div className="min-w-0">
                   <p className="font-medium text-gray-900 whitespace-pre-wrap">{q.question_text}</p>
+                  {q.proposed_answer && (
+                    <div className="mt-2 bg-green-50 border border-green-200 rounded-lg p-2">
+                      <p className="text-[11px] font-semibold text-green-700">
+                        💡 Oplossing van medewerker {q.proposed_by ? `(${q.proposed_by})` : ""}
+                      </p>
+                      <p className="text-sm text-gray-700 whitespace-pre-wrap mt-0.5">{q.proposed_answer}</p>
+                    </div>
+                  )}
                   <p className="text-xs text-gray-400 mt-1">
                     {q.asked_by_name || q.asked_by}
                     {q.category && ` · ${CATEGORY_LABELS[q.category]}`}
@@ -369,7 +377,7 @@ export default function KennisbankBeheer() {
                     onClick={() => answerQuestion(q)}
                     className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
                   >
-                    Beantwoorden
+                    {q.proposed_answer ? "Beoordelen" : "Beantwoorden"}
                   </button>
                   <button
                     onClick={() => dismissQuestion(q.id)}

@@ -64,6 +64,8 @@ async def _run_migrations(conn):
         ("user_roles", "ha_device_tracker", "VARCHAR(255)"),
         ("user_roles", "notify_new_ticket", "BOOLEAN NOT NULL DEFAULT 0"),
         ("knowledge_entries", "images", "TEXT"),
+        ("knowledge_questions", "proposed_answer", "TEXT"),
+        ("knowledge_questions", "proposed_by", "VARCHAR(255)"),
         ("bike_reservations", "key_given_at", "DATETIME"),
         ("bike_reservations", "key_returned_at", "DATETIME"),
         ("bike_reservations", "key_ticket_id", "VARCHAR(36)"),
