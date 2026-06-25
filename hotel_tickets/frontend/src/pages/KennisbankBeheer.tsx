@@ -31,7 +31,15 @@ function fmtWhen(iso: string): string {
   }
 }
 
-type Tab = "queue" | "entries" | "documents";
+type Tab = "overzicht" | "queue" | "entries" | "documents";
+
+type DocEdit = {
+  id: string;
+  title: string;
+  content: string;
+  category: Category | "";
+  folder: string;
+};
 
 const EMPTY_FORM = {
   id: null as string | null,
@@ -45,7 +53,7 @@ const EMPTY_FORM = {
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
 export default function KennisbankBeheer() {
-  const [tab, setTab] = useState<Tab>("queue");
+  const [tab, setTab] = useState<Tab>("overzicht");
   const [queue, setQueue] = useState<KnowledgeQuestion[]>([]);
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
@@ -69,7 +77,14 @@ export default function KennisbankBeheer() {
   const [docContent, setDocContent] = useState("");
   const [docSaving, setDocSaving] = useState(false);
   const [docMsg, setDocMsg] = useState("");
+  const [cleaning, setCleaning] = useState(false);
   const docInputRef = useRef<HTMLInputElement>(null);
+
+  // Document bewerken (modal)
+  const [docEdit, setDocEdit] = useState<DocEdit | null>(null);
+  const [docEditSaving, setDocEditSaving] = useState(false);
+  const [docEditCleaning, setDocEditCleaning] = useState(false);
+  const [docEditError, setDocEditError] = useState("");
 
   function loadQueue() {
     knowledgeApi.queue().then((r) => setQueue(r.data)).catch(() => {});
@@ -149,6 +164,96 @@ export default function KennisbankBeheer() {
     if (!confirm("Dit document verwijderen?")) return;
     await knowledgeApi.removeDocument(id);
     loadDocuments();
+  }
+
+  /** Laat Claude de geplakte tekst herstructureren en vul titel/afdeling/onderwerp voor. */
+  async function cleanupNewDoc() {
+    if (!docContent.trim()) return;
+    setCleaning(true);
+    setDocMsg("");
+    try {
+      const r = await knowledgeApi.aiCleanup(docContent);
+      if (r.data.title) setDocTitle(r.data.title);
+      if (r.data.category) setDocCategory(r.data.category);
+      if (r.data.folder) setDocFolder(r.data.folder);
+      if (r.data.content) setDocContent(r.data.content);
+      setDocMsg("✨ Netjes gemaakt. Controleer het resultaat en sla op.");
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Opschonen mislukt.";
+      setDocMsg(detail);
+    } finally {
+      setCleaning(false);
+    }
+  }
+
+  async function openDocEdit(id: string) {
+    setDocEditError("");
+    try {
+      const r = await knowledgeApi.getDocument(id);
+      setDocEdit({
+        id: r.data.id,
+        title: r.data.title,
+        content: r.data.content,
+        category: r.data.category ?? "",
+        folder: r.data.folder ?? "",
+      });
+    } catch {
+      alert("Document kon niet geladen worden.");
+    }
+  }
+
+  async function cleanupEditDoc() {
+    if (!docEdit || !docEdit.content.trim()) return;
+    setDocEditCleaning(true);
+    setDocEditError("");
+    try {
+      const r = await knowledgeApi.aiCleanup(docEdit.content);
+      setDocEdit((prev) =>
+        prev
+          ? {
+              ...prev,
+              title: r.data.title || prev.title,
+              content: r.data.content || prev.content,
+              category: r.data.category ?? prev.category,
+              folder: r.data.folder ?? prev.folder,
+            }
+          : prev
+      );
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Opschonen mislukt.";
+      setDocEditError(detail);
+    } finally {
+      setDocEditCleaning(false);
+    }
+  }
+
+  async function saveDocEdit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!docEdit) return;
+    if (!docEdit.title.trim() || !docEdit.content.trim()) {
+      setDocEditError("Titel en inhoud zijn verplicht.");
+      return;
+    }
+    setDocEditSaving(true);
+    setDocEditError("");
+    try {
+      await knowledgeApi.updateDocument(docEdit.id, {
+        title: docEdit.title.trim(),
+        content: docEdit.content.trim(),
+        category: docEdit.category || null,
+        folder: docEdit.folder.trim() || null,
+      });
+      setDocEdit(null);
+      loadDocuments();
+    } catch {
+      setDocEditError("Opslaan mislukt. Probeer opnieuw.");
+    } finally {
+      setDocEditSaving(false);
+    }
   }
 
   // --- Wachtrij acties ---
@@ -349,6 +454,9 @@ export default function KennisbankBeheer() {
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
+        <TabButton active={tab === "overzicht"} onClick={() => setTab("overzicht")}>
+          Overzicht
+        </TabButton>
         <TabButton active={tab === "queue"} onClick={() => setTab("queue")}>
           Wachtrij{queue.length > 0 && (
             <span className="ml-1.5 text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5">
@@ -392,6 +500,17 @@ export default function KennisbankBeheer() {
             <span className="text-sm text-gray-700">{aiSettings.ai_enabled ? "Aan" : "Uit"}</span>
           </label>
         </div>
+      )}
+
+      {/* Overzicht / dashboard */}
+      {tab === "overzicht" && (
+        <OverviewTab
+          queue={queue}
+          entries={entries}
+          documents={documents}
+          aiSettings={aiSettings}
+          onGoto={setTab}
+        />
       )}
 
       {/* Wachtrij — opgesplitst: aangedragen oplossingen vs. open vragen */}
@@ -648,14 +767,32 @@ export default function KennisbankBeheer() {
                   Bestand uploaden
                 </button>
               </div>
-              <button
-                onClick={savePastedDoc}
-                disabled={docSaving || !docTitle.trim() || !docContent.trim()}
-                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-              >
-                {docSaving ? "Bezig..." : "Tekst opslaan"}
-              </button>
+              <div className="flex items-center gap-2">
+                {aiSettings?.ai_available && (
+                  <button
+                    onClick={cleanupNewDoc}
+                    disabled={cleaning || !docContent.trim()}
+                    title="Laat de AI je tekst herschrijven tot een nette pagina en afdeling/onderwerp voorstellen"
+                    className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50"
+                  >
+                    {cleaning ? "Bezig..." : "✨ Netjes maken"}
+                  </button>
+                )}
+                <button
+                  onClick={savePastedDoc}
+                  disabled={docSaving || !docTitle.trim() || !docContent.trim()}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {docSaving ? "Bezig..." : "Tekst opslaan"}
+                </button>
+              </div>
             </div>
+            {aiSettings?.ai_available && (
+              <p className="text-[11px] text-gray-400">
+                ✨ Netjes maken gebruikt je Claude API-sleutel om ruwe tekst te herschrijven tot een
+                overzichtelijke pagina en stelt afdeling + onderwerp voor.
+              </p>
+            )}
             {docMsg && <p className="text-sm text-blue-700">{docMsg}</p>}
           </div>
 
@@ -681,12 +818,20 @@ export default function KennisbankBeheer() {
                         {d.source_filename && ` · ${d.source_filename}`}
                       </p>
                     </div>
-                    <button
-                      onClick={() => removeDoc(d.id)}
-                      className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50 shrink-0"
-                    >
-                      Verwijderen
-                    </button>
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        onClick={() => openDocEdit(d.id)}
+                        className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50"
+                      >
+                        Bewerken
+                      </button>
+                      <button
+                        onClick={() => removeDoc(d.id)}
+                        className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50"
+                      >
+                        Verwijderen
+                      </button>
+                    </div>
                   </div>
                 )}
               />
@@ -841,7 +986,246 @@ export default function KennisbankBeheer() {
           </form>
         </div>
       )}
+
+      {/* Document bewerken (modal) */}
+      {docEdit && (
+        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[60]">
+          <form
+            onSubmit={saveDocEdit}
+            className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto"
+          >
+            <h2 className="font-bold text-gray-900">Document bewerken</h2>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Titel</label>
+              <input
+                value={docEdit.title}
+                onChange={(e) => setDocEdit({ ...docEdit, title: e.target.value })}
+                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+              />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Inhoud</label>
+              <textarea
+                value={docEdit.content}
+                onChange={(e) => setDocEdit({ ...docEdit, content: e.target.value })}
+                rows={10}
+                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1 font-mono"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Bij opslaan worden de zoekfragmenten automatisch opnieuw opgebouwd.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <select
+                value={docEdit.category}
+                onChange={(e) =>
+                  setDocEdit({ ...docEdit, category: e.target.value as Category | "" })
+                }
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">Afdeling (optioneel)</option>
+                {ALL_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={docEdit.folder}
+                onChange={(e) => setDocEdit({ ...docEdit, folder: e.target.value })}
+                placeholder="Onderwerp / map"
+                list="kb-folders"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            {docEditError && <p className="text-sm text-red-600">{docEditError}</p>}
+            <div className="flex items-center justify-between gap-2 pt-1">
+              {aiSettings?.ai_available ? (
+                <button
+                  type="button"
+                  onClick={cleanupEditDoc}
+                  disabled={docEditCleaning || !docEdit.content.trim()}
+                  className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50"
+                >
+                  {docEditCleaning ? "Bezig..." : "✨ Netjes maken"}
+                </button>
+              ) : (
+                <span />
+              )}
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setDocEdit(null)}
+                  className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+                >
+                  Annuleren
+                </button>
+                <button
+                  type="submit"
+                  disabled={docEditSaving}
+                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {docEditSaving ? "Opslaan..." : "Opslaan"}
+                </button>
+              </div>
+            </div>
+          </form>
+        </div>
+      )}
     </div>
+  );
+}
+
+/** Overzicht / dashboard: kerncijfers + verdeling per afdeling. */
+function OverviewTab({
+  queue,
+  entries,
+  documents,
+  aiSettings,
+  onGoto,
+}: {
+  queue: KnowledgeQuestion[];
+  entries: KnowledgeEntry[];
+  documents: KnowledgeDocument[];
+  aiSettings: KnowledgeAiSettings | null;
+  onGoto: (t: Tab) => void;
+}) {
+  const proposals = queue.filter((q) => q.proposed_answer).length;
+  const concepts = entries.filter((e) => !e.is_published).length;
+  const totalChunks = documents.reduce((n, d) => n + (d.chunk_count || 0), 0);
+
+  // Verdeling per afdeling (entries + documenten)
+  const byDept = new Map<string, { entries: number; documents: number }>();
+  const bump = (cat: Category | null, key: "entries" | "documents") => {
+    const label = cat ? CATEGORY_LABELS[cat] : "Algemeen";
+    const cur = byDept.get(label) ?? { entries: 0, documents: 0 };
+    cur[key] += 1;
+    byDept.set(label, cur);
+  };
+  entries.forEach((e) => bump(e.category, "entries"));
+  documents.forEach((d) => bump(d.category, "documents"));
+  const deptRows = [...byDept.entries()].sort((a, b) => a[0].localeCompare(b[0], "nl"));
+
+  const topAsked = [...entries]
+    .filter((e) => e.ask_count > 0)
+    .sort((a, b) => b.ask_count - a.ask_count)
+    .slice(0, 5);
+
+  return (
+    <div className="space-y-5">
+      {/* Kerncijfers */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <StatCard
+          label="Open in wachtrij"
+          value={queue.length}
+          hint={proposals > 0 ? `${proposals} aangedragen` : undefined}
+          accent={queue.length > 0 ? "amber" : "gray"}
+          onClick={() => onGoto("queue")}
+        />
+        <StatCard
+          label="Kennis-items"
+          value={entries.length}
+          hint={concepts > 0 ? `${concepts} concept` : undefined}
+          onClick={() => onGoto("entries")}
+        />
+        <StatCard
+          label="Documenten"
+          value={documents.length}
+          hint={`${totalChunks} fragmenten`}
+          onClick={() => onGoto("documents")}
+        />
+        <StatCard
+          label="AI-modus"
+          value={aiSettings?.ai_enabled ? "Aan" : "Uit"}
+          hint={
+            aiSettings
+              ? aiSettings.ai_available
+                ? aiSettings.model
+                : "geen sleutel"
+              : undefined
+          }
+          accent={aiSettings?.ai_enabled ? "green" : "gray"}
+        />
+      </div>
+
+      {/* Verdeling per afdeling */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <h3 className="text-sm font-bold text-gray-800 mb-3">Verdeling per afdeling</h3>
+        {deptRows.length === 0 ? (
+          <p className="text-sm text-gray-400">Nog niets in de kennisbank.</p>
+        ) : (
+          <div className="space-y-1.5">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-[11px] font-semibold text-gray-400 uppercase">
+              <span>Afdeling</span>
+              <span className="text-right w-16">Items</span>
+              <span className="text-right w-20">Documenten</span>
+            </div>
+            {deptRows.map(([label, c]) => (
+              <div
+                key={label}
+                className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-sm text-gray-700 py-0.5"
+              >
+                <span className="font-medium">{label}</span>
+                <span className="text-right w-16">{c.entries}</span>
+                <span className="text-right w-20">{c.documents}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Meest gestelde vragen */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+        <h3 className="text-sm font-bold text-gray-800 mb-3">Meest gevraagd</h3>
+        {topAsked.length === 0 ? (
+          <p className="text-sm text-gray-400">Nog geen vragen beantwoord door de bot.</p>
+        ) : (
+          <div className="space-y-1.5">
+            {topAsked.map((e) => (
+              <div key={e.id} className="flex items-center justify-between gap-3 text-sm">
+                <span className="text-gray-700 truncate">{e.title}</span>
+                <span className="text-xs text-gray-400 shrink-0">{e.ask_count}×</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+function StatCard({
+  label,
+  value,
+  hint,
+  accent = "gray",
+  onClick,
+}: {
+  label: string;
+  value: number | string;
+  hint?: string;
+  accent?: "gray" | "amber" | "green";
+  onClick?: () => void;
+}) {
+  const accentCls =
+    accent === "amber"
+      ? "text-amber-600"
+      : accent === "green"
+      ? "text-green-600"
+      : "text-gray-900";
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-left ${
+        onClick ? "hover:border-blue-300 cursor-pointer" : "cursor-default"
+      }`}
+    >
+      <p className="text-xs text-gray-500">{label}</p>
+      <p className={`text-2xl font-bold mt-0.5 ${accentCls}`}>{value}</p>
+      {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
+    </button>
   );
 }
 

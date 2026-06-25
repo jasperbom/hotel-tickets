@@ -175,6 +175,55 @@ _EXPAND_PROMPT = (
 )
 
 
+_CLEANUP_PROMPT = (
+    "Je herstructureert ruwe tekst tot een nette, overzichtelijke kennisbank-"
+    "pagina voor hotelpersoneel. Behoud ALLE informatie en verzin niets — je mag "
+    "alleen herformuleren, ordenen en opmaken.\n"
+    "Antwoord ALLEEN met een JSON-object van exact deze vorm:\n"
+    '{\"title\": \"...\", \"category\": \"<sleutel of leeg>\", \"folder\": \"...\", \"content\": \"...\"}\n'
+    "- title: korte, duidelijke titel.\n"
+    "- category: kies de meest passende SLEUTEL uit ALLOWED_CATEGORIES (alleen de "
+    "sleutel vóór de haakjes), of laat leeg als niets past.\n"
+    "- folder: kort onderwerp/map; hergebruik er één uit BESTAANDE_ONDERWERPEN als "
+    "die goed past, anders een passende nieuwe.\n"
+    "- content: nette Markdown in het Nederlands, met kopjes (##) per deelonderwerp "
+    "en genummerde stappen waar dat logisch is."
+)
+
+
+async def cleanup_document(
+    text: str, api_key: str, model: str, categories: list[str], folders: list[str]
+) -> dict | None:
+    """Herstructureer ruwe tekst tot een nette kennispagina + suggesties voor
+    titel/afdeling/onderwerp. Retourneert dict of None."""
+    if not api_key or not text.strip():
+        return None
+    try:
+        from anthropic import AsyncAnthropic
+    except ImportError:
+        return None
+    client = AsyncAnthropic(api_key=api_key)
+    cats = ", ".join(categories)
+    folder_list = ", ".join(folders) if folders else "(nog geen)"
+    user_content = (
+        f"ALLOWED_CATEGORIES: {cats}\n"
+        f"BESTAANDE_ONDERWERPEN: {folder_list}\n\n"
+        f"RUWE TEKST:\n{text.strip()}"
+    )
+    try:
+        resp = await client.messages.create(
+            model=model or DEFAULT_MODEL,
+            max_tokens=4096,
+            system=_CLEANUP_PROMPT,
+            messages=[{"role": "user", "content": user_content}],
+        )
+    except Exception as exc:
+        logger.warning("Claude opschonen mislukt: %s", exc)
+        return None
+    out = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")
+    return _extract_json(out)
+
+
 async def expand_query(question: str, api_key: str, model: str) -> list[str]:
     """Genereer alternatieve zoekformuleringen voor een vraag (synoniemen e.d.).
     Retourneert een lijst varianten of [] bij een fout/geen sleutel."""

@@ -930,11 +930,33 @@ class DocumentOut(BaseModel):
     created_at: str
 
 
+class DocumentDetailOut(DocumentOut):
+    content: str = ""
+
+
 class DocumentCreate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
     category: Optional[Category] = None
     folder: Optional[str] = None
+
+
+class DocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    category: Optional[Category] = None
+    folder: Optional[str] = None
+
+
+class CleanupRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+
+
+class CleanupResult(BaseModel):
+    title: str = ""
+    category: Optional[str] = None
+    folder: Optional[str] = None
+    content: str = ""
 
 
 def _doc_out(d: KnowledgeDocument, chunk_count: int) -> DocumentOut:
@@ -1009,6 +1031,64 @@ async def upload_document(
     return _doc_out(doc, cnt)
 
 
+@router.get("/documents/{document_id}", response_model=DocumentDetailOut)
+async def get_document(document_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    cnt = await db.scalar(
+        select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == doc.id)
+    )
+    base = _doc_out(doc, cnt or 0)
+    return DocumentDetailOut(**base.model_dump(), content=doc.content or "")
+
+
+@router.patch("/documents/{document_id}", response_model=DocumentDetailOut)
+async def update_document(
+    document_id: str, data: DocumentUpdate, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    """Wijzig een document. Verandert de inhoud, dan worden de chunks opnieuw
+    opgebouwd zodat de AI altijd de actuele tekst doorzoekt."""
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+
+    updates = data.model_dump(exclude_unset=True)
+    content_changed = False
+    if "title" in updates and updates["title"] is not None:
+        doc.title = updates["title"].strip() or doc.title
+    if "content" in updates and updates["content"] is not None:
+        new_content = updates["content"].strip()
+        if new_content and new_content != (doc.content or ""):
+            doc.content = new_content
+            content_changed = True
+    if "category" in updates:
+        doc.category = updates["category"]
+    if "folder" in updates:
+        folder = updates["folder"]
+        doc.folder = folder.strip() if isinstance(folder, str) and folder.strip() else None
+
+    await db.flush()
+
+    if content_changed:
+        # oude chunks weg, opnieuw opbouwen uit de nieuwe inhoud
+        old = await db.execute(
+            select(KnowledgeChunk).where(KnowledgeChunk.document_id == doc.id)
+        )
+        for ch in old.scalars().all():
+            await db.delete(ch)
+        await db.flush()
+        cnt = await _store_document_chunks(db, doc)
+    else:
+        cnt = await db.scalar(
+            select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == doc.id)
+        ) or 0
+
+    return DocumentDetailOut(**_doc_out(doc, cnt).model_dump(), content=doc.content or "")
+
+
 @router.delete("/documents/{document_id}", status_code=204)
 async def delete_document(document_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
     _require_admin(user)
@@ -1054,6 +1134,57 @@ async def _ai_settings_out(db: AsyncSession) -> AiSettingsOut:
         model=await _ai_model(db),
         has_key=bool(app_key or env_key),
         key_from_addon=not app_key and bool(env_key),
+    )
+
+
+_CATEGORY_LABELS = {
+    "technical": "Technisch",
+    "housekeeping": "Huishouding",
+    "reception": "Receptie",
+    "service": "Bediening",
+    "kitchen": "Keuken",
+    "sales": "Sales",
+    "garden": "Tuin",
+}
+
+
+async def _known_folders(db: AsyncSession) -> list[str]:
+    """Verzamel de bestaande onderwerpen/mappen uit entries + documenten."""
+    folders: set[str] = set()
+    for model in (KnowledgeEntry, KnowledgeDocument):
+        rows = await db.execute(
+            select(model.folder).where(model.folder.isnot(None)).distinct()
+        )
+        for f in rows.scalars().all():
+            if f and f.strip():
+                folders.add(f.strip())
+    return sorted(folders)
+
+
+@router.post("/ai/cleanup", response_model=CleanupResult)
+async def ai_cleanup(data: CleanupRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Laat Claude ruwe tekst herstructureren tot een nette kennispagina en
+    afdeling/onderwerp voorstellen. Vereist een ingestelde API-sleutel."""
+    _require_admin(user)
+    key = await _ai_key(db)
+    if not key:
+        raise HTTPException(400, "Geen API-sleutel ingesteld voor de AI")
+    model = await _ai_model(db)
+    categories = [f"{val} ({label})" for val, label in _CATEGORY_LABELS.items()]
+    folders = await _known_folders(db)
+    result = await ai_client.cleanup_document(data.text, key, model, categories, folders)
+    if result is None:
+        raise HTTPException(502, "De AI kon de tekst niet verwerken. Probeer het opnieuw.")
+
+    category = (result.get("category") or "").strip() or None
+    if category not in _CATEGORY_LABELS:
+        category = None
+    folder = (result.get("folder") or "").strip() or None
+    return CleanupResult(
+        title=(result.get("title") or "").strip(),
+        category=category,
+        folder=folder,
+        content=(result.get("content") or "").strip(),
     )
 
 
