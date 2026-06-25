@@ -320,6 +320,17 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
     return await _log_pending(db, data, user)
 
 
+def _overlap_covered(solution: str, contexts: list[str]) -> bool:
+    """Eenvoudige fallback-check (zonder AI): staat de oplossing qua woorden al
+    grotendeels in de bestaande kennis?"""
+    sol_tokens = {t for t in re.findall(r"\w+", solution.lower()) if len(t) >= 4}
+    if not sol_tokens:
+        return False
+    ctx_tokens = set(re.findall(r"\w+", " ".join(contexts).lower()))
+    overlap = len(sol_tokens & ctx_tokens) / len(sol_tokens)
+    return overlap >= 0.7
+
+
 @router.post("/questions/{question_id}/solution", status_code=200)
 async def submit_solution(
     question_id: str,
@@ -327,19 +338,38 @@ async def submit_solution(
     user: RequireUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """De medewerker loste het zelf op en draagt de oplossing aan. Deze wordt op
-    de vraag bewaard en in de wachtrij gezet zodat een admin 'm kan beoordelen en
-    in de kennisbank kan opnemen."""
+    """De medewerker loste het zelf op en draagt de oplossing aan. Eerst checken
+    of de oplossing niet al in de kennis staat; zo nee, bewaren op de vraag en in
+    de wachtrij zetten zodat een admin 'm kan beoordelen en opnemen."""
     q = await db.get(KnowledgeQuestion, question_id)
     if not q:
         raise HTTPException(404, "Vraag niet gevonden")
-    q.proposed_answer = data.solution.strip()
+    solution = data.solution.strip()
+
+    # Verzamel bestaande kennis rond de oorspronkelijke vraag
+    chunks = await search_chunks(db, q.question_text, q.category)
+    entries = await knowledge_search.search(db, q.question_text, q.category)
+    contexts = list(chunks) + [f"{e.title}\n{e.answer}" for e in entries]
+
+    # Was dit eigenlijk al een gegeven oplossing? (AI-oordeel, anders tekstvergelijking)
+    covered: bool | None = None
+    if contexts:
+        if await _ai_enabled(db):
+            covered = await ai_client.is_covered(
+                solution, contexts, await _ai_key(db), await _ai_model(db)
+            )
+        if covered is None:
+            covered = _overlap_covered(solution, contexts)
+
+    if covered:
+        return {"status": "already_known"}
+
+    q.proposed_answer = solution
     q.proposed_by = user.ha_user_id
-    # Terug naar de review-wachtrij (tenzij al definitief afgehandeld)
     if q.status != KnowledgeQuestionStatus.resolved:
         q.status = KnowledgeQuestionStatus.pending
     await db.flush()
-    return {"ok": True}
+    return {"status": "queued"}
 
 
 # ── Kennisbank bladeren (alle medewerkers) ─────────────────────────────────────

@@ -706,7 +706,10 @@ export const knowledgeApi = {
     api.patch<KnowledgeEntry>(`/knowledge/entries/${id}`, data),
   removeEntry: (id: string) => api.delete(`/knowledge/entries/${id}`),
   submitSolution: (questionId: string, solution: string) =>
-    api.post(`/knowledge/questions/${questionId}/solution`, { solution }),
+    api.post<{ status: "queued" | "already_known" }>(
+      `/knowledge/questions/${questionId}/solution`,
+      { solution }
+    ),
   queue: () => api.get<KnowledgeQuestion[]>("/knowledge/queue"),
   answerQueue: (
     qid: string,

@@ -41,16 +41,14 @@ export default function KennisBot() {
       const qid = solutionFor;
       setSolutionFor(null);
       try {
-        await knowledgeApi.submitSolution(qid, text);
-        setMessages((prev) => [
-          ...prev,
-          {
-            role: "bot",
-            content:
-              "Bedankt! Ik heb je oplossing klaargezet voor het beheer om aan de kennisbank " +
-              "toe te voegen. Zo kan ik anderen hier voortaan direct mee helpen. 🙌",
-          },
-        ]);
+        const res = await knowledgeApi.submitSolution(qid, text);
+        const content =
+          res.data.status === "already_known"
+            ? "Bedankt! Dit staat eigenlijk al in onze kennis, dus ik hoef het niet apart " +
+              "door te geven. 👍"
+            : "Bedankt! Ik heb je oplossing klaargezet voor het beheer om aan de kennisbank " +
+              "toe te voegen. Zo kan ik anderen hier voortaan direct mee helpen. 🙌";
+        setMessages((prev) => [...prev, { role: "bot", content }]);
       } catch {
         setMessages((prev) => [
           ...prev,
@@ -79,7 +77,7 @@ export default function KennisBot() {
       let botMsg: ChatMessage;
       if (d.answered) {
         const content = d.ai_answer || d.entries.map((e) => e.answer).join("\n\n") || "—";
-        botMsg = { role: "bot", content, kind: "answer" };
+        botMsg = { role: "bot", content, kind: "answer", question: text, questionId: d.question_id };
       } else {
         botMsg = {
           role: "bot",
@@ -175,8 +173,18 @@ export default function KennisBot() {
                   </div>
                 </div>
               ) : (
-                <div className="prose prose-sm max-w-none text-gray-700 break-words">
-                  <ReactMarkdown>{m.content}</ReactMarkdown>
+                <div className="space-y-1.5">
+                  <div className="prose prose-sm max-w-none text-gray-700 break-words">
+                    <ReactMarkdown>{m.content}</ReactMarkdown>
+                  </div>
+                  {m.kind === "answer" && m.questionId && (
+                    <button
+                      onClick={() => startSolution(m.questionId)}
+                      className="text-xs text-blue-600 hover:underline"
+                    >
+                      Ik loste het anders op
+                    </button>
+                  )}
                 </div>
               )}
             </BotBubble>
