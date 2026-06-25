@@ -1,11 +1,17 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   knowledgeApi,
   CATEGORY_LABELS,
   type KnowledgeEntry,
   type KnowledgeQuestion,
   type Category,
+  type KnowledgeImportResult,
 } from "../api/client";
+
+/** Verwijder markdown-afbeeldingen uit een tekst voor een korte preview. */
+function stripImages(md: string): string {
+  return md.replace(/!\[[^\]]*\]\([^)]*\)/g, "").trim();
+}
 
 type Tab = "queue" | "entries";
 
@@ -22,9 +28,14 @@ export default function KennisbankBeheer() {
   const [queue, setQueue] = useState<KnowledgeQuestion[]>([]);
   const [entries, setEntries] = useState<KnowledgeEntry[]>([]);
   const [form, setForm] = useState<typeof EMPTY_FORM>(EMPTY_FORM);
+  const [formImages, setFormImages] = useState<string[]>([]);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [uploadingImg, setUploadingImg] = useState(false);
+  const [importing, setImporting] = useState(false);
+  const [importMsg, setImportMsg] = useState("");
+  const importInputRef = useRef<HTMLInputElement>(null);
 
   function loadQueue() {
     knowledgeApi.queue().then((r) => setQueue(r.data)).catch(() => {});
@@ -69,6 +80,7 @@ export default function KennisbankBeheer() {
 
   function newEntry() {
     setForm(EMPTY_FORM);
+    setFormImages([]);
     setAnsweringQuestionId(null);
     setError("");
     setShowForm(true);
@@ -82,9 +94,57 @@ export default function KennisbankBeheer() {
       keywords: e.keywords ?? "",
       category: e.category ?? "",
     });
+    setFormImages(e.images ?? []);
     setAnsweringQuestionId(null);
     setError("");
     setShowForm(true);
+  }
+
+  async function uploadFormImage(file: File) {
+    if (!form.id) return;
+    setUploadingImg(true);
+    try {
+      const r = await knowledgeApi.uploadImage(form.id, file);
+      const fname = r.data.filename;
+      setFormImages((prev) => [...prev, fname]);
+      // Voeg de afbeelding toe aan het antwoord (markdown)
+      setForm((prev) => ({ ...prev, answer: `${prev.answer}\n\n![](${fname})`.trim() }));
+    } catch {
+      alert("Uploaden mislukt.");
+    } finally {
+      setUploadingImg(false);
+    }
+  }
+
+  async function deleteFormImage(fname: string) {
+    if (!form.id) return;
+    await knowledgeApi.deleteImage(form.id, fname);
+    setFormImages((prev) => prev.filter((f) => f !== fname));
+    setForm((prev) => ({
+      ...prev,
+      answer: prev.answer.replace(new RegExp(`!\\[[^\\]]*\\]\\(${fname}\\)`, "g"), "").trim(),
+    }));
+  }
+
+  async function handleImport(file: File) {
+    setImporting(true);
+    setImportMsg("");
+    try {
+      const r = await knowledgeApi.importFile(file);
+      const res: KnowledgeImportResult = r.data;
+      setImportMsg(
+        `Geïmporteerd: ${res.imported} · overgeslagen (al aanwezig): ${res.skipped} · afbeeldingen: ${res.images}`
+      );
+      loadEntries();
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
+        "Import mislukt.";
+      setImportMsg(detail);
+    } finally {
+      setImporting(false);
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
   }
 
   async function removeEntry(id: string) {
@@ -119,6 +179,7 @@ export default function KennisbankBeheer() {
       loadEntries();
       setShowForm(false);
       setForm(EMPTY_FORM);
+      setFormImages([]);
       setAnsweringQuestionId(null);
     } catch {
       setError("Opslaan mislukt. Probeer opnieuw.");
@@ -129,17 +190,48 @@ export default function KennisbankBeheer() {
 
   return (
     <div className="space-y-5">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-gray-900">Kennisbank beheer</h1>
         {tab === "entries" && (
-          <button
-            onClick={newEntry}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
-          >
-            + Nieuw item
-          </button>
+          <div className="flex items-center gap-2">
+            <input
+              ref={importInputRef}
+              type="file"
+              accept=".md,.markdown,.txt,.zip"
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files?.[0];
+                if (f) handleImport(f);
+              }}
+            />
+            <button
+              onClick={() => importInputRef.current?.click()}
+              disabled={importing}
+              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+            >
+              {importing ? "Importeren..." : "Importeren"}
+            </button>
+            <button
+              onClick={newEntry}
+              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+            >
+              + Nieuw item
+            </button>
+          </div>
         )}
       </div>
+
+      {tab === "entries" && importMsg && (
+        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-lg px-4 py-2">
+          {importMsg}
+        </div>
+      )}
+      {tab === "entries" && (
+        <p className="text-xs text-gray-400 -mt-2">
+          Import: een <code>.md</code>-bestand of een <code>.zip</code> (Markdown + afbeeldingen).
+          Zet elke vraag als een kop (#, ## of ###) met het antwoord eronder. Duplicaten worden overgeslagen.
+        </p>
+      )}
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-gray-200">
@@ -221,8 +313,11 @@ export default function KennisbankBeheer() {
                       <span className="text-[10px] text-gray-400">uit ticket</span>
                     )}
                   </div>
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">{e.answer}</p>
-                  <p className="text-xs text-gray-400 mt-1">{e.ask_count}× gevraagd</p>
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">{stripImages(e.answer)}</p>
+                  <p className="text-xs text-gray-400 mt-1">
+                    {e.ask_count}× gevraagd
+                    {e.images.length > 0 && ` · ${e.images.length} afbeelding${e.images.length > 1 ? "en" : ""}`}
+                  </p>
                 </div>
                 <div className="flex flex-col gap-1.5 shrink-0">
                   <button
@@ -274,6 +369,58 @@ export default function KennisbankBeheer() {
                 rows={5}
                 className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
               />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Markdown ondersteund (koppen, lijsten, **vet**, afbeeldingen).
+              </p>
+            </div>
+
+            {/* Afbeeldingen — alleen bij een bestaand item */}
+            <div>
+              <label className="text-xs font-medium text-gray-600">Afbeeldingen</label>
+              {!form.id ? (
+                <p className="text-[11px] text-gray-400 mt-1">
+                  Sla het item eerst op; daarna kun je afbeeldingen toevoegen.
+                </p>
+              ) : (
+                <div className="mt-1 space-y-2">
+                  {formImages.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {formImages.map((img) => (
+                        <div key={img} className="relative">
+                          <img
+                            src={knowledgeApi.imageUrl(form.id!, img)}
+                            alt=""
+                            className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+                          />
+                          <button
+                            type="button"
+                            onClick={() => deleteFormImage(img)}
+                            className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none"
+                            title="Verwijderen"
+                          >
+                            ×
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  <label className="inline-block">
+                    <span className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 cursor-pointer inline-block">
+                      {uploadingImg ? "Uploaden..." : "+ Afbeelding"}
+                    </span>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      className="hidden"
+                      onChange={(e) => {
+                        const f = e.target.files?.[0];
+                        if (f) uploadFormImage(f);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+              )}
             </div>
             <div>
               <label className="text-xs font-medium text-gray-600">
@@ -308,6 +455,7 @@ export default function KennisbankBeheer() {
                 onClick={() => {
                   setShowForm(false);
                   setAnsweringQuestionId(null);
+                  setFormImages([]);
                 }}
                 className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
               >

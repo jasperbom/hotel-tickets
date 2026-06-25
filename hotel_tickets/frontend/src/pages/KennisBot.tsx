@@ -6,6 +6,7 @@ import {
   type KnowledgeEntry,
   type Category,
 } from "../api/client";
+import MarkdownAnswer from "../components/MarkdownAnswer";
 
 export default function KennisBot() {
   const navigate = useNavigate();
@@ -165,7 +166,9 @@ function EntryCard({ entry, collapsible }: { entry: KnowledgeEntry; collapsible?
         {collapsible && <span className="text-gray-400 ml-2">{open ? "−" : "+"}</span>}
       </button>
       {open && (
-        <p className="text-sm text-gray-700 mt-2 whitespace-pre-wrap">{entry.answer}</p>
+        <div className="mt-2">
+          <MarkdownAnswer entryId={entry.id} text={entry.answer} />
+        </div>
       )}
     </div>
   );
