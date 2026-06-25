@@ -1,6 +1,7 @@
 fastapi==0.115.0
 uvicorn[standard]==0.30.6
 sqlalchemy==2.0.35
+greenlet==3.1.1  # vereist door SQLAlchemy async; niet altijd automatisch meegeïnstalleerd op musl/py3.13
 aiosqlite==0.20.0
 aiohttp==3.10.5
 apscheduler==3.10.4
