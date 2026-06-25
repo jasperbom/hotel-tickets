@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role } from "../api/client";
+import { ticketApi, userApi, locationApi, knowledgeApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "../components/StatusBadge";
 
 const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
@@ -29,6 +29,8 @@ export default function TicketDetail() {
   const [commentBody, setCommentBody] = useState("");
   const [saving, setSaving] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [currentUserRole, setCurrentUserRole] = useState<Role | null>(null);
+  const [kbStatus, setKbStatus] = useState<"idle" | "saving" | "done">("idle");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [editingField, setEditingField] = useState<"title" | "description" | "priority" | null>(null);
@@ -58,7 +60,10 @@ export default function TicketDetail() {
     setPhotos(p.data);
 
     // Haal huidige gebruiker op voor commentaar-bewerking
-    userApi.me().then((r) => setCurrentUserId(r.data.ha_user_id)).catch(() => {});
+    userApi.me().then((r) => {
+      setCurrentUserId(r.data.ha_user_id);
+      setCurrentUserRole(r.data.role);
+    }).catch(() => {});
 
     // Keycard sensor ophalen als er een locatie is
     if (t.data.location_id) {
@@ -159,6 +164,18 @@ export default function TicketDetail() {
     if (!confirm("Weet je zeker dat je dit ticket wil verwijderen?")) return;
     await ticketApi.remove(id);
     navigate("/tickets");
+  }
+
+  async function addToKnowledgeBase() {
+    if (!id) return;
+    setKbStatus("saving");
+    try {
+      await knowledgeApi.fromTicket(id);
+      setKbStatus("done");
+    } catch {
+      setKbStatus("idle");
+      alert("Toevoegen aan kennisbank mislukt.");
+    }
   }
 
   async function togglePin() {
@@ -627,6 +644,25 @@ export default function TicketDetail() {
           </button>
         </form>
       </div>
+
+      {/* Kennisbank: gesloten ticket promoveren (alleen admin) */}
+      {ticket.status === "closed" && currentUserRole === "admin" && (
+        <div className="card border-blue-100 flex items-center justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-800">Toevoegen aan kennisbank</p>
+            <p className="text-xs text-gray-500">
+              Maak van dit opgeloste ticket een kennis-item zodat de bot het voortaan kan beantwoorden.
+            </p>
+          </div>
+          <button
+            onClick={addToKnowledgeBase}
+            disabled={kbStatus !== "idle"}
+            className="shrink-0 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+          >
+            {kbStatus === "saving" ? "Bezig..." : kbStatus === "done" ? "✓ Toegevoegd" : "Toevoegen"}
+          </button>
+        </div>
+      )}
 
       {/* Gevaarzone */}
       <div className="card border-red-100">

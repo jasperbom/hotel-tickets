@@ -1,14 +1,17 @@
 import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 import { ticketApi, type Category, type Priority } from "../api/client";
 import AreaSelector from "../components/AreaSelector";
 import MultiAreaSelector from "../components/MultiAreaSelector";
 
 export default function NewTicket() {
   const navigate = useNavigate();
+  const location = useLocation();
+  // Optionele voorvulling, bijv. vanuit de Kennisbot ("Maak hier een ticket van")
+  const prefill = (location.state as { title?: string; description?: string } | null) ?? null;
   const [form, setForm] = useState({
-    title: "",
-    description: "",
+    title: prefill?.title ?? "",
+    description: prefill?.description ?? "",
     category: "technical" as Category,
     priority: "medium" as Priority,
     location_id: null as string | null,

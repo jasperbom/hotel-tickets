@@ -137,3 +137,47 @@ async def _run_migrations(conn):
         await conn.exec_driver_sql(
             "INSERT INTO system_settings (key, value) VALUES ('bikes_module_roles', 'all')"
         )
+
+    # ── Kennisbank: FTS5 full-text index + triggers ───────────────────────────
+    # De virtuele tabel spiegelt knowledge_entries (entry_id als UNINDEXED
+    # kolom zodat we de match terug kunnen koppelen aan de entry). Triggers
+    # houden de index synchroon bij insert/update/delete. Alles idempotent via
+    # IF NOT EXISTS, zodat herhaalde starts niets dubbel doen.
+    await conn.exec_driver_sql(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_fts USING fts5("
+        "entry_id UNINDEXED, title, answer, keywords, tokenize='unicode61')"
+    )
+    await conn.exec_driver_sql(
+        "CREATE TRIGGER IF NOT EXISTS knowledge_fts_ai AFTER INSERT ON knowledge_entries BEGIN "
+        "INSERT INTO knowledge_fts(entry_id, title, answer, keywords) "
+        "VALUES (new.id, new.title, new.answer, COALESCE(new.keywords, '')); END"
+    )
+    await conn.exec_driver_sql(
+        "CREATE TRIGGER IF NOT EXISTS knowledge_fts_ad AFTER DELETE ON knowledge_entries BEGIN "
+        "DELETE FROM knowledge_fts WHERE entry_id = old.id; END"
+    )
+    await conn.exec_driver_sql(
+        "CREATE TRIGGER IF NOT EXISTS knowledge_fts_au AFTER UPDATE ON knowledge_entries BEGIN "
+        "DELETE FROM knowledge_fts WHERE entry_id = old.id; "
+        "INSERT INTO knowledge_fts(entry_id, title, answer, keywords) "
+        "VALUES (new.id, new.title, new.answer, COALESCE(new.keywords, '')); END"
+    )
+    # Herbouw de index als hij leeg is maar er wél entries bestaan (bijv. bij een
+    # bestaande database waar de FTS-tabel nieuw wordt aangemaakt).
+    fts_count = (await conn.exec_driver_sql("SELECT COUNT(*) FROM knowledge_fts")).scalar()
+    entry_count = (await conn.exec_driver_sql("SELECT COUNT(*) FROM knowledge_entries")).scalar()
+    if entry_count and not fts_count:
+        logger.info("Kennisbank: FTS-index opnieuw vullen voor %d entries", entry_count)
+        await conn.exec_driver_sql(
+            "INSERT INTO knowledge_fts(entry_id, title, answer, keywords) "
+            "SELECT id, title, answer, COALESCE(keywords, '') FROM knowledge_entries"
+        )
+
+    # Seed AI-schakelaar voor de kennisbank (Fase 2; standaard uit)
+    result = await conn.exec_driver_sql(
+        "SELECT COUNT(*) FROM system_settings WHERE key = 'knowledge_ai_enabled'"
+    )
+    if result.scalar() == 0:
+        await conn.exec_driver_sql(
+            "INSERT INTO system_settings (key, value) VALUES ('knowledge_ai_enabled', 'false')"
+        )

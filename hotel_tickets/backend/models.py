@@ -212,6 +212,52 @@ class UserRole(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+# ── Kennisbank / bot module ──────────────────────────────────────────────────────
+
+class KnowledgeQuestionStatus(str, PyEnum):
+    answered_by_bot = "answered_by_bot"  # bot vond direct een antwoord (alleen log)
+    pending = "pending"                  # geen antwoord → wacht op een admin
+    resolved = "resolved"                # admin heeft er kennis van gemaakt
+    dismissed = "dismissed"              # admin vond de vraag irrelevant
+
+
+class KnowledgeEntry(Base):
+    """Eén vraag/probleem + oplossing in de kennisbank. De bot geeft uitsluitend
+    deze entries terug — hij verzint nooit zelf antwoorden."""
+    __tablename__ = "knowledge_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)  # het probleem / de vraag
+    answer: Mapped[str] = mapped_column(Text, nullable=False)        # de oplossing / het antwoord
+    keywords: Mapped[str | None] = mapped_column(Text)              # extra trefwoorden / alternatieve formuleringen
+    category: Mapped[Category | None] = mapped_column(Enum(Category))  # afdeling (optioneel filter, geen afscherming)
+    source_ticket_id: Mapped[str | None] = mapped_column(String(36))  # indien gepromoveerd uit een gesloten ticket
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id
+    ask_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)  # hoe vaak gematcht (prioritering)
+    is_published: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+
+class KnowledgeQuestion(Base):
+    """Log + wachtrij van door personeel gestelde vragen."""
+    __tablename__ = "knowledge_questions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    question_text: Mapped[str] = mapped_column(Text, nullable=False)
+    asked_by: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id
+    asked_by_name: Mapped[str | None] = mapped_column(String(255))      # weergavenaam (gemak voor admin)
+    category: Mapped[Category | None] = mapped_column(Enum(Category))   # afdeling van de vrager
+    status: Mapped[KnowledgeQuestionStatus] = mapped_column(
+        Enum(KnowledgeQuestionStatus), default=KnowledgeQuestionStatus.pending, nullable=False
+    )
+    matched_entry_id: Mapped[str | None] = mapped_column(String(36))    # welke entry de bot teruggaf
+    resolved_entry_id: Mapped[str | None] = mapped_column(String(36))   # welke entry de admin er van maakte
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
+    resolved_by: Mapped[str | None] = mapped_column(String(255))        # HA user_id van de admin
+
+
 # ── Fietsen module ──────────────────────────────────────────────────────────────
 
 class BikeStatus(str, PyEnum):

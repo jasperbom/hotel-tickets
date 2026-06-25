@@ -20,6 +20,8 @@ import BikeReserveringDetail from "./pages/BikeReserveringDetail";
 import BikeBeheer from "./pages/BikeBeheer";
 import BikeInstellingen from "./pages/BikeInstellingen";
 import Instellingen from "./pages/Instellingen";
+import KennisBot from "./pages/KennisBot";
+import KennisbankBeheer from "./pages/KennisbankBeheer";
 import { userApi, bikesModuleApi, brandingApi, type UserRole, type BikesModuleRoles } from "./api/client";
 
 // --- Kleurpalet hulpfuncties ---
@@ -73,7 +75,7 @@ interface NavItem {
   label: string;
   icon: string;
   end?: boolean;
-  restricted: false | "adminOrSupervisor" | "settings";
+  restricted: false | "adminOrSupervisor" | "admin" | "settings";
 }
 
 interface ModuleConfig {
@@ -124,6 +126,17 @@ const MODULES: ModuleConfig[] = [
       { to: "/bikes/beheer", label: "Fietsbeheer", icon: "🔧", restricted: false },
     ],
   },
+  {
+    id: "kennis",
+    label: "Kennis",
+    icon: "💡",
+    defaultPath: "/kennis",
+    navTitle: "Kennisbot",
+    navItems: [
+      { to: "/kennis", label: "Vragen", icon: "💬", end: true, restricted: false },
+      { to: "/kennis/beheer", label: "Beheer", icon: "🛠️", restricted: "admin" },
+    ],
+  },
 ];
 
 export default function App() {
@@ -171,6 +184,8 @@ export default function App() {
       setActiveModuleId("zwembaden");
     } else if (pathToDetect.startsWith("/bikes")) {
       setActiveModuleId("fietsen");
+    } else if (pathToDetect.startsWith("/kennis")) {
+      setActiveModuleId("kennis");
     } else if (pathToDetect.startsWith("/instellingen")) {
       // Geen module — instellingen heeft geen module-context
     } else {
@@ -294,6 +309,7 @@ export default function App() {
 
   const visibleNavItems = (activeModule?.navItems || []).filter((item) => {
     if (item.restricted === "adminOrSupervisor") return isAdminOrSupervisor;
+    if (item.restricted === "admin") return currentUser?.role === "admin";
     if (item.restricted === "settings") return isAdminOrSupervisor || !hasAdmin;
     return true;
   });
@@ -475,6 +491,9 @@ export default function App() {
               <Route path="/bikes/reserveringen/:id" element={<BikeReserveringDetail />} />
               <Route path="/bikes/beheer" element={<BikeBeheer />} />
               <Route path="/bikes/instellingen" element={<BikeInstellingen />} />
+              {/* Kennisbank module */}
+              <Route path="/kennis" element={<KennisBot />} />
+              <Route path="/kennis/beheer" element={<KennisbankBeheer />} />
               {/* Instellingen (globaal) */}
               <Route path="/instellingen" element={<Instellingen />} />
             </Routes>
