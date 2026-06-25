@@ -16,7 +16,7 @@ import os
 
 logger = logging.getLogger(__name__)
 
-DEFAULT_MODEL = "claude-opus-4-8"
+DEFAULT_MODEL = "claude-haiku-4-5"
 
 _SYSTEM_PROMPT = (
     "Je bent een interne kennisbot voor hotelpersoneel. Beantwoord de vraag "
