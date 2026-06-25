@@ -259,6 +259,38 @@ class KnowledgeQuestion(Base):
     resolved_by: Mapped[str | None] = mapped_column(String(255))        # HA user_id van de admin
 
 
+class KnowledgeDocument(Base):
+    """Vrij aangeleverd document (Fase 2 / RAG). Wordt gehakt in chunks die de
+    AI doorzoekt om antwoorden uit te formuleren."""
+    __tablename__ = "knowledge_documents"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    title: Mapped[str] = mapped_column(String(255), nullable=False)
+    source_filename: Mapped[str | None] = mapped_column(String(255))
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+    category: Mapped[Category | None] = mapped_column(Enum(Category))
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    chunks: Mapped[list["KnowledgeChunk"]] = relationship(
+        "KnowledgeChunk", back_populates="document", cascade="all, delete-orphan"
+    )
+
+
+class KnowledgeChunk(Base):
+    """Stuk tekst uit een document, met FTS-index voor retrieval."""
+    __tablename__ = "knowledge_chunks"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    document_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("knowledge_documents.id", ondelete="CASCADE"), nullable=False
+    )
+    ordinal: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    content: Mapped[str] = mapped_column(Text, nullable=False)
+
+    document: Mapped["KnowledgeDocument"] = relationship("KnowledgeDocument", back_populates="chunks")
+
+
 # ── Fietsen module ──────────────────────────────────────────────────────────────
 
 class BikeStatus(str, PyEnum):

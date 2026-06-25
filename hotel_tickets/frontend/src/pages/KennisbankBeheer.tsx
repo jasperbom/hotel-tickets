@@ -4,6 +4,8 @@ import {
   CATEGORY_LABELS,
   type KnowledgeEntry,
   type KnowledgeQuestion,
+  type KnowledgeDocument,
+  type KnowledgeAiSettings,
   type Category,
   type KnowledgeImportResult,
 } from "../api/client";
@@ -13,7 +15,7 @@ function stripImages(md: string): string {
   return md.replace(/!\[[^\]]*\]\([^)]*\)/g, "").trim();
 }
 
-type Tab = "queue" | "entries";
+type Tab = "queue" | "entries" | "documents";
 
 const EMPTY_FORM = {
   id: null as string | null,
@@ -37,6 +39,15 @@ export default function KennisbankBeheer() {
   const [importMsg, setImportMsg] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  // Documenten + AI
+  const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [aiSettings, setAiSettings] = useState<KnowledgeAiSettings | null>(null);
+  const [docTitle, setDocTitle] = useState("");
+  const [docContent, setDocContent] = useState("");
+  const [docSaving, setDocSaving] = useState(false);
+  const [docMsg, setDocMsg] = useState("");
+  const docInputRef = useRef<HTMLInputElement>(null);
+
   function loadQueue() {
     knowledgeApi.queue().then((r) => setQueue(r.data)).catch(() => {});
   }
@@ -46,11 +57,66 @@ export default function KennisbankBeheer() {
       .then((r) => setEntries(r.data))
       .catch(() => {});
   }
+  function loadDocuments() {
+    knowledgeApi.listDocuments().then((r) => setDocuments(r.data)).catch(() => {});
+  }
+  function loadAiSettings() {
+    knowledgeApi.getAiSettings().then((r) => setAiSettings(r.data)).catch(() => {});
+  }
 
   useEffect(() => {
     loadQueue();
     loadEntries();
+    loadDocuments();
+    loadAiSettings();
   }, []);
+
+  // --- AI + documenten acties ---
+
+  async function toggleAi(enabled: boolean) {
+    const r = await knowledgeApi.updateAiSettings(enabled);
+    setAiSettings(r.data);
+  }
+
+  async function savePastedDoc() {
+    if (!docTitle.trim() || !docContent.trim()) return;
+    setDocSaving(true);
+    setDocMsg("");
+    try {
+      const r = await knowledgeApi.createDocument({ title: docTitle.trim(), content: docContent.trim() });
+      setDocMsg(`Toegevoegd: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
+      setDocTitle("");
+      setDocContent("");
+      loadDocuments();
+    } catch {
+      setDocMsg("Opslaan mislukt.");
+    } finally {
+      setDocSaving(false);
+    }
+  }
+
+  async function uploadDoc(file: File) {
+    setDocSaving(true);
+    setDocMsg("");
+    try {
+      const r = await knowledgeApi.uploadDocument(file);
+      setDocMsg(`Geüpload: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
+      loadDocuments();
+    } catch (err: unknown) {
+      const detail =
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Upload mislukt.";
+      setDocMsg(detail);
+    } finally {
+      setDocSaving(false);
+      if (docInputRef.current) docInputRef.current.value = "";
+    }
+  }
+
+  async function removeDoc(id: string) {
+    if (!confirm("Dit document verwijderen?")) return;
+    await knowledgeApi.removeDocument(id);
+    loadDocuments();
+  }
 
   // --- Wachtrij acties ---
 
@@ -245,7 +311,40 @@ export default function KennisbankBeheer() {
         <TabButton active={tab === "entries"} onClick={() => setTab("entries")}>
           Kennisbank ({entries.length})
         </TabButton>
+        <TabButton active={tab === "documents"} onClick={() => setTab("documents")}>
+          Documenten ({documents.length})
+        </TabButton>
       </div>
+
+      {/* AI-schakelaar */}
+      {aiSettings && (
+        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-sm font-medium text-gray-800">🤖 AI-modus (Claude)</p>
+            {aiSettings.ai_available ? (
+              <p className="text-xs text-gray-500 mt-0.5">
+                Model: {aiSettings.model}. Met AI aan beantwoordt de bot vragen uit je documenten
+                (vrije tekst); zonder AI zoekt hij op trefwoord in de kennis-items.
+              </p>
+            ) : (
+              <p className="text-xs text-amber-700 mt-0.5">
+                Geen API-sleutel ingesteld. Vul <code>claude_api_key</code> in bij de addon-opties
+                om AI te kunnen gebruiken.
+              </p>
+            )}
+          </div>
+          <label className="flex items-center gap-2 shrink-0 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={aiSettings.ai_enabled}
+              disabled={!aiSettings.ai_available}
+              onChange={(e) => toggleAi(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm text-gray-700">{aiSettings.ai_enabled ? "Aan" : "Uit"}</span>
+          </label>
+        </div>
+      )}
 
       {/* Wachtrij */}
       {tab === "queue" && (
@@ -335,6 +434,90 @@ export default function KennisbankBeheer() {
                 </div>
               </div>
             ))
+          )}
+        </div>
+      )}
+
+      {/* Documenten (RAG-bron voor AI) */}
+      {tab === "documents" && (
+        <div className="space-y-4">
+          <p className="text-xs text-gray-500">
+            Documenten zijn vrije tekst die de AI doorzoekt om antwoorden uit te formuleren.
+            Plak tekst of upload een bestand (.md, .txt, .pdf of .zip). Werkt alleen als AI aanstaat.
+          </p>
+
+          {/* Plakken */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-2">
+            <input
+              value={docTitle}
+              onChange={(e) => setDocTitle(e.target.value)}
+              placeholder="Titel van het document"
+              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            />
+            <textarea
+              value={docContent}
+              onChange={(e) => setDocContent(e.target.value)}
+              placeholder="Plak hier de tekst..."
+              rows={5}
+              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+            />
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2">
+                <input
+                  ref={docInputRef}
+                  type="file"
+                  accept=".md,.markdown,.txt,.pdf,.zip"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) uploadDoc(f);
+                  }}
+                />
+                <button
+                  onClick={() => docInputRef.current?.click()}
+                  disabled={docSaving}
+                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+                >
+                  Bestand uploaden
+                </button>
+              </div>
+              <button
+                onClick={savePastedDoc}
+                disabled={docSaving || !docTitle.trim() || !docContent.trim()}
+                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              >
+                {docSaving ? "Bezig..." : "Tekst opslaan"}
+              </button>
+            </div>
+            {docMsg && <p className="text-sm text-blue-700">{docMsg}</p>}
+          </div>
+
+          {/* Lijst */}
+          {documents.length === 0 ? (
+            <p className="text-sm text-gray-400">Nog geen documenten.</p>
+          ) : (
+            <div className="space-y-2">
+              {documents.map((d) => (
+                <div
+                  key={d.id}
+                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+                >
+                  <div className="min-w-0">
+                    <p className="font-semibold text-gray-900">{d.title}</p>
+                    <p className="text-xs text-gray-400 mt-1">
+                      {d.chunk_count} fragment{d.chunk_count === 1 ? "" : "en"}
+                      {d.source_filename && ` · ${d.source_filename}`}
+                    </p>
+                  </div>
+                  <button
+                    onClick={() => removeDoc(d.id)}
+                    className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50 shrink-0"
+                  >
+                    Verwijderen
+                  </button>
+                </div>
+              ))}
+            </div>
           )}
         </div>
       )}

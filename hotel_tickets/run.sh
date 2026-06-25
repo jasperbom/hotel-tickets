@@ -30,6 +30,14 @@ if bashio::config.has_value 'smtp_from'; then
     export SMTP_FROM=$(bashio::config 'smtp_from')
 fi
 
+# Claude / AI kennisbot (optioneel)
+if bashio::config.has_value 'claude_api_key'; then
+    export CLAUDE_API_KEY=$(bashio::config 'claude_api_key')
+fi
+if bashio::config.has_value 'claude_model'; then
+    export CLAUDE_MODEL=$(bashio::config 'claude_model')
+fi
+
 bashio::log.info "Starting Hotel Ticket System..."
 
 cd /app

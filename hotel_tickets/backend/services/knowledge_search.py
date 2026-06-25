@@ -107,6 +107,33 @@ class FtsKnowledgeSearch:
         return list(result.scalars().all())
 
 
+async def search_chunks(
+    db: AsyncSession,
+    question: str,
+    category: "Category | None" = None,
+    limit: int = 8,
+) -> list[str]:
+    """Haal de meest relevante document-chunks op voor een vraag (RAG-retrieval).
+
+    Retourneert een lijst tekstfragmenten (geen objecten) die als context aan de
+    AI gegeven worden."""
+    fts_query = _build_fts_query(question)
+    if not fts_query:
+        return []
+    try:
+        rows = await db.execute(
+            text(
+                "SELECT content FROM knowledge_chunk_fts WHERE knowledge_chunk_fts MATCH :q "
+                "ORDER BY bm25(knowledge_chunk_fts) LIMIT :lim"
+            ),
+            {"q": fts_query, "lim": limit},
+        )
+        return [r[0] for r in rows.fetchall()]
+    except Exception as exc:  # pragma: no cover - defensief
+        logger.warning("Chunk-FTS-zoekopdracht mislukt: %s", exc)
+        return []
+
+
 # Singleton-instantie die de router gebruikt. Later kan dit op basis van de
 # 'knowledge_ai_enabled'-instelling een SemanticKnowledgeSearch worden.
 knowledge_search = FtsKnowledgeSearch()

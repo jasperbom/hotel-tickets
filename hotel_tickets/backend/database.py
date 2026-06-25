@@ -182,3 +182,32 @@ async def _run_migrations(conn):
         await conn.exec_driver_sql(
             "INSERT INTO system_settings (key, value) VALUES ('knowledge_ai_enabled', 'false')"
         )
+
+    # ── Kennisbank documenten (RAG): FTS5 index over chunks + triggers ────────
+    await conn.exec_driver_sql(
+        "CREATE VIRTUAL TABLE IF NOT EXISTS knowledge_chunk_fts USING fts5("
+        "chunk_id UNINDEXED, document_id UNINDEXED, content, tokenize='unicode61')"
+    )
+    await conn.exec_driver_sql(
+        "CREATE TRIGGER IF NOT EXISTS knowledge_chunk_fts_ai AFTER INSERT ON knowledge_chunks BEGIN "
+        "INSERT INTO knowledge_chunk_fts(chunk_id, document_id, content) "
+        "VALUES (new.id, new.document_id, new.content); END"
+    )
+    await conn.exec_driver_sql(
+        "CREATE TRIGGER IF NOT EXISTS knowledge_chunk_fts_ad AFTER DELETE ON knowledge_chunks BEGIN "
+        "DELETE FROM knowledge_chunk_fts WHERE chunk_id = old.id; END"
+    )
+    await conn.exec_driver_sql(
+        "CREATE TRIGGER IF NOT EXISTS knowledge_chunk_fts_au AFTER UPDATE ON knowledge_chunks BEGIN "
+        "DELETE FROM knowledge_chunk_fts WHERE chunk_id = old.id; "
+        "INSERT INTO knowledge_chunk_fts(chunk_id, document_id, content) "
+        "VALUES (new.id, new.document_id, new.content); END"
+    )
+    chunk_fts_count = (await conn.exec_driver_sql("SELECT COUNT(*) FROM knowledge_chunk_fts")).scalar()
+    chunk_count = (await conn.exec_driver_sql("SELECT COUNT(*) FROM knowledge_chunks")).scalar()
+    if chunk_count and not chunk_fts_count:
+        logger.info("Kennisbank: chunk-FTS-index opnieuw vullen voor %d chunks", chunk_count)
+        await conn.exec_driver_sql(
+            "INSERT INTO knowledge_chunk_fts(chunk_id, document_id, content) "
+            "SELECT id, document_id, content FROM knowledge_chunks"
+        )

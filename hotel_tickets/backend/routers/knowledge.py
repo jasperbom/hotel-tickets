@@ -32,12 +32,16 @@ from ..models import (
     KnowledgeEntry,
     KnowledgeQuestion,
     KnowledgeQuestionStatus,
+    KnowledgeDocument,
+    KnowledgeChunk,
+    SystemSetting,
     Category,
     Role,
     Ticket,
     Status,
 )
-from ..services.knowledge_search import knowledge_search
+from ..services.knowledge_search import knowledge_search, search_chunks
+from ..services import ai_client
 
 logger = logging.getLogger(__name__)
 
@@ -114,6 +118,8 @@ class AskResponse(BaseModel):
     answered: bool
     question_id: str
     entries: list[EntryOut]
+    ai_answer: Optional[str] = None        # door Claude geformuleerd antwoord (RAG)
+    source: Optional[str] = None           # "ai" of "entries"
 
 
 class QuestionOut(BaseModel):
@@ -184,31 +190,16 @@ def _question_out(q: KnowledgeQuestion) -> dict:
 
 # ── Vragen stellen (alle medewerkers) ──────────────────────────────────────────
 
-@router.post("/ask", response_model=AskResponse)
-async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    entries = await knowledge_search.search(db, data.question, data.category)
+async def _ai_enabled(db: AsyncSession) -> bool:
+    """AI is actief als de admin 'm aanzette én er een API-sleutel is."""
+    if not ai_client.is_available():
+        return False
+    row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    return bool(row and row.value == "true")
 
-    if entries:
-        top = entries[0]
-        top.ask_count += 1
-        q = KnowledgeQuestion(
-            question_text=data.question,
-            asked_by=user.ha_user_id,
-            asked_by_name=user.display_name,
-            category=data.category,
-            status=KnowledgeQuestionStatus.answered_by_bot,
-            matched_entry_id=top.id,
-        )
-        db.add(q)
-        await db.flush()
-        return AskResponse(
-            answered=True,
-            question_id=q.id,
-            entries=[EntryOut(**_entry_out(e)) for e in entries],
-        )
 
-    # Geen antwoord → wachtrij. Voorkom duplicaten: hergebruik een bestaande
-    # pending vraag met exact dezelfde tekst.
+async def _log_pending(db: AsyncSession, data: "AskRequest", user) -> AskResponse:
+    """Log een onbeantwoorde vraag in de wachtrij (dedup op tekst)."""
     existing = await db.execute(
         select(KnowledgeQuestion).where(
             KnowledgeQuestion.status == KnowledgeQuestionStatus.pending,
@@ -227,6 +218,66 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         db.add(q)
         await db.flush()
     return AskResponse(answered=False, question_id=q.id, entries=[])
+
+
+async def _log_answered(
+    db: AsyncSession, data: "AskRequest", user, matched_entry_id: Optional[str]
+) -> KnowledgeQuestion:
+    q = KnowledgeQuestion(
+        question_text=data.question.strip(),
+        asked_by=user.ha_user_id,
+        asked_by_name=user.display_name,
+        category=data.category,
+        status=KnowledgeQuestionStatus.answered_by_bot,
+        matched_entry_id=matched_entry_id,
+    )
+    db.add(q)
+    await db.flush()
+    return q
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    # ── RAG-route: AI doorzoekt documenten + entries en formuleert een antwoord ──
+    if await _ai_enabled(db):
+        chunks = await search_chunks(db, data.question, data.category)
+        entries = await knowledge_search.search(db, data.question, data.category)
+        contexts: list[str] = list(chunks)
+        for e in entries:
+            contexts.append(f"{e.title}\n{e.answer}")
+        if contexts:
+            result = await ai_client.answer_from_context(data.question, contexts)
+            if result is not None:
+                if result["answered"] and result["answer"]:
+                    matched_id = entries[0].id if entries else None
+                    if entries:
+                        entries[0].ask_count += 1
+                    q = await _log_answered(db, data, user, matched_id)
+                    return AskResponse(
+                        answered=True,
+                        question_id=q.id,
+                        entries=[EntryOut(**_entry_out(e)) for e in entries],
+                        ai_answer=result["answer"],
+                        source="ai",
+                    )
+                # AI concludeert dat het antwoord er niet in staat → wachtrij
+                return await _log_pending(db, data, user)
+        # Geen context gevonden → wachtrij
+        return await _log_pending(db, data, user)
+
+    # ── Zonder AI: trefwoord-zoeken in de kennisbank-entries ──
+    entries = await knowledge_search.search(db, data.question, data.category)
+    if entries:
+        top = entries[0]
+        top.ask_count += 1
+        q = await _log_answered(db, data, user, top.id)
+        return AskResponse(
+            answered=True,
+            question_id=q.id,
+            entries=[EntryOut(**_entry_out(e)) for e in entries],
+            source="entries",
+        )
+    return await _log_pending(db, data, user)
 
 
 # ── Kennisbank bladeren (alle medewerkers) ─────────────────────────────────────
@@ -661,3 +712,218 @@ async def import_qa(
 
     await db.flush()
     return ImportResult(found=len(pairs), imported=imported, skipped=skipped, images=images_stored)
+
+
+# ── Documenten (RAG-bron) + AI-instellingen (alleen admin) ─────────────────────
+
+def _chunk_text(text: str, size: int = 900, overlap: int = 150) -> list[str]:
+    """Hak tekst in overlappende stukken voor retrieval. Splitst bij voorkeur op
+    paragraafgrenzen en valt anders terug op harde knippen."""
+    text = text.strip()
+    if not text:
+        return []
+    paragraphs = re.split(r"\n\s*\n", text)
+    chunks: list[str] = []
+    current = ""
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        if len(current) + len(para) + 2 <= size:
+            current = f"{current}\n\n{para}" if current else para
+        else:
+            if current:
+                chunks.append(current)
+            # paragraaf zelf te groot? hard knippen met overlap
+            if len(para) > size:
+                start = 0
+                while start < len(para):
+                    chunks.append(para[start:start + size])
+                    start += size - overlap
+                current = ""
+            else:
+                current = para
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _extract_text(filename: str, raw: bytes) -> str:
+    """Haal platte tekst uit een geüpload bestand (.md/.txt/.pdf/.zip)."""
+    name = (filename or "").lower()
+    ext = os.path.splitext(name)[1]
+    if ext == ".pdf":
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(raw))
+            return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+        except Exception as exc:
+            raise HTTPException(400, f"PDF kon niet gelezen worden: {exc}")
+    if ext == ".zip" or raw[:2] == b"PK":
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except zipfile.BadZipFile:
+            raise HTTPException(400, "Ongeldig ZIP-bestand")
+        parts: list[str] = []
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            iext = os.path.splitext(info.filename)[1].lower()
+            if iext in MD_EXTENSIONS:
+                parts.append(zf.read(info).decode("utf-8", errors="replace"))
+            elif iext == ".pdf":
+                try:
+                    from pypdf import PdfReader
+                    reader = PdfReader(io.BytesIO(zf.read(info)))
+                    parts.append("\n\n".join((p.extract_text() or "") for p in reader.pages))
+                except Exception:
+                    continue
+        return "\n\n".join(parts)
+    # tekst/markdown
+    return raw.decode("utf-8", errors="replace")
+
+
+async def _store_document_chunks(db: AsyncSession, doc: KnowledgeDocument) -> int:
+    for ch in _chunk_text(doc.content):
+        db.add(KnowledgeChunk(document_id=doc.id, ordinal=0, content=ch))
+    await db.flush()
+    count = await db.scalar(
+        select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == doc.id)
+    )
+    return count or 0
+
+
+class DocumentOut(BaseModel):
+    id: str
+    title: str
+    source_filename: Optional[str] = None
+    category: Optional[Category] = None
+    chunk_count: int = 0
+    created_at: str
+
+
+class DocumentCreate(BaseModel):
+    title: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1)
+    category: Optional[Category] = None
+
+
+@router.get("/documents", response_model=list[DocumentOut])
+async def list_documents(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    rows = await db.execute(select(KnowledgeDocument).order_by(KnowledgeDocument.created_at.desc()))
+    docs = rows.scalars().all()
+    out = []
+    for d in docs:
+        cnt = await db.scalar(
+            select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == d.id)
+        )
+        out.append(DocumentOut(
+            id=d.id,
+            title=d.title,
+            source_filename=d.source_filename,
+            category=d.category.value if isinstance(d.category, Category) else d.category,
+            chunk_count=cnt or 0,
+            created_at=d.created_at.isoformat() if d.created_at else "",
+        ))
+    return out
+
+
+@router.post("/documents", response_model=DocumentOut, status_code=201)
+async def create_document(data: DocumentCreate, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Plak vrije tekst als kennisdocument."""
+    _require_admin(user)
+    doc = KnowledgeDocument(
+        title=data.title.strip(),
+        content=data.content.strip(),
+        category=data.category,
+        created_by=user.ha_user_id,
+    )
+    db.add(doc)
+    await db.flush()
+    cnt = await _store_document_chunks(db, doc)
+    return DocumentOut(
+        id=doc.id, title=doc.title, source_filename=None,
+        category=doc.category.value if isinstance(doc.category, Category) else doc.category,
+        chunk_count=cnt, created_at=doc.created_at.isoformat() if doc.created_at else "",
+    )
+
+
+@router.post("/documents/upload", response_model=DocumentOut, status_code=201)
+async def upload_document(
+    user: RequireUser,
+    file: UploadFile = File(...),
+    title: Optional[str] = Query(None),
+    category: Optional[Category] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload een document (.md/.txt/.pdf/.zip) als kennisbron voor de AI."""
+    _require_admin(user)
+    raw = await file.read()
+    content = _extract_text(file.filename or "", raw).strip()
+    if not content:
+        raise HTTPException(400, "Geen tekst gevonden in het bestand")
+    doc = KnowledgeDocument(
+        title=(title or os.path.splitext(file.filename or "Document")[0]).strip() or "Document",
+        source_filename=file.filename,
+        content=content,
+        category=category,
+        created_by=user.ha_user_id,
+    )
+    db.add(doc)
+    await db.flush()
+    cnt = await _store_document_chunks(db, doc)
+    return DocumentOut(
+        id=doc.id, title=doc.title, source_filename=doc.source_filename,
+        category=doc.category.value if isinstance(doc.category, Category) else doc.category,
+        chunk_count=cnt, created_at=doc.created_at.isoformat() if doc.created_at else "",
+    )
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+async def delete_document(document_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    await db.delete(doc)
+
+
+class AiSettingsOut(BaseModel):
+    ai_available: bool   # is er een API-sleutel geconfigureerd?
+    ai_enabled: bool     # heeft de admin AI aangezet?
+    model: str
+
+
+class AiSettingsUpdate(BaseModel):
+    enabled: bool
+
+
+@router.get("/ai-settings", response_model=AiSettingsOut)
+async def get_ai_settings(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    return AiSettingsOut(
+        ai_available=ai_client.is_available(),
+        ai_enabled=bool(row and row.value == "true"),
+        model=ai_client.get_model(),
+    )
+
+
+@router.patch("/ai-settings", response_model=AiSettingsOut)
+async def update_ai_settings(
+    data: AiSettingsUpdate, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    _require_admin(user)
+    value = "true" if data.enabled else "false"
+    row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    if row:
+        row.value = value
+    else:
+        db.add(SystemSetting(key="knowledge_ai_enabled", value=value))
+    await db.flush()
+    return AiSettingsOut(
+        ai_available=ai_client.is_available(),
+        ai_enabled=data.enabled,
+        model=ai_client.get_model(),
+    )
