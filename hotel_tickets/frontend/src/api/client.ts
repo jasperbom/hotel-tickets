@@ -658,6 +658,14 @@ export interface KnowledgeAiSettings {
   ai_available: boolean;
   ai_enabled: boolean;
   model: string;
+  has_key: boolean;
+  key_from_addon: boolean;
+}
+
+export interface KnowledgeAiSettingsUpdate {
+  enabled?: boolean;
+  api_key?: string;
+  model?: string;
 }
 
 export interface KnowledgeStats {
@@ -732,8 +740,8 @@ export const knowledgeApi = {
   removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
   // AI-instellingen
   getAiSettings: () => api.get<KnowledgeAiSettings>("/knowledge/ai-settings"),
-  updateAiSettings: (enabled: boolean) =>
-    api.patch<KnowledgeAiSettings>("/knowledge/ai-settings", { enabled }),
+  updateAiSettings: (data: KnowledgeAiSettingsUpdate) =>
+    api.patch<KnowledgeAiSettings>("/knowledge/ai-settings", data),
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {

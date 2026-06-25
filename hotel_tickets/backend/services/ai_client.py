@@ -56,26 +56,23 @@ def _extract_json(text: str) -> dict | None:
     return None
 
 
-def get_model() -> str:
-    return (os.environ.get("CLAUDE_MODEL") or "").strip() or DEFAULT_MODEL
+def env_model() -> str:
+    return (os.environ.get("CLAUDE_MODEL") or "").strip()
 
 
-def _api_key() -> str:
+def env_api_key() -> str:
     return (os.environ.get("CLAUDE_API_KEY") or "").strip()
 
 
-def is_available() -> bool:
-    """Is er een API-sleutel geconfigureerd?"""
-    return bool(_api_key())
-
-
-async def answer_from_context(question: str, contexts: list[str]) -> dict | None:
+async def answer_from_context(
+    question: str, contexts: list[str], api_key: str, model: str
+) -> dict | None:
     """Vraag Claude een antwoord te formuleren uit de gegeven context-stukken.
 
-    Retourneert {"answered": bool, "answer": str} of None bij een fout / geen
-    sleutel (de router valt dan terug op de wachtrij)."""
-    key = _api_key()
-    if not key or not contexts:
+    `api_key` en `model` worden door de router bepaald (app-instelling, anders
+    addon-optie/omgeving). Retourneert {"answered": bool, "answer": str} of None
+    bij een fout / geen sleutel (de router valt dan terug op de wachtrij)."""
+    if not api_key or not contexts:
         return None
 
     try:
@@ -84,13 +81,13 @@ async def answer_from_context(question: str, contexts: list[str]) -> dict | None
         logger.warning("anthropic SDK niet geïnstalleerd; AI niet beschikbaar")
         return None
 
-    client = AsyncAnthropic(api_key=key)
+    client = AsyncAnthropic(api_key=api_key)
     context_text = "\n\n---\n\n".join(contexts)
     user_content = f"CONTEXT:\n{context_text}\n\nVRAAG: {question.strip()}"
 
     try:
         resp = await client.messages.create(
-            model=get_model(),
+            model=model or DEFAULT_MODEL,
             max_tokens=1024,
             system=_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": user_content}],

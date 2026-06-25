@@ -434,8 +434,13 @@ export default function App() {
                   )}
                 </div>
 
-                <span className="font-bold text-base md:text-lg mr-1 md:mr-3 text-white shrink-0">
+                <span className="font-bold text-base md:text-lg mr-1 md:mr-3 text-white shrink-0 flex items-center gap-1.5">
                   {activeModule?.navTitle ?? "Instellingen"}
+                  {activeModule?.id === "kennis" && (
+                    <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none">
+                      Beta
+                    </span>
+                  )}
                 </span>
 
                 {/* Navigatie links — altijd zichtbaar, horizontaal scrollbaar op mobiel */}

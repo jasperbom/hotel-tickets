@@ -190,12 +190,26 @@ def _question_out(q: KnowledgeQuestion) -> dict:
 
 # ── Vragen stellen (alle medewerkers) ──────────────────────────────────────────
 
+async def _setting(db: AsyncSession, key: str) -> str:
+    row = await db.get(SystemSetting, key)
+    return (row.value if row and row.value else "").strip()
+
+
+async def _ai_key(db: AsyncSession) -> str:
+    """API-sleutel: app-instelling heeft voorrang op de addon-optie/omgeving."""
+    return (await _setting(db, "knowledge_ai_key")) or ai_client.env_api_key()
+
+
+async def _ai_model(db: AsyncSession) -> str:
+    return (await _setting(db, "knowledge_ai_model")) or ai_client.env_model() or ai_client.DEFAULT_MODEL
+
+
 async def _ai_enabled(db: AsyncSession) -> bool:
     """AI is actief als de admin 'm aanzette én er een API-sleutel is."""
-    if not ai_client.is_available():
-        return False
     row = await db.get(SystemSetting, "knowledge_ai_enabled")
-    return bool(row and row.value == "true")
+    if not (row and row.value == "true"):
+        return False
+    return bool(await _ai_key(db))
 
 
 async def _log_pending(db: AsyncSession, data: "AskRequest", user) -> AskResponse:
@@ -246,7 +260,9 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         for e in entries:
             contexts.append(f"{e.title}\n{e.answer}")
         if contexts:
-            result = await ai_client.answer_from_context(data.question, contexts)
+            result = await ai_client.answer_from_context(
+                data.question, contexts, await _ai_key(db), await _ai_model(db)
+            )
             if result is not None:
                 if result["answered"] and result["answer"]:
                     matched_id = entries[0].id if entries else None
@@ -890,24 +906,48 @@ async def delete_document(document_id: str, user: RequireUser, db: AsyncSession 
 
 
 class AiSettingsOut(BaseModel):
-    ai_available: bool   # is er een API-sleutel geconfigureerd?
-    ai_enabled: bool     # heeft de admin AI aangezet?
-    model: str
+    ai_available: bool          # is er een API-sleutel beschikbaar (app of addon)?
+    ai_enabled: bool            # heeft de admin AI aangezet?
+    model: str                  # actief model
+    has_key: bool               # is er überhaupt een sleutel ingesteld?
+    key_from_addon: bool        # komt de sleutel uit de addon-optie (env)?
 
 
 class AiSettingsUpdate(BaseModel):
-    enabled: bool
+    enabled: Optional[bool] = None
+    api_key: Optional[str] = None   # "" of null = niet wijzigen; spaties = wissen
+    model: Optional[str] = None
+
+
+async def _set_setting(db: AsyncSession, key: str, value: str | None) -> None:
+    row = await db.get(SystemSetting, key)
+    if value:
+        if row:
+            row.value = value
+        else:
+            db.add(SystemSetting(key=key, value=value))
+    elif row is not None:
+        # lege waarde → instelling verwijderen (valt terug op addon-optie)
+        await db.delete(row)
+
+
+async def _ai_settings_out(db: AsyncSession) -> AiSettingsOut:
+    enabled_row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    app_key = await _setting(db, "knowledge_ai_key")
+    env_key = ai_client.env_api_key()
+    return AiSettingsOut(
+        ai_available=bool(app_key or env_key),
+        ai_enabled=bool(enabled_row and enabled_row.value == "true"),
+        model=await _ai_model(db),
+        has_key=bool(app_key or env_key),
+        key_from_addon=not app_key and bool(env_key),
+    )
 
 
 @router.get("/ai-settings", response_model=AiSettingsOut)
 async def get_ai_settings(user: RequireUser, db: AsyncSession = Depends(get_db)):
     _require_admin(user)
-    row = await db.get(SystemSetting, "knowledge_ai_enabled")
-    return AiSettingsOut(
-        ai_available=ai_client.is_available(),
-        ai_enabled=bool(row and row.value == "true"),
-        model=ai_client.get_model(),
-    )
+    return await _ai_settings_out(db)
 
 
 @router.patch("/ai-settings", response_model=AiSettingsOut)
@@ -915,15 +955,15 @@ async def update_ai_settings(
     data: AiSettingsUpdate, user: RequireUser, db: AsyncSession = Depends(get_db)
 ):
     _require_admin(user)
-    value = "true" if data.enabled else "false"
-    row = await db.get(SystemSetting, "knowledge_ai_enabled")
-    if row:
-        row.value = value
-    else:
-        db.add(SystemSetting(key="knowledge_ai_enabled", value=value))
+    if data.enabled is not None:
+        await _set_setting(db, "knowledge_ai_enabled", "true" if data.enabled else "false")
+    if data.api_key is not None:
+        # lege string laat ongewijzigd; alleen-spaties wist de sleutel
+        if data.api_key == "":
+            pass
+        else:
+            await _set_setting(db, "knowledge_ai_key", data.api_key.strip())
+    if data.model is not None:
+        await _set_setting(db, "knowledge_ai_model", data.model.strip())
     await db.flush()
-    return AiSettingsOut(
-        ai_available=ai_client.is_available(),
-        ai_enabled=data.enabled,
-        model=ai_client.get_model(),
-    )
+    return await _ai_settings_out(db)
