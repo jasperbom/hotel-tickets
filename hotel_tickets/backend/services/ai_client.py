@@ -163,3 +163,41 @@ async def is_covered(solution: str, contexts: list[str], api_key: str, model: st
     if data is None:
         return None
     return bool(data.get("covered"))
+
+
+_EXPAND_PROMPT = (
+    "Een hotelmedewerker stelt een vraag. Bedenk korte alternatieve "
+    "zoekformuleringen zodat we de juiste kennis terugvinden, ook als die anders "
+    "verwoord is. Gebruik synoniemen, kernwoorden en gangbare termen (bijv. "
+    "'reset' en 'herstart', 'kapot' en 'storing'). Antwoord ALLEEN met een "
+    'JSON-object: {\"queries\": [\"...\", \"...\"]} — maximaal 4 korte varianten in '
+    "het Nederlands, zonder uitleg."
+)
+
+
+async def expand_query(question: str, api_key: str, model: str) -> list[str]:
+    """Genereer alternatieve zoekformuleringen voor een vraag (synoniemen e.d.).
+    Retourneert een lijst varianten of [] bij een fout/geen sleutel."""
+    if not api_key or not question.strip():
+        return []
+    try:
+        from anthropic import AsyncAnthropic
+    except ImportError:
+        return []
+    client = AsyncAnthropic(api_key=api_key)
+    try:
+        resp = await client.messages.create(
+            model=model or DEFAULT_MODEL,
+            max_tokens=200,
+            system=_EXPAND_PROMPT,
+            messages=[{"role": "user", "content": question.strip()}],
+        )
+    except Exception as exc:
+        logger.warning("Claude query-expansie mislukt: %s", exc)
+        return []
+    text = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")
+    data = _extract_json(text)
+    if not data:
+        return []
+    queries = data.get("queries") or []
+    return [q.strip() for q in queries if isinstance(q, str) and q.strip()][:4]

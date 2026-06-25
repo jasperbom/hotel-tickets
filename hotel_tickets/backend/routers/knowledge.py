@@ -268,6 +268,8 @@ async def _log_answered(
 async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
     # ── RAG-route: AI doorzoekt documenten + entries en formuleert een antwoord ──
     if await _ai_enabled(db):
+        key = await _ai_key(db)
+        model = await _ai_model(db)
         # Retrieval-query: bij een vervolgvraag ook de vorige vraag meenemen
         retrieval_q = data.question
         last_user = next(
@@ -276,8 +278,23 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         if last_user:
             retrieval_q = f"{last_user} {data.question}"
 
-        chunks = await search_chunks(db, retrieval_q, data.category)
+        chunks = await search_chunks(db, retrieval_q, data.category, limit=8)
         entries = await knowledge_search.search(db, retrieval_q, data.category)
+
+        # Slimmer zoeken: levert de gewone zoekopdracht weinig op, laat Claude de
+        # vraag dan herformuleren (synoniemen) en zoek op die varianten.
+        if len(chunks) < 3:
+            existing_ids = {e.id for e in entries}
+            for variant in await ai_client.expand_query(data.question, key, model):
+                for c in await search_chunks(db, variant, data.category, limit=5):
+                    if c not in chunks:
+                        chunks.append(c)
+                for e in await knowledge_search.search(db, variant, data.category):
+                    if e.id not in existing_ids:
+                        entries.append(e)
+                        existing_ids.add(e.id)
+            chunks = chunks[:12]
+
         contexts: list[str] = list(chunks)
         for e in entries:
             contexts.append(f"{e.title}\n{e.answer}")
@@ -285,7 +302,7 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         history = [{"role": t.role, "content": t.content} for t in data.history]
         if contexts or history:
             result = await ai_client.answer_from_context(
-                data.question, contexts, await _ai_key(db), await _ai_model(db), history=history
+                data.question, contexts, key, model, history=history
             )
             if result is not None:
                 if result["answered"] and result["answer"]:
