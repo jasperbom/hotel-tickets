@@ -659,6 +659,26 @@ export interface KnowledgeDocument {
   created_at: string;
 }
 
+export interface KnowledgeDocumentDetail extends KnowledgeDocument {
+  content: string;
+}
+
+export interface KnowledgeDocumentMatch extends KnowledgeDocument {
+  snippet: string;
+}
+
+export interface KnowledgeSearchResults {
+  entries: KnowledgeEntry[];
+  documents: KnowledgeDocumentMatch[];
+}
+
+export interface KnowledgeCleanupResult {
+  title: string;
+  category: Category | null;
+  folder: string | null;
+  content: string;
+}
+
 export interface KnowledgeAiSettings {
   ai_available: boolean;
   ai_enabled: boolean;
@@ -758,7 +778,16 @@ export const knowledgeApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  getDocument: (id: string) => api.get<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`),
+  updateDocument: (
+    id: string,
+    data: { title?: string; content?: string; category?: Category | null; folder?: string | null }
+  ) => api.patch<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`, data),
   removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
+  aiCleanup: (text: string) =>
+    api.post<KnowledgeCleanupResult>("/knowledge/ai/cleanup", { text }),
+  searchBeheer: (q: string) =>
+    api.get<KnowledgeSearchResults>("/knowledge/search", { params: { q } }),
   // AI-instellingen
   getAiSettings: () => api.get<KnowledgeAiSettings>("/knowledge/ai-settings"),
   updateAiSettings: (data: KnowledgeAiSettingsUpdate) =>
