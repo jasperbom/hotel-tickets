@@ -608,6 +608,7 @@ export interface KnowledgeEntry {
   answer: string;
   keywords: string | null;
   category: Category | null;
+  folder: string | null;
   source_ticket_id: string | null;
   images: string[];
   ask_count: number;
@@ -634,6 +635,7 @@ export interface KnowledgeQuestion {
   resolved_entry_id: string | null;
   proposed_answer: string | null;
   proposed_by: string | null;
+  conversation: string | null;
   created_at: string;
   resolved_at: string | null;
   resolved_by: string | null;
@@ -652,6 +654,7 @@ export interface KnowledgeDocument {
   title: string;
   source_filename: string | null;
   category: Category | null;
+  folder: string | null;
   chunk_count: number;
   created_at: string;
 }
@@ -681,6 +684,7 @@ export interface KnowledgeEntryInput {
   answer?: string;
   keywords?: string | null;
   category?: Category | null;
+  folder?: string | null;
   is_published?: boolean;
   source_ticket_id?: string | null;
 }
@@ -705,15 +709,15 @@ export const knowledgeApi = {
   updateEntry: (id: string, data: KnowledgeEntryInput) =>
     api.patch<KnowledgeEntry>(`/knowledge/entries/${id}`, data),
   removeEntry: (id: string) => api.delete(`/knowledge/entries/${id}`),
-  submitSolution: (questionId: string, solution: string) =>
+  submitSolution: (questionId: string, solution: string, conversation?: ChatTurn[]) =>
     api.post<{ status: "queued" | "already_known" }>(
       `/knowledge/questions/${questionId}/solution`,
-      { solution }
+      { solution, conversation: conversation ?? [] }
     ),
   queue: () => api.get<KnowledgeQuestion[]>("/knowledge/queue"),
   answerQueue: (
     qid: string,
-    data: { title: string; answer: string; keywords?: string | null; category?: Category | null }
+    data: { title: string; answer: string; keywords?: string | null; category?: Category | null; folder?: string | null }
   ) => api.post<KnowledgeEntry>(`/knowledge/queue/${qid}/answer`, data),
   dismissQueue: (qid: string) => api.post(`/knowledge/queue/${qid}/dismiss`),
   fromTicket: (ticketId: string, data?: KnowledgeEntryInput) =>
@@ -740,14 +744,15 @@ export const knowledgeApi = {
   },
   // Documenten (RAG-bron)
   listDocuments: () => api.get<KnowledgeDocument[]>("/knowledge/documents"),
-  createDocument: (data: { title: string; content: string; category?: Category | null }) =>
+  createDocument: (data: { title: string; content: string; category?: Category | null; folder?: string | null }) =>
     api.post<KnowledgeDocument>("/knowledge/documents", data),
-  uploadDocument: (file: File, title?: string, category?: Category | null) => {
+  uploadDocument: (file: File, title?: string, category?: Category | null, folder?: string | null) => {
     const form = new FormData();
     form.append("file", file);
     const params = new URLSearchParams();
     if (title) params.set("title", title);
     if (category) params.set("category", category);
+    if (folder) params.set("folder", folder);
     const qs = params.toString() ? `?${params.toString()}` : "";
     return api.post<KnowledgeDocument>(`/knowledge/documents/upload${qs}`, form, {
       headers: { "Content-Type": "multipart/form-data" },

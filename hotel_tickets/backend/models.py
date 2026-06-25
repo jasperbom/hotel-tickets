@@ -231,6 +231,7 @@ class KnowledgeEntry(Base):
     answer: Mapped[str] = mapped_column(Text, nullable=False)        # de oplossing / het antwoord
     keywords: Mapped[str | None] = mapped_column(Text)              # extra trefwoorden / alternatieve formuleringen
     category: Mapped[Category | None] = mapped_column(Enum(Category))  # afdeling (optioneel filter, geen afscherming)
+    folder: Mapped[str | None] = mapped_column(String(100))         # onderwerp/map binnen de afdeling
     images: Mapped[str | None] = mapped_column(Text)               # JSON: ["bestand1.png", ...] (in het antwoord als markdown ![](bestand))
     source_ticket_id: Mapped[str | None] = mapped_column(String(36))  # indien gepromoveerd uit een gesloten ticket
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id
@@ -256,6 +257,7 @@ class KnowledgeQuestion(Base):
     resolved_entry_id: Mapped[str | None] = mapped_column(String(36))   # welke entry de admin er van maakte
     proposed_answer: Mapped[str | None] = mapped_column(Text)           # oplossing aangedragen door de medewerker
     proposed_by: Mapped[str | None] = mapped_column(String(255))        # HA user_id van wie de oplossing aandroeg
+    conversation: Mapped[str | None] = mapped_column(Text)             # transcript van het chatgesprek (context)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
     resolved_by: Mapped[str | None] = mapped_column(String(255))        # HA user_id van de admin
@@ -271,6 +273,7 @@ class KnowledgeDocument(Base):
     source_filename: Mapped[str | None] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text, nullable=False)
     category: Mapped[Category | None] = mapped_column(Enum(Category))
+    folder: Mapped[str | None] = mapped_column(String(100))         # onderwerp/map binnen de afdeling
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
