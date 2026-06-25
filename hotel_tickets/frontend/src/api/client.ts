@@ -597,3 +597,87 @@ export const bikeAdminApi = {
   resetDatabase: () =>
     api.delete<{ ok: boolean; message: string }>("/bike-admin/reset"),
 };
+
+// --- Kennisbank / bot ---
+
+export type KnowledgeQuestionStatus = "answered_by_bot" | "pending" | "resolved" | "dismissed";
+
+export interface KnowledgeEntry {
+  id: string;
+  title: string;
+  answer: string;
+  keywords: string | null;
+  category: Category | null;
+  source_ticket_id: string | null;
+  ask_count: number;
+  is_published: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface KnowledgeQuestion {
+  id: string;
+  question_text: string;
+  asked_by: string;
+  asked_by_name: string | null;
+  category: Category | null;
+  status: KnowledgeQuestionStatus;
+  matched_entry_id: string | null;
+  resolved_entry_id: string | null;
+  created_at: string;
+  resolved_at: string | null;
+  resolved_by: string | null;
+}
+
+export interface AskResponse {
+  answered: boolean;
+  question_id: string;
+  entries: KnowledgeEntry[];
+}
+
+export interface KnowledgeStats {
+  pending_count: number;
+  entry_count: number;
+  top_entries: KnowledgeEntry[];
+}
+
+export interface KnowledgeEntryInput {
+  title?: string;
+  answer?: string;
+  keywords?: string | null;
+  category?: Category | null;
+  is_published?: boolean;
+  source_ticket_id?: string | null;
+}
+
+export const knowledgeApi = {
+  ask: (question: string, category?: Category | null) =>
+    api.post<AskResponse>("/knowledge/ask", { question, category: category ?? null }),
+  listEntries: (params?: Record<string, string>) =>
+    api.get<KnowledgeEntry[]>("/knowledge/entries", { params }),
+  getEntry: (id: string) => api.get<KnowledgeEntry>(`/knowledge/entries/${id}`),
+  createEntry: (data: KnowledgeEntryInput) =>
+    api.post<KnowledgeEntry>("/knowledge/entries", data),
+  updateEntry: (id: string, data: KnowledgeEntryInput) =>
+    api.patch<KnowledgeEntry>(`/knowledge/entries/${id}`, data),
+  removeEntry: (id: string) => api.delete(`/knowledge/entries/${id}`),
+  queue: () => api.get<KnowledgeQuestion[]>("/knowledge/queue"),
+  answerQueue: (
+    qid: string,
+    data: { title: string; answer: string; keywords?: string | null; category?: Category | null }
+  ) => api.post<KnowledgeEntry>(`/knowledge/queue/${qid}/answer`, data),
+  dismissQueue: (qid: string) => api.post(`/knowledge/queue/${qid}/dismiss`),
+  fromTicket: (ticketId: string, data?: KnowledgeEntryInput) =>
+    api.post<KnowledgeEntry>(`/knowledge/from-ticket/${ticketId}`, data ?? {}),
+  stats: () => api.get<KnowledgeStats>("/knowledge/stats"),
+};
+
+export const CATEGORY_LABELS: Record<Category, string> = {
+  technical: "Technisch",
+  housekeeping: "Huishouding",
+  reception: "Receptie",
+  service: "Bediening",
+  kitchen: "Keuken",
+  sales: "Sales",
+  garden: "Tuin",
+};
