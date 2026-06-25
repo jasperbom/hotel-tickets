@@ -39,7 +39,10 @@ const EMPTY_FORM = {
   answer: "",
   keywords: "",
   category: "" as Category | "",
+  folder: "",
 };
+
+const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
 export default function KennisbankBeheer() {
   const [tab, setTab] = useState<Tab>("queue");
@@ -55,8 +58,12 @@ export default function KennisbankBeheer() {
   const [importMsg, setImportMsg] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
 
+  const [deptFilter, setDeptFilter] = useState<Category | "">("");
+
   // Documenten + AI
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
+  const [docCategory, setDocCategory] = useState<Category | "">("");
+  const [docFolder, setDocFolder] = useState("");
   const [aiSettings, setAiSettings] = useState<KnowledgeAiSettings | null>(null);
   const [docTitle, setDocTitle] = useState("");
   const [docContent, setDocContent] = useState("");
@@ -99,7 +106,12 @@ export default function KennisbankBeheer() {
     setDocSaving(true);
     setDocMsg("");
     try {
-      const r = await knowledgeApi.createDocument({ title: docTitle.trim(), content: docContent.trim() });
+      const r = await knowledgeApi.createDocument({
+        title: docTitle.trim(),
+        content: docContent.trim(),
+        category: docCategory || null,
+        folder: docFolder.trim() || null,
+      });
       setDocMsg(`Toegevoegd: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
       setDocTitle("");
       setDocContent("");
@@ -115,7 +127,12 @@ export default function KennisbankBeheer() {
     setDocSaving(true);
     setDocMsg("");
     try {
-      const r = await knowledgeApi.uploadDocument(file);
+      const r = await knowledgeApi.uploadDocument(
+        file,
+        undefined,
+        docCategory || null,
+        docFolder.trim() || null
+      );
       setDocMsg(`Geüpload: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
       loadDocuments();
     } catch (err: unknown) {
@@ -143,7 +160,9 @@ export default function KennisbankBeheer() {
       answer: q.proposed_answer ?? "", // voorvullen met de oplossing van de medewerker
       keywords: "",
       category: q.category ?? "",
+      folder: "",
     });
+    setFormImages([]);
     setError("");
     setShowForm(true);
     // markeer dat dit een wachtrij-antwoord is via een verborgen veld
@@ -175,6 +194,7 @@ export default function KennisbankBeheer() {
       answer: e.answer,
       keywords: e.keywords ?? "",
       category: e.category ?? "",
+      folder: e.folder ?? "",
     });
     setFormImages(e.images ?? []);
     setAnsweringQuestionId(null);
@@ -248,6 +268,7 @@ export default function KennisbankBeheer() {
       answer: form.answer.trim(),
       keywords: form.keywords.trim() || null,
       category: form.category || null,
+      folder: form.folder.trim() || null,
     };
     try {
       if (answeringQuestionId) {
@@ -270,8 +291,19 @@ export default function KennisbankBeheer() {
     }
   }
 
+  const knownFolders = Array.from(
+    new Set(
+      [...entries, ...documents].map((x) => (x.folder || "").trim()).filter(Boolean)
+    )
+  ).sort();
+
   return (
     <div className="space-y-5">
+      <datalist id="kb-folders">
+        {knownFolders.map((f) => (
+          <option key={f} value={f} />
+        ))}
+      </datalist>
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-xl font-bold text-gray-900">Kennisbank beheer</h1>
         {tab === "entries" && (
@@ -489,56 +521,62 @@ export default function KennisbankBeheer() {
           );
         })()}
 
-      {/* Kennisbank */}
+      {/* Kennisbank — gegroepeerd per afdeling → onderwerp */}
       {tab === "entries" && (
-        <div className="space-y-2">
+        <div className="space-y-3">
           {entries.length === 0 ? (
             <p className="text-sm text-gray-400">Nog geen kennis-items.</p>
           ) : (
-            entries.map((e) => (
-              <div
-                key={e.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {e.category && (
-                      <span className="text-[10px] font-medium bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
-                        {CATEGORY_LABELS[e.category]}
-                      </span>
-                    )}
-                    <span className="font-semibold text-gray-900">{e.title}</span>
-                    {!e.is_published && (
-                      <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
-                        concept
-                      </span>
-                    )}
-                    {e.source_ticket_id && (
-                      <span className="text-[10px] text-gray-400">uit ticket</span>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">{stripImages(e.answer)}</p>
-                  <p className="text-xs text-gray-400 mt-1">
-                    {e.ask_count}× gevraagd
-                    {e.images.length > 0 && ` · ${e.images.length} afbeelding${e.images.length > 1 ? "en" : ""}`}
-                  </p>
-                </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <button
-                    onClick={() => editEntry(e)}
-                    className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50"
-                  >
-                    Bewerken
-                  </button>
-                  <button
-                    onClick={() => removeEntry(e.id)}
-                    className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50"
-                  >
-                    Verwijderen
-                  </button>
-                </div>
+            <>
+              <div className="flex justify-end">
+                <DeptFilter value={deptFilter} onChange={setDeptFilter} />
               </div>
-            ))
+              <GroupedSections
+                items={entries.filter((e) => !deptFilter || e.category === deptFilter)}
+                renderItem={(e) => (
+                  <div
+                    key={e.id}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+                  >
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-semibold text-gray-900">{e.title}</span>
+                        {!e.is_published && (
+                          <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                            concept
+                          </span>
+                        )}
+                        {e.source_ticket_id && (
+                          <span className="text-[10px] text-gray-400">uit ticket</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">
+                        {stripImages(e.answer)}
+                      </p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {e.ask_count}× gevraagd
+                        {e.images.length > 0 &&
+                          ` · ${e.images.length} afbeelding${e.images.length > 1 ? "en" : ""}`}
+                      </p>
+                    </div>
+                    <div className="flex flex-col gap-1.5 shrink-0">
+                      <button
+                        onClick={() => editEntry(e)}
+                        className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50"
+                      >
+                        Bewerken
+                      </button>
+                      <button
+                        onClick={() => removeEntry(e.id)}
+                        className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50"
+                      >
+                        Verwijderen
+                      </button>
+                    </div>
+                  </div>
+                )}
+              />
+            </>
           )}
         </div>
       )}
@@ -566,6 +604,30 @@ export default function KennisbankBeheer() {
               rows={5}
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
             />
+            <div className="flex gap-2">
+              <select
+                value={docCategory}
+                onChange={(e) => setDocCategory(e.target.value as Category | "")}
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+              >
+                <option value="">Afdeling (optioneel)</option>
+                {ALL_CATEGORIES.map((c) => (
+                  <option key={c} value={c}>
+                    {CATEGORY_LABELS[c]}
+                  </option>
+                ))}
+              </select>
+              <input
+                value={docFolder}
+                onChange={(e) => setDocFolder(e.target.value)}
+                placeholder="Onderwerp / map"
+                list="kb-folders"
+                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
+              />
+            </div>
+            <p className="text-[11px] text-gray-400">
+              Afdeling + onderwerp gelden voor het volgende geplakte of geüploade document.
+            </p>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
                 <input
@@ -597,32 +659,38 @@ export default function KennisbankBeheer() {
             {docMsg && <p className="text-sm text-blue-700">{docMsg}</p>}
           </div>
 
-          {/* Lijst */}
+          {/* Lijst — gegroepeerd per afdeling → onderwerp */}
           {documents.length === 0 ? (
             <p className="text-sm text-gray-400">Nog geen documenten.</p>
           ) : (
-            <div className="space-y-2">
-              {documents.map((d) => (
-                <div
-                  key={d.id}
-                  className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
-                >
-                  <div className="min-w-0">
-                    <p className="font-semibold text-gray-900">{d.title}</p>
-                    <p className="text-xs text-gray-400 mt-1">
-                      {d.chunk_count} fragment{d.chunk_count === 1 ? "" : "en"}
-                      {d.source_filename && ` · ${d.source_filename}`}
-                    </p>
-                  </div>
-                  <button
-                    onClick={() => removeDoc(d.id)}
-                    className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50 shrink-0"
+            <>
+              <div className="flex justify-end">
+                <DeptFilter value={deptFilter} onChange={setDeptFilter} />
+              </div>
+              <GroupedSections
+                items={documents.filter((d) => !deptFilter || d.category === deptFilter)}
+                renderItem={(d) => (
+                  <div
+                    key={d.id}
+                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
                   >
-                    Verwijderen
-                  </button>
-                </div>
-              ))}
-            </div>
+                    <div className="min-w-0">
+                      <p className="font-semibold text-gray-900">{d.title}</p>
+                      <p className="text-xs text-gray-400 mt-1">
+                        {d.chunk_count} fragment{d.chunk_count === 1 ? "" : "en"}
+                        {d.source_filename && ` · ${d.source_filename}`}
+                      </p>
+                    </div>
+                    <button
+                      onClick={() => removeDoc(d.id)}
+                      className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50 shrink-0"
+                    >
+                      Verwijderen
+                    </button>
+                  </div>
+                )}
+              />
+            </>
           )}
         </div>
       )}
@@ -729,12 +797,25 @@ export default function KennisbankBeheer() {
                 className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
               >
                 <option value="">Algemeen / alle afdelingen</option>
-                {(Object.keys(CATEGORY_LABELS) as Category[]).map((c) => (
+                {ALL_CATEGORIES.map((c) => (
                   <option key={c} value={c}>
                     {CATEGORY_LABELS[c]}
                   </option>
                 ))}
               </select>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Onderwerp / map (optioneel)</label>
+              <input
+                value={form.folder}
+                onChange={(e) => setForm({ ...form, folder: e.target.value })}
+                placeholder="bijv. Koffiemachine, Check-in, Wasserij"
+                list="kb-folders"
+                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Groepeert items binnen een afdeling. Hergebruik bestaande namen voor overzicht.
+              </p>
             </div>
             {error && <p className="text-sm text-red-600">{error}</p>}
             <div className="flex justify-end gap-2 pt-1">
@@ -760,6 +841,78 @@ export default function KennisbankBeheer() {
           </form>
         </div>
       )}
+    </div>
+  );
+}
+
+/** Filterbalk per afdeling. */
+function DeptFilter({
+  value,
+  onChange,
+}: {
+  value: Category | "";
+  onChange: (v: Category | "") => void;
+}) {
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value as Category | "")}
+      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+    >
+      <option value="">Alle afdelingen</option>
+      {ALL_CATEGORIES.map((c) => (
+        <option key={c} value={c}>
+          {CATEGORY_LABELS[c]}
+        </option>
+      ))}
+    </select>
+  );
+}
+
+/** Toont items gegroepeerd op afdeling → onderwerp/map. */
+function GroupedSections<T extends { id: string; category: Category | null; folder: string | null }>({
+  items,
+  renderItem,
+}: {
+  items: T[];
+  renderItem: (it: T) => React.ReactNode;
+}) {
+  const cats = new Map<string, Map<string, T[]>>();
+  for (const it of items) {
+    const cat = it.category ? CATEGORY_LABELS[it.category] : "Algemeen";
+    const folder = (it.folder || "").trim() || "Overig";
+    if (!cats.has(cat)) cats.set(cat, new Map());
+    const fm = cats.get(cat)!;
+    if (!fm.has(folder)) fm.set(folder, []);
+    fm.get(folder)!.push(it);
+  }
+  const catKeys = [...cats.keys()].sort((a, b) => a.localeCompare(b, "nl"));
+
+  return (
+    <div className="space-y-5">
+      {catKeys.map((cat) => {
+        const folders = cats.get(cat)!;
+        const folderKeys = [...folders.keys()].sort((a, b) => a.localeCompare(b, "nl"));
+        const total = folderKeys.reduce((n, f) => n + folders.get(f)!.length, 0);
+        return (
+          <div key={cat} className="space-y-2">
+            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+              {cat}
+              <span className="text-xs font-normal bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+                {total}
+              </span>
+            </h3>
+            {folderKeys.map((f) => (
+              <div key={f} className="space-y-2">
+                {!(folderKeys.length === 1 && f === "Overig") && (
+                  <p className="text-xs font-semibold text-gray-500 ml-0.5">{f}</p>
+                )}
+                {folders.get(f)!.map(renderItem)}
+              </div>
+            ))}
+          </div>
+        );
+      })}
     </div>
   );
 }

@@ -84,6 +84,7 @@ class EntryOut(BaseModel):
     answer: str
     keywords: Optional[str] = None
     category: Optional[Category] = None
+    folder: Optional[str] = None
     source_ticket_id: Optional[str] = None
     images: list[str] = []
     ask_count: int
@@ -97,6 +98,7 @@ class EntryCreate(BaseModel):
     answer: str = Field(..., min_length=1)
     keywords: Optional[str] = None
     category: Optional[Category] = None
+    folder: Optional[str] = None
     is_published: bool = True
     source_ticket_id: Optional[str] = None
 
@@ -106,6 +108,7 @@ class EntryUpdate(BaseModel):
     answer: Optional[str] = None
     keywords: Optional[str] = None
     category: Optional[Category] = None
+    folder: Optional[str] = None
     is_published: Optional[bool] = None
 
 
@@ -155,6 +158,7 @@ class AnswerQueueRequest(BaseModel):
     answer: str = Field(..., min_length=1)
     keywords: Optional[str] = None
     category: Optional[Category] = None
+    folder: Optional[str] = None
 
 
 class FromTicketRequest(BaseModel):
@@ -177,6 +181,7 @@ def _entry_out(e: KnowledgeEntry) -> dict:
         "answer": e.answer,
         "keywords": e.keywords,
         "category": e.category.value if isinstance(e.category, Category) else e.category,
+        "folder": e.folder,
         "source_ticket_id": e.source_ticket_id,
         "images": _load_images(e),
         "ask_count": e.ask_count,
@@ -466,6 +471,7 @@ async def create_entry(data: EntryCreate, user: RequireUser, db: AsyncSession = 
         answer=data.answer.strip(),
         keywords=(data.keywords or None),
         category=data.category,
+        folder=(data.folder.strip() if data.folder else None),
         is_published=data.is_published,
         source_ticket_id=data.source_ticket_id,
         created_by=user.ha_user_id,
@@ -533,6 +539,7 @@ async def answer_queue(
         answer=data.answer.strip(),
         keywords=(data.keywords or None),
         category=data.category if data.category is not None else q.category,
+        folder=(data.folder.strip() if data.folder else None),
         created_by=user.ha_user_id,
     )
     db.add(entry)
@@ -918,6 +925,7 @@ class DocumentOut(BaseModel):
     title: str
     source_filename: Optional[str] = None
     category: Optional[Category] = None
+    folder: Optional[str] = None
     chunk_count: int = 0
     created_at: str
 
@@ -926,6 +934,19 @@ class DocumentCreate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
     category: Optional[Category] = None
+    folder: Optional[str] = None
+
+
+def _doc_out(d: KnowledgeDocument, chunk_count: int) -> DocumentOut:
+    return DocumentOut(
+        id=d.id,
+        title=d.title,
+        source_filename=d.source_filename,
+        category=d.category.value if isinstance(d.category, Category) else d.category,
+        folder=d.folder,
+        chunk_count=chunk_count,
+        created_at=d.created_at.isoformat() if d.created_at else "",
+    )
 
 
 @router.get("/documents", response_model=list[DocumentOut])
@@ -938,14 +959,7 @@ async def list_documents(user: RequireUser, db: AsyncSession = Depends(get_db)):
         cnt = await db.scalar(
             select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == d.id)
         )
-        out.append(DocumentOut(
-            id=d.id,
-            title=d.title,
-            source_filename=d.source_filename,
-            category=d.category.value if isinstance(d.category, Category) else d.category,
-            chunk_count=cnt or 0,
-            created_at=d.created_at.isoformat() if d.created_at else "",
-        ))
+        out.append(_doc_out(d, cnt or 0))
     return out
 
 
@@ -957,16 +971,13 @@ async def create_document(data: DocumentCreate, user: RequireUser, db: AsyncSess
         title=data.title.strip(),
         content=data.content.strip(),
         category=data.category,
+        folder=(data.folder.strip() if data.folder else None),
         created_by=user.ha_user_id,
     )
     db.add(doc)
     await db.flush()
     cnt = await _store_document_chunks(db, doc)
-    return DocumentOut(
-        id=doc.id, title=doc.title, source_filename=None,
-        category=doc.category.value if isinstance(doc.category, Category) else doc.category,
-        chunk_count=cnt, created_at=doc.created_at.isoformat() if doc.created_at else "",
-    )
+    return _doc_out(doc, cnt)
 
 
 @router.post("/documents/upload", response_model=DocumentOut, status_code=201)
@@ -975,6 +986,7 @@ async def upload_document(
     file: UploadFile = File(...),
     title: Optional[str] = Query(None),
     category: Optional[Category] = Query(None),
+    folder: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
     """Upload een document (.md/.txt/.pdf/.zip) als kennisbron voor de AI."""
@@ -988,16 +1000,13 @@ async def upload_document(
         source_filename=file.filename,
         content=content,
         category=category,
+        folder=(folder.strip() if folder else None),
         created_by=user.ha_user_id,
     )
     db.add(doc)
     await db.flush()
     cnt = await _store_document_chunks(db, doc)
-    return DocumentOut(
-        id=doc.id, title=doc.title, source_filename=doc.source_filename,
-        category=doc.category.value if isinstance(doc.category, Category) else doc.category,
-        chunk_count=cnt, created_at=doc.created_at.isoformat() if doc.created_at else "",
-    )
+    return _doc_out(doc, cnt)
 
 
 @router.delete("/documents/{document_id}", status_code=204)
