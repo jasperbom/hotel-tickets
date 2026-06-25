@@ -22,12 +22,45 @@ export default function KennisBot() {
   const [sending, setSending] = useState(false);
   // Als gezet: het volgende bericht is de oplossing voor deze vraag-id
   const [solutionFor, setSolutionFor] = useState<string | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
+  const [kbInset, setKbInset] = useState(0);
 
+  // Houd de berichtenlijst onderaan wanneer er een bericht bijkomt of het
+  // toetsenbord opent. We scrollen alléén de lijst zelf — een scrollIntoView()
+  // zou op iOS de hele webview kunnen verschuiven en het invoerveld omhoog laten
+  // springen.
   useEffect(() => {
-    scrollRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, sending]);
+    const el = listRef.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, [messages, sending, kbInset]);
+
+  // Op iOS schuift het virtuele toetsenbord de layout-viewport niet in (anders dan
+  // Android met interactive-widget=resizes-content): 100dvh blijft de volledige
+  // hoogte en het toetsenbord dekt het invoerveld af. We meten via de
+  // visualViewport hoeveel het toetsenbord onderaan afdekt en verkleinen het
+  // chatvenster met dat bedrag, zodat de invoerbalk netjes boven het toetsenbord
+  // blijft staan in plaats van te verspringen.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return;
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const overlap = window.innerHeight - vv.height - vv.offsetTop;
+        setKbInset(Math.max(0, Math.round(overlap)));
+      });
+    };
+    update();
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      cancelAnimationFrame(raf);
+    };
+  }, []);
 
   async function send() {
     const text = input.trim();
@@ -136,7 +169,11 @@ export default function KennisBot() {
   }
 
   return (
-    <div className="flex flex-col h-[calc(100dvh-7rem)] max-w-2xl mx-auto">
+    <div
+      data-no-kb-scroll
+      className="flex flex-col max-w-2xl mx-auto"
+      style={{ height: `calc(100dvh - 7rem - ${kbInset}px)` }}
+    >
       <div className="flex items-center gap-2 mb-3 shrink-0">
         <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
           Jaisper
@@ -147,7 +184,7 @@ export default function KennisBot() {
       </div>
 
       {/* Gespreksvenster */}
-      <div className="flex-1 overflow-y-auto space-y-3 pr-1">
+      <div ref={listRef} className="flex-1 overflow-y-auto space-y-3 pr-1">
         <BotBubble>
           <p className="text-sm text-gray-700">{WELCOME}</p>
         </BotBubble>
@@ -205,8 +242,6 @@ export default function KennisBot() {
             </div>
           </BotBubble>
         )}
-
-        <div ref={scrollRef} />
       </div>
 
       {/* Invoer */}

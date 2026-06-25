@@ -224,6 +224,10 @@ export default function App() {
     ]);
 
     function shouldScroll(el: Element): boolean {
+      // Pagina's met een eigen vaste-hoogte layout (bijv. de chatbot) regelen het
+      // toetsenbord zelf via de visualViewport. De generieke scrollIntoView()-aanpak
+      // zou daar de hele webview omhoog duwen en het invoerveld laten verspringen.
+      if (el.closest("[data-no-kb-scroll]")) return false;
       const tag = el.tagName.toLowerCase();
       if (tag === "textarea" || tag === "select") return true;
       if (tag === "input") {
@@ -471,7 +475,7 @@ export default function App() {
         {/* Inhoud */}
         {activeModule || isOnInstellingen ? (
           <main
-            className={`flex-1 px-4 py-6 touch-keyboard-pb w-full mx-auto ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"}`}
+            className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/kennis" ? "" : "touch-keyboard-pb"} ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"}`}
           >
             <Routes>
               {/* Taken module */}
