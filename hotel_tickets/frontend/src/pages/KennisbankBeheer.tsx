@@ -7,6 +7,8 @@ import {
   type KnowledgeQuestion,
   type KnowledgeDocument,
   type KnowledgeAiSettings,
+  type KnowledgeSearchResults,
+  type KnowledgeDocumentMatch,
   type Category,
   type KnowledgeImportResult,
 } from "../api/client";
@@ -68,6 +70,12 @@ export default function KennisbankBeheer() {
 
   const [deptFilter, setDeptFilter] = useState<Category | "">("");
 
+  // Zoeken door alle kennis
+  const [searchQ, setSearchQ] = useState("");
+  const [searchResults, setSearchResults] = useState<KnowledgeSearchResults | null>(null);
+  const [searching, setSearching] = useState(false);
+  const searchActive = searchQ.trim().length > 0;
+
   // Documenten + AI
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [docCategory, setDocCategory] = useState<Category | "">("");
@@ -108,6 +116,25 @@ export default function KennisbankBeheer() {
     loadDocuments();
     loadAiSettings();
   }, []);
+
+  // Zoeken (gedebounced) door entries + documenten
+  useEffect(() => {
+    const term = searchQ.trim();
+    if (!term) {
+      setSearchResults(null);
+      setSearching(false);
+      return;
+    }
+    setSearching(true);
+    const t = setTimeout(() => {
+      knowledgeApi
+        .searchBeheer(term)
+        .then((r) => setSearchResults(r.data))
+        .catch(() => setSearchResults({ entries: [], documents: [] }))
+        .finally(() => setSearching(false));
+    }, 300);
+    return () => clearTimeout(t);
+  }, [searchQ]);
 
   // --- AI + documenten acties ---
 
@@ -440,6 +467,35 @@ export default function KennisbankBeheer() {
         )}
       </div>
 
+      {/* Zoeken door alle kennis */}
+      <div className="relative">
+        <input
+          value={searchQ}
+          onChange={(e) => setSearchQ(e.target.value)}
+          placeholder="🔍 Zoek in alle kennis (items + documenten)…"
+          className="block w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
+        />
+        {searchActive && (
+          <button
+            type="button"
+            onClick={() => setSearchQ("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none"
+            title="Zoekopdracht wissen"
+          >
+            ×
+          </button>
+        )}
+      </div>
+
+      {searchActive ? (
+        <SearchResultsPanel
+          results={searchResults}
+          loading={searching}
+          onEditEntry={editEntry}
+          onEditDoc={openDocEdit}
+        />
+      ) : (
+      <>
       {tab === "entries" && importMsg && (
         <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-lg px-4 py-2">
           {importMsg}
@@ -839,6 +895,8 @@ export default function KennisbankBeheer() {
           )}
         </div>
       )}
+      </>
+      )}
 
       {/* Formulier (modal) */}
       {showForm && (
@@ -855,23 +913,26 @@ export default function KennisbankBeheer() {
                 : "Nieuw kennis-item"}
             </h2>
             <div>
-              <label className="text-xs font-medium text-gray-600">Titel / vraag</label>
+              <label className="text-xs font-medium text-gray-600">Titel / onderwerp</label>
               <input
                 value={form.title}
                 onChange={(e) => setForm({ ...form, title: e.target.value })}
+                placeholder="bijv. een vraag, of gewoon een onderwerp"
                 className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
               />
             </div>
             <div>
-              <label className="text-xs font-medium text-gray-600">Antwoord / oplossing</label>
+              <label className="text-xs font-medium text-gray-600">Informatie / antwoord</label>
               <textarea
                 value={form.answer}
                 onChange={(e) => setForm({ ...form, answer: e.target.value })}
                 rows={5}
+                placeholder="Informatie hoeft geen antwoord op een vraag te zijn — je mag hier ook gewoon losse kennis kwijt."
                 className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
               />
               <p className="text-[11px] text-gray-400 mt-1">
-                Markdown ondersteund (koppen, lijsten, **vet**, afbeeldingen).
+                Vrije tekst — een vraag/antwoord óf gewoon informatie. Markdown ondersteund
+                (koppen, lijsten, **vet**, afbeeldingen).
               </p>
             </div>
 
@@ -1226,6 +1287,124 @@ function StatCard({
       <p className={`text-2xl font-bold mt-0.5 ${accentCls}`}>{value}</p>
       {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
     </button>
+  );
+}
+
+/** Zoekresultaten door alle kennis (items + documenten). */
+function SearchResultsPanel({
+  results,
+  loading,
+  onEditEntry,
+  onEditDoc,
+}: {
+  results: KnowledgeSearchResults | null;
+  loading: boolean;
+  onEditEntry: (e: KnowledgeEntry) => void;
+  onEditDoc: (id: string) => void;
+}) {
+  if (loading && !results) {
+    return <p className="text-sm text-gray-400">Zoeken…</p>;
+  }
+  if (!results) return null;
+
+  const total = results.entries.length + results.documents.length;
+  if (total === 0) {
+    return (
+      <p className="text-sm text-gray-400">
+        Niets gevonden. Er is hier nog niets over bekend — voeg het toe via{" "}
+        <strong>Kennisbank</strong> of <strong>Documenten</strong>.
+      </p>
+    );
+  }
+
+  function meta(category: Category | null, folder: string | null) {
+    const parts: string[] = [];
+    if (category) parts.push(CATEGORY_LABELS[category]);
+    if (folder) parts.push(folder);
+    return parts.join(" · ");
+  }
+
+  return (
+    <div className="space-y-5">
+      <p className="text-xs text-gray-500">
+        {total} resulta{total === 1 ? "at" : "ten"} gevonden.
+      </p>
+
+      {results.entries.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+            Kennis-items
+            <span className="text-xs font-normal bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+              {results.entries.length}
+            </span>
+          </h3>
+          {results.entries.map((e) => (
+            <div
+              key={e.id}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-semibold text-gray-900">{e.title}</span>
+                  {!e.is_published && (
+                    <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                      concept
+                    </span>
+                  )}
+                </div>
+                {meta(e.category, e.folder) && (
+                  <p className="text-[11px] text-gray-400 mt-0.5">{meta(e.category, e.folder)}</p>
+                )}
+                <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">
+                  {stripImages(e.answer)}
+                </p>
+              </div>
+              <button
+                onClick={() => onEditEntry(e)}
+                className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50 shrink-0"
+              >
+                Bewerken
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {results.documents.length > 0 && (
+        <div className="space-y-2">
+          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+            Documenten
+            <span className="text-xs font-normal bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+              {results.documents.length}
+            </span>
+          </h3>
+          {results.documents.map((d: KnowledgeDocumentMatch) => (
+            <div
+              key={d.id}
+              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+            >
+              <div className="min-w-0">
+                <p className="font-semibold text-gray-900">{d.title}</p>
+                {meta(d.category, d.folder) && (
+                  <p className="text-[11px] text-gray-400 mt-0.5">{meta(d.category, d.folder)}</p>
+                )}
+                {d.snippet && (
+                  <p className="text-sm text-gray-600 mt-1 line-clamp-3 whitespace-pre-wrap">
+                    {d.snippet}
+                  </p>
+                )}
+              </div>
+              <button
+                onClick={() => onEditDoc(d.id)}
+                className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50 shrink-0"
+              >
+                Bewerken
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }
 

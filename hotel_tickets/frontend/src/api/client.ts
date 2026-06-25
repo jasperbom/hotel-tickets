@@ -663,6 +663,15 @@ export interface KnowledgeDocumentDetail extends KnowledgeDocument {
   content: string;
 }
 
+export interface KnowledgeDocumentMatch extends KnowledgeDocument {
+  snippet: string;
+}
+
+export interface KnowledgeSearchResults {
+  entries: KnowledgeEntry[];
+  documents: KnowledgeDocumentMatch[];
+}
+
 export interface KnowledgeCleanupResult {
   title: string;
   category: Category | null;
@@ -777,6 +786,8 @@ export const knowledgeApi = {
   removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
   aiCleanup: (text: string) =>
     api.post<KnowledgeCleanupResult>("/knowledge/ai/cleanup", { text }),
+  searchBeheer: (q: string) =>
+    api.get<KnowledgeSearchResults>("/knowledge/search", { params: { q } }),
   // AI-instellingen
   getAiSettings: () => api.get<KnowledgeAiSettings>("/knowledge/ai-settings"),
   updateAiSettings: (data: KnowledgeAiSettingsUpdate) =>

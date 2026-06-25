@@ -1098,6 +1098,84 @@ async def delete_document(document_id: str, user: RequireUser, db: AsyncSession 
     await db.delete(doc)
 
 
+# ── Zoeken door alle kennis (alleen admin) ─────────────────────────────────────
+
+def _snippet(text: str, query: str, width: int = 200) -> str:
+    """Korte fragmenttekst rond de eerste match (of het begin als er geen match
+    in de tekst zelf zit, bijv. bij een treffer in de titel)."""
+    text = (text or "").replace("\n", " ").strip()
+    if not text:
+        return ""
+    low = text.lower()
+    i = low.find(query.lower()) if query else -1
+    if i < 0:
+        return text[:width].strip() + ("…" if len(text) > width else "")
+    start = max(0, i - width // 3)
+    end = min(len(text), i + len(query) + (2 * width) // 3)
+    return ("…" if start > 0 else "") + text[start:end].strip() + ("…" if end < len(text) else "")
+
+
+class DocumentMatch(DocumentOut):
+    snippet: str = ""
+
+
+class SearchResults(BaseModel):
+    entries: list[EntryOut]
+    documents: list[DocumentMatch]
+
+
+@router.get("/search", response_model=SearchResults)
+async def search_all(
+    user: RequireUser,
+    q: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+):
+    """Doorzoek de hele kennisbank (kennis-items + documenten) op een trefwoord,
+    zodat een beheerder ziet wat er al over een onderwerp bekend is."""
+    _require_admin(user)
+    term = q.strip()
+    if not term:
+        return SearchResults(entries=[], documents=[])
+    like = f"%{term}%"
+
+    erows = await db.execute(
+        select(KnowledgeEntry)
+        .where(
+            or_(
+                KnowledgeEntry.title.ilike(like),
+                KnowledgeEntry.answer.ilike(like),
+                KnowledgeEntry.keywords.ilike(like),
+                KnowledgeEntry.folder.ilike(like),
+            )
+        )
+        .order_by(KnowledgeEntry.ask_count.desc(), KnowledgeEntry.created_at.desc())
+        .limit(50)
+    )
+    entries = [EntryOut(**_entry_out(e)) for e in erows.scalars().all()]
+
+    drows = await db.execute(
+        select(KnowledgeDocument)
+        .where(
+            or_(
+                KnowledgeDocument.title.ilike(like),
+                KnowledgeDocument.content.ilike(like),
+                KnowledgeDocument.folder.ilike(like),
+            )
+        )
+        .order_by(KnowledgeDocument.created_at.desc())
+        .limit(50)
+    )
+    documents: list[DocumentMatch] = []
+    for d in drows.scalars().all():
+        cnt = await db.scalar(
+            select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == d.id)
+        )
+        base = _doc_out(d, cnt or 0)
+        documents.append(DocumentMatch(**base.model_dump(), snippet=_snippet(d.content or "", term)))
+
+    return SearchResults(entries=entries, documents=documents)
+
+
 class AiSettingsOut(BaseModel):
     ai_available: bool          # is er een API-sleutel beschikbaar (app of addon)?
     ai_enabled: bool            # heeft de admin AI aangezet?
