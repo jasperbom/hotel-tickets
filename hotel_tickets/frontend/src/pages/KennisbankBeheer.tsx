@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   knowledgeApi,
   CATEGORY_LABELS,
+  parseUTC,
   type KnowledgeEntry,
   type KnowledgeQuestion,
   type KnowledgeDocument,
@@ -13,6 +14,21 @@ import {
 /** Verwijder markdown-afbeeldingen uit een tekst voor een korte preview. */
 function stripImages(md: string): string {
   return md.replace(/!\[[^\]]*\]\([^)]*\)/g, "").trim();
+}
+
+/** Korte datum+tijd in NL-notatie. */
+function fmtWhen(iso: string): string {
+  if (!iso) return "";
+  try {
+    return parseUTC(iso).toLocaleString("nl-NL", {
+      day: "numeric",
+      month: "short",
+      hour: "2-digit",
+      minute: "2-digit",
+    });
+  } catch {
+    return "";
+  }
 }
 
 type Tab = "queue" | "entries" | "documents";
@@ -346,51 +362,122 @@ export default function KennisbankBeheer() {
         </div>
       )}
 
-      {/* Wachtrij */}
-      {tab === "queue" && (
-        <div className="space-y-2">
-          {queue.length === 0 ? (
-            <p className="text-sm text-gray-400">Geen openstaande vragen 🎉</p>
-          ) : (
-            queue.map((q) => (
-              <div
-                key={q.id}
-                className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
-              >
-                <div className="min-w-0">
-                  <p className="font-medium text-gray-900 whitespace-pre-wrap">{q.question_text}</p>
-                  {q.proposed_answer && (
-                    <div className="mt-2 bg-green-50 border border-green-200 rounded-lg p-2">
-                      <p className="text-[11px] font-semibold text-green-700">
-                        💡 Oplossing van medewerker {q.proposed_by ? `(${q.proposed_by})` : ""}
-                      </p>
-                      <p className="text-sm text-gray-700 whitespace-pre-wrap mt-0.5">{q.proposed_answer}</p>
-                    </div>
-                  )}
-                  <p className="text-xs text-gray-400 mt-1">
-                    {q.asked_by_name || q.asked_by}
-                    {q.category && ` · ${CATEGORY_LABELS[q.category]}`}
+      {/* Wachtrij — opgesplitst: aangedragen oplossingen vs. open vragen */}
+      {tab === "queue" &&
+        (() => {
+          const proposals = queue.filter((q) => q.proposed_answer);
+          const openQuestions = queue.filter((q) => !q.proposed_answer);
+          if (queue.length === 0) {
+            return <p className="text-sm text-gray-400">Geen openstaande items 🎉</p>;
+          }
+          return (
+            <div className="space-y-6">
+              {/* Aangedragen oplossingen (te beoordelen) */}
+              {proposals.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    💡 Aangedragen oplossingen
+                    <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">
+                      {proposals.length}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 -mt-1">
+                    Een medewerker loste dit zelf op via de chat. Controleer de oplossing en voeg
+                    'm toe aan de kennisbank.
                   </p>
+                  {proposals.map((q) => (
+                    <div
+                      key={q.id}
+                      className="bg-white rounded-xl shadow-sm border border-green-200 p-4 space-y-2"
+                    >
+                      <div className="text-xs text-gray-400 flex flex-wrap gap-x-2">
+                        <span>🗨️ uit de chat</span>
+                        <span>· {q.proposed_by || "onbekend"}</span>
+                        {q.category && <span>· {CATEGORY_LABELS[q.category]}</span>}
+                        {q.created_at && <span>· {fmtWhen(q.created_at)}</span>}
+                      </div>
+                      <div>
+                        <p className="text-[11px] font-semibold text-gray-400 uppercase">Vraag</p>
+                        <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                          {q.question_text}
+                        </p>
+                      </div>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-2.5">
+                        <p className="text-[11px] font-semibold text-green-700 uppercase">
+                          Voorgestelde oplossing
+                        </p>
+                        <p className="text-sm text-gray-700 whitespace-pre-wrap mt-0.5">
+                          {q.proposed_answer}
+                        </p>
+                      </div>
+                      <div className="flex gap-2 pt-1">
+                        <button
+                          onClick={() => answerQuestion(q)}
+                          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+                        >
+                          Beoordelen & toevoegen
+                        </button>
+                        <button
+                          onClick={() => dismissQuestion(q.id)}
+                          className="text-gray-500 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-100"
+                        >
+                          Afwijzen
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-                <div className="flex flex-col gap-1.5 shrink-0">
-                  <button
-                    onClick={() => answerQuestion(q)}
-                    className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
-                  >
-                    {q.proposed_answer ? "Beoordelen" : "Beantwoorden"}
-                  </button>
-                  <button
-                    onClick={() => dismissQuestion(q.id)}
-                    className="text-gray-500 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-100"
-                  >
-                    Afwijzen
-                  </button>
+              )}
+
+              {/* Onbeantwoorde vragen */}
+              {openQuestions.length > 0 && (
+                <div className="space-y-2">
+                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                    ❓ Onbeantwoorde vragen
+                    <span className="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">
+                      {openQuestions.length}
+                    </span>
+                  </h3>
+                  <p className="text-xs text-gray-500 -mt-1">
+                    Hier had de bot geen antwoord op. Voeg een antwoord toe zodat het voortaan wél
+                    beantwoord wordt.
+                  </p>
+                  {openQuestions.map((q) => (
+                    <div
+                      key={q.id}
+                      className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+                    >
+                      <div className="min-w-0">
+                        <p className="font-medium text-gray-900 whitespace-pre-wrap">
+                          {q.question_text}
+                        </p>
+                        <p className="text-xs text-gray-400 mt-1 flex flex-wrap gap-x-2">
+                          <span>{q.asked_by_name || q.asked_by}</span>
+                          {q.category && <span>· {CATEGORY_LABELS[q.category]}</span>}
+                          {q.created_at && <span>· {fmtWhen(q.created_at)}</span>}
+                        </p>
+                      </div>
+                      <div className="flex flex-col gap-1.5 shrink-0">
+                        <button
+                          onClick={() => answerQuestion(q)}
+                          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+                        >
+                          Beantwoorden
+                        </button>
+                        <button
+                          onClick={() => dismissQuestion(q.id)}
+                          className="text-gray-500 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-100"
+                        >
+                          Afwijzen
+                        </button>
+                      </div>
+                    </div>
+                  ))}
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
+              )}
+            </div>
+          );
+        })()}
 
       {/* Kennisbank */}
       {tab === "entries" && (
