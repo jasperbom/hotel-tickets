@@ -7,6 +7,7 @@ import {
   type Category,
 } from "../api/client";
 import MarkdownAnswer from "../components/MarkdownAnswer";
+import ReactMarkdown from "react-markdown";
 
 export default function KennisBot() {
   const navigate = useNavigate();
@@ -15,6 +16,7 @@ export default function KennisBot() {
   const [asked, setAsked] = useState(false);
   const [answered, setAnswered] = useState(false);
   const [results, setResults] = useState<KnowledgeEntry[]>([]);
+  const [aiAnswer, setAiAnswer] = useState<string | null>(null);
   const [lastQuestion, setLastQuestion] = useState("");
 
   // Bladeren door de kennisbank
@@ -37,12 +39,14 @@ export default function KennisBot() {
     try {
       const res = await knowledgeApi.ask(question.trim());
       setResults(res.data.entries);
+      setAiAnswer(res.data.ai_answer ?? null);
       setAnswered(res.data.answered);
       setLastQuestion(question.trim());
       setAsked(true);
     } catch {
       setAnswered(false);
       setResults([]);
+      setAiAnswer(null);
       setAsked(true);
     } finally {
       setAsking(false);
@@ -81,8 +85,32 @@ export default function KennisBot() {
         </div>
       </form>
 
-      {/* Resultaat */}
-      {asked && answered && (
+      {/* AI-antwoord (RAG) */}
+      {asked && answered && aiAnswer && (
+        <div className="space-y-2">
+          <h2 className="text-sm font-semibold text-gray-700 flex items-center gap-1.5">
+            <span>🤖</span> Antwoord
+          </h2>
+          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
+            <div className="prose prose-sm max-w-none text-gray-700 break-words">
+              <ReactMarkdown>{aiAnswer}</ReactMarkdown>
+            </div>
+          </div>
+          {results.length > 0 && (
+            <details className="text-xs text-gray-500">
+              <summary className="cursor-pointer">Gerelateerde kennis-items</summary>
+              <div className="space-y-2 mt-2">
+                {results.map((e) => (
+                  <EntryCard key={e.id} entry={e} collapsible />
+                ))}
+              </div>
+            </details>
+          )}
+        </div>
+      )}
+
+      {/* Resultaat (zonder AI: directe kennisbank-treffers) */}
+      {asked && answered && !aiAnswer && (
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-gray-700">
             {results.length === 1 ? "Gevonden antwoord" : "Mogelijke antwoorden"}

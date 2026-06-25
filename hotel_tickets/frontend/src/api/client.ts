@@ -641,6 +641,23 @@ export interface AskResponse {
   answered: boolean;
   question_id: string;
   entries: KnowledgeEntry[];
+  ai_answer?: string | null;
+  source?: "ai" | "entries" | null;
+}
+
+export interface KnowledgeDocument {
+  id: string;
+  title: string;
+  source_filename: string | null;
+  category: Category | null;
+  chunk_count: number;
+  created_at: string;
+}
+
+export interface KnowledgeAiSettings {
+  ai_available: boolean;
+  ai_enabled: boolean;
+  model: string;
 }
 
 export interface KnowledgeStats {
@@ -697,6 +714,26 @@ export const knowledgeApi = {
       headers: { "Content-Type": "multipart/form-data" },
     });
   },
+  // Documenten (RAG-bron)
+  listDocuments: () => api.get<KnowledgeDocument[]>("/knowledge/documents"),
+  createDocument: (data: { title: string; content: string; category?: Category | null }) =>
+    api.post<KnowledgeDocument>("/knowledge/documents", data),
+  uploadDocument: (file: File, title?: string, category?: Category | null) => {
+    const form = new FormData();
+    form.append("file", file);
+    const params = new URLSearchParams();
+    if (title) params.set("title", title);
+    if (category) params.set("category", category);
+    const qs = params.toString() ? `?${params.toString()}` : "";
+    return api.post<KnowledgeDocument>(`/knowledge/documents/upload${qs}`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
+  // AI-instellingen
+  getAiSettings: () => api.get<KnowledgeAiSettings>("/knowledge/ai-settings"),
+  updateAiSettings: (enabled: boolean) =>
+    api.patch<KnowledgeAiSettings>("/knowledge/ai-settings", { enabled }),
 };
 
 export const CATEGORY_LABELS: Record<Category, string> = {
