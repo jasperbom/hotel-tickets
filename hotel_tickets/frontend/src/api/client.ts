@@ -683,9 +683,18 @@ export interface KnowledgeEntryInput {
   source_ticket_id?: string | null;
 }
 
+export interface ChatTurn {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export const knowledgeApi = {
-  ask: (question: string, category?: Category | null) =>
-    api.post<AskResponse>("/knowledge/ask", { question, category: category ?? null }),
+  ask: (question: string, category?: Category | null, history?: ChatTurn[]) =>
+    api.post<AskResponse>("/knowledge/ask", {
+      question,
+      category: category ?? null,
+      history: history ?? [],
+    }),
   listEntries: (params?: Record<string, string>) =>
     api.get<KnowledgeEntry[]>("/knowledge/entries", { params }),
   getEntry: (id: string) => api.get<KnowledgeEntry>(`/knowledge/entries/${id}`),
