@@ -66,6 +66,7 @@ async def _run_migrations(conn):
         ("knowledge_entries", "images", "TEXT"),
         ("knowledge_questions", "proposed_answer", "TEXT"),
         ("knowledge_questions", "proposed_by", "VARCHAR(255)"),
+        ("knowledge_questions", "conversation", "TEXT"),
         ("bike_reservations", "key_given_at", "DATETIME"),
         ("bike_reservations", "key_returned_at", "DATETIME"),
         ("bike_reservations", "key_ticket_id", "VARCHAR(36)"),

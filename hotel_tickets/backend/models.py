@@ -256,6 +256,7 @@ class KnowledgeQuestion(Base):
     resolved_entry_id: Mapped[str | None] = mapped_column(String(36))   # welke entry de admin er van maakte
     proposed_answer: Mapped[str | None] = mapped_column(Text)           # oplossing aangedragen door de medewerker
     proposed_by: Mapped[str | None] = mapped_column(String(255))        # HA user_id van wie de oplossing aandroeg
+    conversation: Mapped[str | None] = mapped_column(Text)             # transcript van het chatgesprek (context)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
     resolved_at: Mapped[datetime | None] = mapped_column(DateTime)
     resolved_by: Mapped[str | None] = mapped_column(String(255))        # HA user_id van de admin

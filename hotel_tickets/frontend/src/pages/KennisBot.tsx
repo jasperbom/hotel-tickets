@@ -40,8 +40,15 @@ export default function KennisBot() {
       setSending(true);
       const qid = solutionFor;
       setSolutionFor(null);
+      // Stuur het gesprek mee zodat het beheer de context van de vraag ziet
+      const convo: ChatTurn[] = [
+        ...messages
+          .slice(-10)
+          .map((m) => ({ role: m.role === "user" ? "user" : "assistant", content: m.content }) as ChatTurn),
+        { role: "user", content: text },
+      ];
       try {
-        const res = await knowledgeApi.submitSolution(qid, text);
+        const res = await knowledgeApi.submitSolution(qid, text, convo);
         const content =
           res.data.status === "already_known"
             ? "Bedankt! Dit staat eigenlijk al in onze kennis, dus ik hoef het niet apart " +

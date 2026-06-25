@@ -139,6 +139,7 @@ class QuestionOut(BaseModel):
     resolved_entry_id: Optional[str] = None
     proposed_answer: Optional[str] = None
     proposed_by: Optional[str] = None
+    conversation: Optional[str] = None
     created_at: str
     resolved_at: Optional[str] = None
     resolved_by: Optional[str] = None
@@ -146,6 +147,7 @@ class QuestionOut(BaseModel):
 
 class SolutionRequest(BaseModel):
     solution: str = Field(..., min_length=1)
+    conversation: list[ChatTurn] = []
 
 
 class AnswerQueueRequest(BaseModel):
@@ -196,6 +198,7 @@ def _question_out(q: KnowledgeQuestion) -> dict:
         "resolved_entry_id": q.resolved_entry_id,
         "proposed_answer": q.proposed_answer,
         "proposed_by": q.proposed_by,
+        "conversation": q.conversation,
         "created_at": q.created_at.isoformat() if q.created_at else "",
         "resolved_at": q.resolved_at.isoformat() if q.resolved_at else None,
         "resolved_by": q.resolved_by,
@@ -383,6 +386,14 @@ async def submit_solution(
 
     q.proposed_answer = solution
     q.proposed_by = user.ha_user_id
+    if data.conversation:
+        lines = []
+        for t in data.conversation:
+            who = "Medewerker" if t.role == "user" else "Jaisper"
+            if t.content and t.content.strip():
+                lines.append(f"{who}: {t.content.strip()}")
+        if lines:
+            q.conversation = "\n".join(lines)
     if q.status != KnowledgeQuestionStatus.resolved:
         q.status = KnowledgeQuestionStatus.pending
     await db.flush()
