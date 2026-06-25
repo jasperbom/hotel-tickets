@@ -60,7 +60,12 @@ export default function KennisBot() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-xl font-bold text-gray-900">Kennisbot</h1>
+        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+          Kennisbot
+          <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+            Beta
+          </span>
+        </h1>
         <p className="text-sm text-gray-500 mt-1">
           Loop je ergens tegenaan? Stel je vraag — je krijgt antwoord uit onze eigen kennisbank.
         </p>

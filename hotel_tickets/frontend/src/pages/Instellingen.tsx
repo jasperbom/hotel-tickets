@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, recurringApi,
+  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, recurringApi, knowledgeApi,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
-  type RecurringTemplate,
+  type RecurringTemplate, type KnowledgeAiSettings,
 } from "../api/client";
 
-type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl";
+type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot";
 
 // ── Gedeelde hulpcomponent ─────────────────────────────────────────────────────
 
@@ -960,6 +960,142 @@ function HuisstijlPanel() {
 // HOOFD COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
 
+const AI_MODELS = [
+  { id: "claude-haiku-4-5", label: "Claude Haiku 4.5 — snel & goedkoop (aanbevolen)" },
+  { id: "claude-sonnet-4-6", label: "Claude Sonnet 4.6 — balans" },
+  { id: "claude-opus-4-8", label: "Claude Opus 4.8 — krachtigst" },
+];
+
+function KennisbotAiPanel() {
+  const [settings, setSettings] = useState<KnowledgeAiSettings | null>(null);
+  const [apiKey, setApiKey] = useState("");
+  const [model, setModel] = useState("claude-haiku-4-5");
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+
+  function load() {
+    knowledgeApi.getAiSettings().then((r) => {
+      setSettings(r.data);
+      setModel(r.data.model);
+    }).catch(() => {});
+  }
+  useEffect(load, []);
+
+  async function save() {
+    setSaving(true);
+    setMsg(null);
+    try {
+      const payload: { model: string; api_key?: string } = { model };
+      if (apiKey.trim()) payload.api_key = apiKey.trim();
+      const r = await knowledgeApi.updateAiSettings(payload);
+      setSettings(r.data);
+      setApiKey("");
+      setMsg({ type: "ok", text: "Opgeslagen." });
+    } catch {
+      setMsg({ type: "err", text: "Opslaan mislukt." });
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function clearKey() {
+    if (!confirm("De opgeslagen API-sleutel verwijderen?")) return;
+    const r = await knowledgeApi.updateAiSettings({ api_key: "   " });
+    setSettings(r.data);
+    setMsg({ type: "ok", text: "Sleutel verwijderd." });
+  }
+
+  async function toggle(enabled: boolean) {
+    const r = await knowledgeApi.updateAiSettings({ enabled });
+    setSettings(r.data);
+  }
+
+  return (
+    <Section title="AI / Kennisbot">
+      <p className="text-sm text-gray-600">
+        Koppel Claude om vragen te laten beantwoorden uit je documenten. Zonder sleutel
+        valt de kennisbot terug op trefwoord-zoeken. De bot put altijd alleen uit jouw
+        eigen kennis en verzint nooit antwoorden.
+      </p>
+
+      {settings && (
+        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+          <div>
+            <p className="text-sm font-medium text-gray-800">AI-modus</p>
+            <p className="text-xs text-gray-500">
+              {settings.has_key
+                ? settings.key_from_addon
+                  ? "Sleutel actief (via addon-optie)"
+                  : "Sleutel actief (in de app ingesteld)"
+                : "Nog geen sleutel ingesteld"}
+            </p>
+          </div>
+          <label className="flex items-center gap-2 cursor-pointer">
+            <input
+              type="checkbox"
+              checked={settings.ai_enabled}
+              disabled={!settings.ai_available}
+              onChange={(e) => toggle(e.target.checked)}
+              className="w-4 h-4"
+            />
+            <span className="text-sm">{settings.ai_enabled ? "Aan" : "Uit"}</span>
+          </label>
+        </div>
+      )}
+
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-gray-700">Claude API-sleutel</label>
+        <input
+          type="password"
+          value={apiKey}
+          onChange={(e) => setApiKey(e.target.value)}
+          placeholder={settings?.has_key ? "•••••••• (laat leeg om te behouden)" : "sk-ant-..."}
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          autoComplete="off"
+        />
+        <p className="text-xs text-gray-400">
+          Een sleutel haal je op bij console.anthropic.com. Wordt versleuteld bewaard en
+          nooit teruggetoond.
+        </p>
+        {settings?.has_key && !settings.key_from_addon && (
+          <button onClick={clearKey} className="text-xs text-red-600 hover:underline">
+            Sleutel verwijderen
+          </button>
+        )}
+      </div>
+
+      <div className="space-y-1.5">
+        <label className="text-sm font-medium text-gray-700">Model</label>
+        <select
+          value={model}
+          onChange={(e) => setModel(e.target.value)}
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+        >
+          {AI_MODELS.map((m) => (
+            <option key={m.id} value={m.id}>{m.label}</option>
+          ))}
+          {!AI_MODELS.some((m) => m.id === model) && <option value={model}>{model}</option>}
+        </select>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <button
+          onClick={save}
+          disabled={saving}
+          className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+        >
+          {saving ? "Opslaan..." : "Opslaan"}
+        </button>
+        {msg && (
+          <span className={`text-sm ${msg.type === "ok" ? "text-green-600" : "text-red-600"}`}>
+            {msg.text}
+          </span>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 export default function Instellingen() {
   const [tab, setTab] = useState<Tab>("systeem");
   const [me, setMe] = useState<UserRole | null>(null);
@@ -974,6 +1110,7 @@ export default function Instellingen() {
     { id: "systeem", label: "Systeem", icon: "🏠" },
     { id: "zwembaden", label: "Zwembaden", icon: "🏊" },
     { id: "fietsen", label: "Fietsen", icon: "🚲" },
+    { id: "kennisbot", label: "Kennisbot", icon: "💡" },
     { id: "huisstijl", label: "Huisstijl", icon: "🎨" },
   ];
 
@@ -1017,6 +1154,15 @@ export default function Instellingen() {
           {isAdmin && <FietsenExcelPanel />}
           {me?.role === "admin" && <FietsenResetPanel />}
         </div>
+      )}
+
+      {tab === "kennisbot" && me?.role === "admin" && (
+        <div className="space-y-5">
+          <KennisbotAiPanel />
+        </div>
+      )}
+      {tab === "kennisbot" && me?.role !== "admin" && (
+        <p className="text-sm text-gray-500">Alleen admins kunnen de kennisbot-instellingen aanpassen.</p>
       )}
 
       {tab === "huisstijl" && isAdmin && <HuisstijlPanel />}

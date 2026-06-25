@@ -74,7 +74,7 @@ export default function KennisbankBeheer() {
   // --- AI + documenten acties ---
 
   async function toggleAi(enabled: boolean) {
-    const r = await knowledgeApi.updateAiSettings(enabled);
+    const r = await knowledgeApi.updateAiSettings({ enabled });
     setAiSettings(r.data);
   }
 
@@ -328,8 +328,8 @@ export default function KennisbankBeheer() {
               </p>
             ) : (
               <p className="text-xs text-amber-700 mt-0.5">
-                Geen API-sleutel ingesteld. Vul <code>claude_api_key</code> in bij de addon-opties
-                om AI te kunnen gebruiken.
+                Geen API-sleutel ingesteld. Stel de Claude API-sleutel in onder
+                <strong> Instellingen → AI / Kennisbot</strong> om AI te kunnen gebruiken.
               </p>
             )}
           </div>
