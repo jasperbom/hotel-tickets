@@ -81,6 +81,8 @@ export default function KennisbankBeheer() {
   const [error, setError] = useState("");
   const [entryCleaning, setEntryCleaning] = useState(false);
   const [uploadingImg, setUploadingImg] = useState(false);
+  // Klaargezette foto's voor een NIEUW item (geüpload bij Opslaan).
+  const [formStaged, setFormStaged] = useState<{ file: File; url: string }[]>([]);
   const [importing, setImporting] = useState(false);
   const [importMsg, setImportMsg] = useState("");
   const importInputRef = useRef<HTMLInputElement>(null);
@@ -99,6 +101,8 @@ export default function KennisbankBeheer() {
   const [showDocForm, setShowDocForm] = useState(false);
   const [docForm, setDocForm] = useState<KFValue>(EMPTY_KF);
   const [docFile, setDocFile] = useState<File | null>(null);
+  // Klaargezette foto's voor een NIEUW document (geüpload bij Opslaan).
+  const [docFormStaged, setDocFormStaged] = useState<{ file: File; url: string }[]>([]);
   const [docSaving, setDocSaving] = useState(false);
   const [docMsg, setDocMsg] = useState("");
   const [docError, setDocError] = useState("");
@@ -106,8 +110,10 @@ export default function KennisbankBeheer() {
 
   // Document bewerken (modal)
   const [docEdit, setDocEdit] = useState<DocEdit | null>(null);
+  const [docEditImages, setDocEditImages] = useState<string[]>([]);
   const [docEditSaving, setDocEditSaving] = useState(false);
   const [docEditCleaning, setDocEditCleaning] = useState(false);
+  const [docEditUploadingImg, setDocEditUploadingImg] = useState(false);
   const [docEditError, setDocEditError] = useState("");
 
   function loadQueue() {
@@ -159,6 +165,37 @@ export default function KennisbankBeheer() {
     setAiSettings(r.data);
   }
 
+  // --- Klaargezette foto's (voor nieuwe items/documenten) ---
+
+  type Staged = { file: File; url: string };
+  type StagedSetter = React.Dispatch<React.SetStateAction<Staged[]>>;
+
+  function addStagedImage(setter: StagedSetter, file: File) {
+    setter((prev) => [...prev, { file, url: URL.createObjectURL(file) }]);
+  }
+  function removeStagedImage(setter: StagedSetter, key: string) {
+    const i = Number(key.replace("staged-", ""));
+    setter((prev) => {
+      const next = prev.slice();
+      const [rm] = next.splice(i, 1);
+      if (rm) URL.revokeObjectURL(rm.url);
+      return next;
+    });
+  }
+  function clearStaged(list: Staged[], setter: StagedSetter) {
+    list.forEach((s) => URL.revokeObjectURL(s.url));
+    setter([]);
+  }
+  async function uploadStaged(list: Staged[], upload: (f: File) => Promise<unknown>) {
+    for (const s of list) {
+      try {
+        await upload(s.file);
+      } catch {
+        /* per-foto fout negeren; de rest gaat door */
+      }
+    }
+  }
+
   /** Zet een gekozen bestand klaar (nog niet opslaan). Vul de titel voor uit de
    * bestandsnaam als die nog leeg is. */
   function pickFile(file: File) {
@@ -170,6 +207,7 @@ export default function KennisbankBeheer() {
   function openDocForm() {
     setDocForm(EMPTY_KF);
     setDocFile(null);
+    clearStaged(docFormStaged, setDocFormStaged);
     setDocError("");
     setDocMsg("");
     setShowDocForm(true);
@@ -179,6 +217,7 @@ export default function KennisbankBeheer() {
     setShowDocForm(false);
     setDocForm(EMPTY_KF);
     setDocFile(null);
+    clearStaged(docFormStaged, setDocFormStaged);
   }
 
   /** Eén opslag-actie: een klaargezet bestand wordt geüpload, anders wordt de
@@ -217,6 +256,9 @@ export default function KennisbankBeheer() {
           visibility: v.visibility,
           folder: v.folder.trim() || null,
         });
+      }
+      if (docFormStaged.length) {
+        await uploadStaged(docFormStaged, (f) => knowledgeApi.uploadDocImage(r.data.id, f));
       }
       setDocMsg(`Opgeslagen: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
       closeDocForm();
@@ -274,9 +316,29 @@ export default function KennisbankBeheer() {
         visibility: r.data.visibility ?? "all",
         folder: r.data.folder ?? "",
       });
+      setDocEditImages(r.data.images ?? []);
     } catch {
       alert("Document kon niet geladen worden.");
     }
+  }
+
+  async function uploadDocEditImage(file: File) {
+    if (!docEdit) return;
+    setDocEditUploadingImg(true);
+    try {
+      const r = await knowledgeApi.uploadDocImage(docEdit.id, file);
+      setDocEditImages((prev) => [...prev, r.data.filename]);
+    } catch {
+      alert("Uploaden mislukt.");
+    } finally {
+      setDocEditUploadingImg(false);
+    }
+  }
+
+  async function deleteDocEditImage(fname: string) {
+    if (!docEdit) return;
+    await knowledgeApi.deleteDocImage(docEdit.id, fname);
+    setDocEditImages((prev) => prev.filter((f) => f !== fname));
   }
 
   async function cleanupEditDoc() {
@@ -370,6 +432,7 @@ export default function KennisbankBeheer() {
       category: q.category ?? "",
     });
     setFormImages([]);
+    clearStaged(formStaged, setFormStaged);
     setError("");
     setShowForm(true);
     // markeer dat dit een wachtrij-antwoord is via een verborgen veld
@@ -389,6 +452,7 @@ export default function KennisbankBeheer() {
   function newEntry() {
     setForm(EMPTY_FORM);
     setFormImages([]);
+    clearStaged(formStaged, setFormStaged);
     setAnsweringQuestionId(null);
     setError("");
     setShowForm(true);
@@ -406,6 +470,7 @@ export default function KennisbankBeheer() {
       folder: e.folder ?? "",
     });
     setFormImages(e.images ?? []);
+    clearStaged(formStaged, setFormStaged);
     setAnsweringQuestionId(null);
     setError("");
     setShowForm(true);
@@ -482,17 +547,25 @@ export default function KennisbankBeheer() {
       folder: form.folder.trim() || null,
     };
     try {
+      let createdId: string | null = null;
       if (answeringQuestionId) {
-        await knowledgeApi.answerQueue(answeringQuestionId, payload);
+        const r = await knowledgeApi.answerQueue(answeringQuestionId, payload);
+        createdId = r.data.id;
         loadQueue();
       } else if (form.id) {
         await knowledgeApi.updateEntry(form.id, payload);
       } else {
-        await knowledgeApi.createEntry(payload);
+        const r = await knowledgeApi.createEntry(payload);
+        createdId = r.data.id;
+      }
+      // Klaargezette foto's van een nieuw item nu pas uploaden (id is er nu).
+      if (createdId && formStaged.length) {
+        await uploadStaged(formStaged, (f) => knowledgeApi.uploadImage(createdId!, f));
       }
       loadEntries();
       setShowForm(false);
       setForm(EMPTY_FORM);
+      clearStaged(formStaged, setFormStaged);
       setFormImages([]);
       setAnsweringQuestionId(null);
     } catch {
@@ -923,6 +996,7 @@ export default function KennisbankBeheer() {
             setShowForm(false);
             setAnsweringQuestionId(null);
             setFormImages([]);
+            clearStaged(formStaged, setFormStaged);
           }}
           saving={saving}
           error={error}
@@ -933,11 +1007,19 @@ export default function KennisbankBeheer() {
             aiAvailable={aiSettings?.ai_available}
             onCleanup={cleanupEntryForm}
             cleaning={entryCleaning}
-            images={formImages}
-            onUploadImage={uploadFormImage}
-            onDeleteImage={deleteFormImage}
-            imageUrlFor={(name) => knowledgeApi.imageUrl(form.id!, name)}
-            imagesHint={form.id ? undefined : "Sla het item eerst op; daarna kun je afbeeldingen toevoegen."}
+            imageItems={
+              form.id
+                ? formImages.map((f) => ({ key: f, url: knowledgeApi.imageUrl(form.id!, f) }))
+                : formStaged.map((s, i) => ({ key: `staged-${i}`, url: s.url }))
+            }
+            onAddImage={(file) => {
+              if (form.id) uploadFormImage(file);
+              else addStagedImage(setFormStaged, file);
+            }}
+            onRemoveImage={(key) => {
+              if (form.id) deleteFormImage(key);
+              else removeStagedImage(setFormStaged, key);
+            }}
             uploadingImg={uploadingImg}
           />
         </KnowledgeFormModal>
@@ -961,6 +1043,9 @@ export default function KennisbankBeheer() {
             file={docFile}
             onPickFile={pickFile}
             onClearFile={() => setDocFile(null)}
+            imageItems={docFormStaged.map((s, i) => ({ key: `staged-${i}`, url: s.url }))}
+            onAddImage={(file) => addStagedImage(setDocFormStaged, file)}
+            onRemoveImage={(key) => removeStagedImage(setDocFormStaged, key)}
           />
         </KnowledgeFormModal>
       )}
@@ -980,6 +1065,13 @@ export default function KennisbankBeheer() {
             aiAvailable={aiSettings?.ai_available}
             onCleanup={cleanupEditDoc}
             cleaning={docEditCleaning}
+            imageItems={docEditImages.map((f) => ({
+              key: f,
+              url: knowledgeApi.docImageUrl(docEdit.id, f),
+            }))}
+            onAddImage={uploadDocEditImage}
+            onRemoveImage={deleteDocEditImage}
+            uploadingImg={docEditUploadingImg}
           />
         </KnowledgeFormModal>
       )}
@@ -1345,11 +1437,9 @@ function KnowledgeForm({
   file,
   onPickFile,
   onClearFile,
-  images,
-  onUploadImage,
-  onDeleteImage,
-  imageUrlFor,
-  imagesHint,
+  imageItems,
+  onAddImage,
+  onRemoveImage,
   uploadingImg,
 }: {
   value: KFValue;
@@ -1361,16 +1451,15 @@ function KnowledgeForm({
   file?: File | null;
   onPickFile?: (f: File) => void;
   onClearFile?: () => void;
-  images?: string[];
-  onUploadImage?: (f: File) => void;
-  onDeleteImage?: (name: string) => void;
-  imageUrlFor?: (name: string) => string;
-  imagesHint?: string;
+  // Foto's: een lijst van toonbare items (opgeslagen óf klaargezet) + acties.
+  imageItems?: { key: string; url: string }[];
+  onAddImage?: (f: File) => void;
+  onRemoveImage?: (key: string) => void;
   uploadingImg?: boolean;
 }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const allowFile = !!onPickFile;
-  const showImages = imagesHint != null || !!onUploadImage;
+  const showImages = !!onAddImage;
   return (
     <div className="space-y-3">
       <div>
@@ -1477,49 +1566,49 @@ function KnowledgeForm({
 
       {showImages && (
         <div>
-          <label className="text-xs font-medium text-gray-600">Afbeeldingen</label>
-          {imagesHint ? (
-            <p className="text-[11px] text-gray-400 mt-1">{imagesHint}</p>
-          ) : (
-            <div className="mt-1 space-y-2">
-              {!!images?.length && (
-                <div className="flex flex-wrap gap-2">
-                  {images.map((img) => (
-                    <div key={img} className="relative">
-                      <img
-                        src={imageUrlFor ? imageUrlFor(img) : ""}
-                        alt=""
-                        className="h-16 w-16 object-cover rounded-lg border border-gray-200"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => onDeleteImage?.(img)}
-                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none"
-                        title="Verwijderen"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <label className="inline-block">
-                <span className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 cursor-pointer inline-block">
-                  {uploadingImg ? "Uploaden..." : "+ Afbeelding"}
-                </span>
-                <input
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) onUploadImage?.(f);
-                    e.target.value = "";
-                  }}
-                />
-              </label>
-            </div>
-          )}
+          <label className="text-xs font-medium text-gray-600">Foto's</label>
+          <div className="mt-1 space-y-2">
+            {!!imageItems?.length && (
+              <div className="flex flex-wrap gap-2">
+                {imageItems.map((img) => (
+                  <div key={img.key} className="relative">
+                    <img
+                      src={img.url}
+                      alt=""
+                      className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => onRemoveImage?.(img.key)}
+                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none"
+                      title="Verwijderen"
+                    >
+                      ×
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <label className="inline-block">
+              <span className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 cursor-pointer inline-block">
+                {uploadingImg ? "Uploaden..." : "+ Foto"}
+              </span>
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const f = e.target.files?.[0];
+                  if (f) onAddImage?.(f);
+                  e.target.value = "";
+                }}
+              />
+            </label>
+            <p className="text-[11px] text-gray-400">
+              Foto's worden bij dit antwoord getoond in de chat. Bij een nieuw item/document
+              worden ze bij Opslaan toegevoegd.
+            </p>
+          </div>
         </div>
       )}
 

@@ -289,6 +289,7 @@ class KnowledgeDocument(Base):
     # (soms kromme) tekst uit een PDF te duiden; wordt mee-doorzocht.
     context: Mapped[str | None] = mapped_column(Text)
     keywords: Mapped[str | None] = mapped_column(Text)            # extra trefwoorden (zelfde veld als bij items)
+    images: Mapped[str | None] = mapped_column(Text)             # JSON: ["bestand1.png", ...] (zelfde als bij items)
     category: Mapped[Category | None] = mapped_column(Enum(Category))
     visibility: Mapped[KnowledgeVisibility] = mapped_column(
         Enum(KnowledgeVisibility), default=KnowledgeVisibility.all, nullable=False

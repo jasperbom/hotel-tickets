@@ -71,6 +71,7 @@ async def _run_migrations(conn):
         ("knowledge_documents", "visibility", "VARCHAR(20) NOT NULL DEFAULT 'all'"),
         ("knowledge_entries", "context", "TEXT"),
         ("knowledge_documents", "keywords", "TEXT"),
+        ("knowledge_documents", "images", "TEXT"),
         ("knowledge_questions", "proposed_answer", "TEXT"),
         ("knowledge_questions", "proposed_by", "VARCHAR(255)"),
         ("knowledge_questions", "conversation", "TEXT"),

@@ -41,7 +41,13 @@ from ..models import (
     Ticket,
     Status,
 )
-from ..services.knowledge_search import knowledge_search, search_chunks, visibility_clause, can_see
+from ..services.knowledge_search import (
+    knowledge_search,
+    search_chunks,
+    search_chunk_documents,
+    visibility_clause,
+    can_see,
+)
 from ..services import ai_client
 
 logger = logging.getLogger(__name__)
@@ -54,12 +60,17 @@ UPLOAD_DIR = os.environ.get(
     "UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads")
 )
 KNOWLEDGE_SUBDIR = "knowledge"
+KNOWLEDGE_DOC_SUBDIR = "knowledge_documents"
 IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
 MD_EXTENSIONS = {".md", ".markdown", ".txt"}
 
 
 def _entry_image_dir(entry_id: str) -> str:
     return os.path.join(UPLOAD_DIR, KNOWLEDGE_SUBDIR, entry_id)
+
+
+def _document_image_dir(document_id: str) -> str:
+    return os.path.join(UPLOAD_DIR, KNOWLEDGE_DOC_SUBDIR, document_id)
 
 
 def _load_images(e: KnowledgeEntry) -> list[str]:
@@ -130,10 +141,18 @@ class AskRequest(BaseModel):
     history: list[ChatTurn] = []
 
 
+class AskDocument(BaseModel):
+    """Minimale document-info voor de chat: alleen nodig om foto's te tonen."""
+    id: str
+    title: str
+    images: list[str] = []
+
+
 class AskResponse(BaseModel):
     answered: bool
     question_id: str
     entries: list[EntryOut]
+    documents: list[AskDocument] = []      # bijdragende documenten (voor foto's)
     ai_answer: Optional[str] = None        # door Claude geformuleerd antwoord (RAG)
     source: Optional[str] = None           # "ai" of "entries"
 
@@ -281,6 +300,24 @@ async def _log_answered(
     return q
 
 
+async def _answer_documents(
+    db: AsyncSession, retrieval_q: str, category: Optional[Category], user, max_docs: int = 3
+) -> list[AskDocument]:
+    """De bijdragende documenten mét foto's, om bij een bot-antwoord te tonen."""
+    doc_ids = await search_chunk_documents(db, retrieval_q, category, limit=8, user=user)
+    out: list[AskDocument] = []
+    for did in doc_ids:
+        doc = await db.get(KnowledgeDocument, did)
+        if not doc:
+            continue
+        imgs = _load_images(doc)
+        if imgs:
+            out.append(AskDocument(id=doc.id, title=doc.title, images=imgs))
+        if len(out) >= max_docs:
+            break
+    return out
+
+
 @router.post("/ask", response_model=AskResponse)
 async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
     # ── RAG-route: AI doorzoekt documenten + entries en formuleert een antwoord ──
@@ -331,6 +368,7 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
                         answered=True,
                         question_id=q.id,
                         entries=[EntryOut(**_entry_out(e)) for e in entries],
+                        documents=await _answer_documents(db, retrieval_q, data.category, user),
                         ai_answer=result["answer"],
                         source="ai",
                     )
@@ -959,6 +997,7 @@ class DocumentOut(BaseModel):
     category: Optional[Category] = None
     visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
+    images: list[str] = []
     chunk_count: int = 0
     created_at: str
 
@@ -1008,6 +1047,7 @@ def _doc_out(d: KnowledgeDocument, chunk_count: int) -> DocumentOut:
         category=d.category.value if isinstance(d.category, Category) else d.category,
         visibility=d.visibility.value if isinstance(d.visibility, KnowledgeVisibility) else (d.visibility or "all"),
         folder=d.folder,
+        images=_load_images(d),
         chunk_count=chunk_count,
         created_at=d.created_at.isoformat() if d.created_at else "",
     )
@@ -1168,6 +1208,61 @@ async def delete_document(document_id: str, user: RequireUser, db: AsyncSession 
     if not doc:
         raise HTTPException(404, "Document niet gevonden")
     await db.delete(doc)
+
+
+# ── Afbeeldingen bij documenten (alleen admin; tonen mag iedereen) ─────────────
+
+@router.post("/documents/{document_id}/images", status_code=201)
+async def upload_document_image(
+    document_id: str,
+    user: RequireUser,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise HTTPException(400, "Alleen afbeeldingen zijn toegestaan")
+    d = _document_image_dir(document_id)
+    os.makedirs(d, exist_ok=True)
+    fname = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(d, fname), "wb") as f:
+        f.write(await file.read())
+    imgs = _load_images(doc)
+    imgs.append(fname)
+    doc.images = json.dumps(imgs)
+    await db.flush()
+    return {"filename": fname}
+
+
+@router.get("/documents/{document_id}/images/{filename}")
+async def get_document_image(document_id: str, filename: str, user: RequireUser):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Ongeldige bestandsnaam")
+    filepath = os.path.join(_document_image_dir(document_id), filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(404, "Afbeelding niet gevonden")
+    return FileResponse(filepath)
+
+
+@router.delete("/documents/{document_id}/images/{filename}", status_code=204)
+async def delete_document_image(
+    document_id: str, filename: str, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    base = os.path.basename(filename)
+    filepath = os.path.join(_document_image_dir(document_id), base)
+    if os.path.isfile(filepath):
+        os.remove(filepath)
+    imgs = [i for i in _load_images(doc) if i != base]
+    doc.images = json.dumps(imgs) if imgs else None
+    await db.flush()
 
 
 # ── Zoeken door alle kennis (alleen admin) ─────────────────────────────────────
