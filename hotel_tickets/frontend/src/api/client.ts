@@ -602,12 +602,23 @@ export const bikeAdminApi = {
 
 export type KnowledgeQuestionStatus = "answered_by_bot" | "pending" | "resolved" | "dismissed";
 
+export type KnowledgeVisibility = "all" | "department" | "management" | "admin";
+
+export const VISIBILITY_LABELS: Record<KnowledgeVisibility, string> = {
+  all: "🌐 Iedereen",
+  department: "🏢 Alleen afdeling",
+  management: "👔 Supervisors + admin",
+  admin: "🔑 Alleen admin",
+};
+
 export interface KnowledgeEntry {
   id: string;
   title: string;
   answer: string;
   keywords: string | null;
+  context: string | null;
   category: Category | null;
+  visibility: KnowledgeVisibility;
   folder: string | null;
   source_ticket_id: string | null;
   images: string[];
@@ -654,7 +665,9 @@ export interface KnowledgeDocument {
   title: string;
   source_filename: string | null;
   context: string | null;
+  keywords: string | null;
   category: Category | null;
+  visibility: KnowledgeVisibility;
   folder: string | null;
   chunk_count: number;
   created_at: string;
@@ -704,7 +717,9 @@ export interface KnowledgeEntryInput {
   title?: string;
   answer?: string;
   keywords?: string | null;
+  context?: string | null;
   category?: Category | null;
+  visibility?: KnowledgeVisibility;
   folder?: string | null;
   is_published?: boolean;
   source_ticket_id?: string | null;
@@ -765,21 +780,25 @@ export const knowledgeApi = {
   },
   // Documenten (RAG-bron)
   listDocuments: () => api.get<KnowledgeDocument[]>("/knowledge/documents"),
-  createDocument: (data: { title: string; content: string; context?: string | null; category?: Category | null; folder?: string | null }) =>
+  createDocument: (data: { title: string; content: string; context?: string | null; keywords?: string | null; category?: Category | null; visibility?: KnowledgeVisibility; folder?: string | null }) =>
     api.post<KnowledgeDocument>("/knowledge/documents", data),
   uploadDocument: (
     file: File,
     title?: string,
     category?: Category | null,
     folder?: string | null,
-    context?: string | null
+    context?: string | null,
+    visibility?: KnowledgeVisibility,
+    keywords?: string | null
   ) => {
     const form = new FormData();
     form.append("file", file);
     const params = new URLSearchParams();
     if (title) params.set("title", title);
     if (context) params.set("context", context);
+    if (keywords) params.set("keywords", keywords);
     if (category) params.set("category", category);
+    if (visibility) params.set("visibility", visibility);
     if (folder) params.set("folder", folder);
     const qs = params.toString() ? `?${params.toString()}` : "";
     return api.post<KnowledgeDocument>(`/knowledge/documents/upload${qs}`, form, {
@@ -789,7 +808,7 @@ export const knowledgeApi = {
   getDocument: (id: string) => api.get<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`),
   updateDocument: (
     id: string,
-    data: { title?: string; content?: string; context?: string | null; category?: Category | null; folder?: string | null }
+    data: { title?: string; content?: string; context?: string | null; keywords?: string | null; category?: Category | null; visibility?: KnowledgeVisibility; folder?: string | null }
   ) => api.patch<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`, data),
   removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
   aiCleanup: (text: string) =>

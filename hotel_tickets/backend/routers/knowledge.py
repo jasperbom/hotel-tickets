@@ -34,13 +34,14 @@ from ..models import (
     KnowledgeQuestionStatus,
     KnowledgeDocument,
     KnowledgeChunk,
+    KnowledgeVisibility,
     SystemSetting,
     Category,
     Role,
     Ticket,
     Status,
 )
-from ..services.knowledge_search import knowledge_search, search_chunks
+from ..services.knowledge_search import knowledge_search, search_chunks, visibility_clause, can_see
 from ..services import ai_client
 
 logger = logging.getLogger(__name__)
@@ -83,7 +84,9 @@ class EntryOut(BaseModel):
     title: str
     answer: str
     keywords: Optional[str] = None
+    context: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
     source_ticket_id: Optional[str] = None
     images: list[str] = []
@@ -97,7 +100,9 @@ class EntryCreate(BaseModel):
     title: str = Field(..., min_length=1)
     answer: str = Field(..., min_length=1)
     keywords: Optional[str] = None
+    context: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
     is_published: bool = True
     source_ticket_id: Optional[str] = None
@@ -107,7 +112,9 @@ class EntryUpdate(BaseModel):
     title: Optional[str] = None
     answer: Optional[str] = None
     keywords: Optional[str] = None
+    context: Optional[str] = None
     category: Optional[Category] = None
+    visibility: Optional[KnowledgeVisibility] = None
     folder: Optional[str] = None
     is_published: Optional[bool] = None
 
@@ -180,7 +187,9 @@ def _entry_out(e: KnowledgeEntry) -> dict:
         "title": e.title,
         "answer": e.answer,
         "keywords": e.keywords,
+        "context": e.context,
         "category": e.category.value if isinstance(e.category, Category) else e.category,
+        "visibility": e.visibility.value if isinstance(e.visibility, KnowledgeVisibility) else (e.visibility or "all"),
         "folder": e.folder,
         "source_ticket_id": e.source_ticket_id,
         "images": _load_images(e),
@@ -286,18 +295,18 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         if last_user:
             retrieval_q = f"{last_user} {data.question}"
 
-        chunks = await search_chunks(db, retrieval_q, data.category, limit=8)
-        entries = await knowledge_search.search(db, retrieval_q, data.category)
+        chunks = await search_chunks(db, retrieval_q, data.category, limit=8, user=user)
+        entries = await knowledge_search.search(db, retrieval_q, data.category, user=user)
 
         # Slimmer zoeken: levert de gewone zoekopdracht weinig op, laat Claude de
         # vraag dan herformuleren (synoniemen) en zoek op die varianten.
         if len(chunks) < 3:
             existing_ids = {e.id for e in entries}
             for variant in await ai_client.expand_query(data.question, key, model):
-                for c in await search_chunks(db, variant, data.category, limit=5):
+                for c in await search_chunks(db, variant, data.category, limit=5, user=user):
                     if c not in chunks:
                         chunks.append(c)
-                for e in await knowledge_search.search(db, variant, data.category):
+                for e in await knowledge_search.search(db, variant, data.category, user=user):
                     if e.id not in existing_ids:
                         entries.append(e)
                         existing_ids.add(e.id)
@@ -331,7 +340,7 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         return await _log_pending(db, data, user)
 
     # ── Zonder AI: trefwoord-zoeken in de kennisbank-entries ──
-    entries = await knowledge_search.search(db, data.question, data.category)
+    entries = await knowledge_search.search(db, data.question, data.category, user=user)
     if entries:
         top = entries[0]
         top.ask_count += 1
@@ -418,6 +427,8 @@ async def list_entries(
     query = select(KnowledgeEntry)
     if not (include_unpublished and user.role == Role.admin):
         query = query.where(KnowledgeEntry.is_published == True)  # noqa: E712
+    # Afscherming op rol + afdeling (admin/supervisor zien (vrijwel) alles).
+    query = query.where(visibility_clause(KnowledgeEntry, user))
     if category is not None:
         query = query.where(KnowledgeEntry.category == category)
     if q:
@@ -458,6 +469,8 @@ async def get_entry(entry_id: str, user: RequireUser, db: AsyncSession = Depends
     e = await db.get(KnowledgeEntry, entry_id)
     if not e:
         raise HTTPException(404, "Kennis-entry niet gevonden")
+    if not can_see(user, e.visibility, e.category):
+        raise HTTPException(404, "Kennis-entry niet gevonden")
     return _entry_out(e)
 
 
@@ -470,7 +483,9 @@ async def create_entry(data: EntryCreate, user: RequireUser, db: AsyncSession = 
         title=data.title.strip(),
         answer=data.answer.strip(),
         keywords=(data.keywords or None),
+        context=(data.context.strip() if data.context and data.context.strip() else None),
         category=data.category,
+        visibility=data.visibility or KnowledgeVisibility.all,
         folder=(data.folder.strip() if data.folder else None),
         is_published=data.is_published,
         source_ticket_id=data.source_ticket_id,
@@ -911,14 +926,20 @@ def _extract_text(filename: str, raw: bytes) -> str:
 
 
 async def _store_document_chunks(db: AsyncSession, doc: KnowledgeDocument) -> int:
-    # De toelichting (context) wordt voor elk fragment geplakt, zodat de AI bij
-    # élk opgehaald stuk weet waar het document over gaat — handig wanneer een
-    # PDF kromme of context-loze tekst oplevert.
+    # De toelichting (context) + trefwoorden worden voor elk fragment geplakt,
+    # zodat de AI bij élk opgehaald stuk weet waar het document over gaat — handig
+    # wanneer een PDF kromme of context-loze tekst oplevert.
     context = (doc.context or "").strip()
-    prefix = f"[Context: {context}]\n\n" if context else ""
+    keywords = (doc.keywords or "").strip()
+    header_lines = []
+    if context:
+        header_lines.append(f"[Context: {context}]")
+    if keywords:
+        header_lines.append(f"[Trefwoorden: {keywords}]")
+    prefix = ("\n".join(header_lines) + "\n\n") if header_lines else ""
     pieces = _chunk_text(doc.content)
-    if not pieces and context:
-        # Geen bruikbare inhoud, maar wél een toelichting → bewaar de context zelf.
+    if not pieces and prefix:
+        # Geen bruikbare inhoud, maar wél context/trefwoorden → bewaar die zelf.
         pieces = [""]
     for ch in pieces:
         db.add(KnowledgeChunk(document_id=doc.id, ordinal=0, content=(prefix + ch).strip()))
@@ -934,7 +955,9 @@ class DocumentOut(BaseModel):
     title: str
     source_filename: Optional[str] = None
     context: Optional[str] = None
+    keywords: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
     chunk_count: int = 0
     created_at: str
@@ -948,7 +971,9 @@ class DocumentCreate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
     context: Optional[str] = None
+    keywords: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
 
 
@@ -956,7 +981,9 @@ class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
     context: Optional[str] = None
+    keywords: Optional[str] = None
     category: Optional[Category] = None
+    visibility: Optional[KnowledgeVisibility] = None
     folder: Optional[str] = None
 
 
@@ -977,7 +1004,9 @@ def _doc_out(d: KnowledgeDocument, chunk_count: int) -> DocumentOut:
         title=d.title,
         source_filename=d.source_filename,
         context=d.context,
+        keywords=d.keywords,
         category=d.category.value if isinstance(d.category, Category) else d.category,
+        visibility=d.visibility.value if isinstance(d.visibility, KnowledgeVisibility) else (d.visibility or "all"),
         folder=d.folder,
         chunk_count=chunk_count,
         created_at=d.created_at.isoformat() if d.created_at else "",
@@ -1006,7 +1035,9 @@ async def create_document(data: DocumentCreate, user: RequireUser, db: AsyncSess
         title=data.title.strip(),
         content=data.content.strip(),
         context=(data.context.strip() if data.context and data.context.strip() else None),
+        keywords=(data.keywords.strip() if data.keywords and data.keywords.strip() else None),
         category=data.category,
+        visibility=data.visibility or KnowledgeVisibility.all,
         folder=(data.folder.strip() if data.folder else None),
         created_by=user.ha_user_id,
     )
@@ -1022,7 +1053,9 @@ async def upload_document(
     file: UploadFile = File(...),
     title: Optional[str] = Query(None),
     context: Optional[str] = Query(None),
+    keywords: Optional[str] = Query(None),
     category: Optional[Category] = Query(None),
+    visibility: KnowledgeVisibility = Query(KnowledgeVisibility.all),
     folder: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1044,7 +1077,9 @@ async def upload_document(
         source_filename=file.filename,
         content=content,
         context=ctx,
+        keywords=(keywords.strip() if keywords and keywords.strip() else None),
         category=category,
+        visibility=visibility or KnowledgeVisibility.all,
         folder=(folder.strip() if folder else None),
         created_by=user.ha_user_id,
     )
@@ -1093,8 +1128,16 @@ async def update_document(
         if new_ctx != (doc.context or None):
             doc.context = new_ctx
             content_changed = True  # context zit in de chunks → opnieuw opbouwen
+    if "keywords" in updates:
+        new_kw = updates["keywords"]
+        new_kw = new_kw.strip() if isinstance(new_kw, str) and new_kw.strip() else None
+        if new_kw != (doc.keywords or None):
+            doc.keywords = new_kw
+            content_changed = True  # trefwoorden zitten in de chunks → opnieuw opbouwen
     if "category" in updates:
         doc.category = updates["category"]
+    if "visibility" in updates and updates["visibility"] is not None:
+        doc.visibility = updates["visibility"]
     if "folder" in updates:
         folder = updates["folder"]
         doc.folder = folder.strip() if isinstance(folder, str) and folder.strip() else None
@@ -1189,6 +1232,7 @@ async def search_all(
                 KnowledgeDocument.title.ilike(like),
                 KnowledgeDocument.content.ilike(like),
                 KnowledgeDocument.context.ilike(like),
+                KnowledgeDocument.keywords.ilike(like),
                 KnowledgeDocument.folder.ilike(like),
             )
         )

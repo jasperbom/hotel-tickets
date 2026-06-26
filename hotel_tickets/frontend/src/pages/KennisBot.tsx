@@ -199,6 +199,15 @@ export default function KennisBot() {
         </h1>
       </div>
 
+      {/* Privacy-waarschuwing — altijd zichtbaar boven het gesprek */}
+      <div className="shrink-0 mb-2 flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+        <span aria-hidden>⚠️</span>
+        <span>
+          Deel hier <strong>geen persoonsgegevens, gebruikersnamen of wachtwoorden</strong>. Berichten
+          worden bewaard voor het beheer.
+        </span>
+      </div>
+
       {/* Gespreksvenster */}
       <div ref={listRef} className="flex-1 overflow-y-auto space-y-3 pr-1">
         <BotBubble>

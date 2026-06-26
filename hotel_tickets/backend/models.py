@@ -221,6 +221,15 @@ class KnowledgeQuestionStatus(str, PyEnum):
     dismissed = "dismissed"              # admin vond de vraag irrelevant
 
 
+class KnowledgeVisibility(str, PyEnum):
+    """Wie mag een kennis-item / document zien (en via de bot te horen krijgen).
+    admin + supervisor zien altijd alles, behalve het expliciete 'admin'-niveau."""
+    all = "all"                  # iedere medewerker
+    department = "department"    # alleen de eigen afdeling (= category) + management
+    management = "management"    # alleen supervisors + admin
+    admin = "admin"             # alleen admin
+
+
 class KnowledgeEntry(Base):
     """Eén vraag/probleem + oplossing in de kennisbank. De bot geeft uitsluitend
     deze entries terug — hij verzint nooit zelf antwoorden."""
@@ -230,7 +239,11 @@ class KnowledgeEntry(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)  # het probleem / de vraag
     answer: Mapped[str] = mapped_column(Text, nullable=False)        # de oplossing / het antwoord
     keywords: Mapped[str | None] = mapped_column(Text)              # extra trefwoorden / alternatieve formuleringen
-    category: Mapped[Category | None] = mapped_column(Enum(Category))  # afdeling (optioneel filter, geen afscherming)
+    context: Mapped[str | None] = mapped_column(Text)              # optionele toelichting (zelfde veld als bij documenten)
+    category: Mapped[Category | None] = mapped_column(Enum(Category))  # afdeling (filter + grondslag voor afdeling-afscherming)
+    visibility: Mapped[KnowledgeVisibility] = mapped_column(
+        Enum(KnowledgeVisibility), default=KnowledgeVisibility.all, nullable=False
+    )  # wie mag dit zien / via de bot horen
     folder: Mapped[str | None] = mapped_column(String(100))         # onderwerp/map binnen de afdeling
     images: Mapped[str | None] = mapped_column(Text)               # JSON: ["bestand1.png", ...] (in het antwoord als markdown ![](bestand))
     source_ticket_id: Mapped[str | None] = mapped_column(String(36))  # indien gepromoveerd uit een gesloten ticket
@@ -275,7 +288,11 @@ class KnowledgeDocument(Base):
     # Door een mens aangeleverde toelichting bij het document. Helpt de AI de
     # (soms kromme) tekst uit een PDF te duiden; wordt mee-doorzocht.
     context: Mapped[str | None] = mapped_column(Text)
+    keywords: Mapped[str | None] = mapped_column(Text)            # extra trefwoorden (zelfde veld als bij items)
     category: Mapped[Category | None] = mapped_column(Enum(Category))
+    visibility: Mapped[KnowledgeVisibility] = mapped_column(
+        Enum(KnowledgeVisibility), default=KnowledgeVisibility.all, nullable=False
+    )  # wie mag dit (via de bot) horen
     folder: Mapped[str | None] = mapped_column(String(100))         # onderwerp/map binnen de afdeling
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
