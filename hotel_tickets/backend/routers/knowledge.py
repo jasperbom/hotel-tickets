@@ -34,13 +34,14 @@ from ..models import (
     KnowledgeQuestionStatus,
     KnowledgeDocument,
     KnowledgeChunk,
+    KnowledgeVisibility,
     SystemSetting,
     Category,
     Role,
     Ticket,
     Status,
 )
-from ..services.knowledge_search import knowledge_search, search_chunks
+from ..services.knowledge_search import knowledge_search, search_chunks, visibility_clause, can_see
 from ..services import ai_client
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ class EntryOut(BaseModel):
     answer: str
     keywords: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
     source_ticket_id: Optional[str] = None
     images: list[str] = []
@@ -98,6 +100,7 @@ class EntryCreate(BaseModel):
     answer: str = Field(..., min_length=1)
     keywords: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
     is_published: bool = True
     source_ticket_id: Optional[str] = None
@@ -108,6 +111,7 @@ class EntryUpdate(BaseModel):
     answer: Optional[str] = None
     keywords: Optional[str] = None
     category: Optional[Category] = None
+    visibility: Optional[KnowledgeVisibility] = None
     folder: Optional[str] = None
     is_published: Optional[bool] = None
 
@@ -181,6 +185,7 @@ def _entry_out(e: KnowledgeEntry) -> dict:
         "answer": e.answer,
         "keywords": e.keywords,
         "category": e.category.value if isinstance(e.category, Category) else e.category,
+        "visibility": e.visibility.value if isinstance(e.visibility, KnowledgeVisibility) else (e.visibility or "all"),
         "folder": e.folder,
         "source_ticket_id": e.source_ticket_id,
         "images": _load_images(e),
@@ -286,18 +291,18 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         if last_user:
             retrieval_q = f"{last_user} {data.question}"
 
-        chunks = await search_chunks(db, retrieval_q, data.category, limit=8)
-        entries = await knowledge_search.search(db, retrieval_q, data.category)
+        chunks = await search_chunks(db, retrieval_q, data.category, limit=8, user=user)
+        entries = await knowledge_search.search(db, retrieval_q, data.category, user=user)
 
         # Slimmer zoeken: levert de gewone zoekopdracht weinig op, laat Claude de
         # vraag dan herformuleren (synoniemen) en zoek op die varianten.
         if len(chunks) < 3:
             existing_ids = {e.id for e in entries}
             for variant in await ai_client.expand_query(data.question, key, model):
-                for c in await search_chunks(db, variant, data.category, limit=5):
+                for c in await search_chunks(db, variant, data.category, limit=5, user=user):
                     if c not in chunks:
                         chunks.append(c)
-                for e in await knowledge_search.search(db, variant, data.category):
+                for e in await knowledge_search.search(db, variant, data.category, user=user):
                     if e.id not in existing_ids:
                         entries.append(e)
                         existing_ids.add(e.id)
@@ -331,7 +336,7 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
         return await _log_pending(db, data, user)
 
     # ── Zonder AI: trefwoord-zoeken in de kennisbank-entries ──
-    entries = await knowledge_search.search(db, data.question, data.category)
+    entries = await knowledge_search.search(db, data.question, data.category, user=user)
     if entries:
         top = entries[0]
         top.ask_count += 1
@@ -418,6 +423,8 @@ async def list_entries(
     query = select(KnowledgeEntry)
     if not (include_unpublished and user.role == Role.admin):
         query = query.where(KnowledgeEntry.is_published == True)  # noqa: E712
+    # Afscherming op rol + afdeling (admin/supervisor zien (vrijwel) alles).
+    query = query.where(visibility_clause(KnowledgeEntry, user))
     if category is not None:
         query = query.where(KnowledgeEntry.category == category)
     if q:
@@ -458,6 +465,8 @@ async def get_entry(entry_id: str, user: RequireUser, db: AsyncSession = Depends
     e = await db.get(KnowledgeEntry, entry_id)
     if not e:
         raise HTTPException(404, "Kennis-entry niet gevonden")
+    if not can_see(user, e.visibility, e.category):
+        raise HTTPException(404, "Kennis-entry niet gevonden")
     return _entry_out(e)
 
 
@@ -471,6 +480,7 @@ async def create_entry(data: EntryCreate, user: RequireUser, db: AsyncSession = 
         answer=data.answer.strip(),
         keywords=(data.keywords or None),
         category=data.category,
+        visibility=data.visibility or KnowledgeVisibility.all,
         folder=(data.folder.strip() if data.folder else None),
         is_published=data.is_published,
         source_ticket_id=data.source_ticket_id,
@@ -935,6 +945,7 @@ class DocumentOut(BaseModel):
     source_filename: Optional[str] = None
     context: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
     chunk_count: int = 0
     created_at: str
@@ -949,6 +960,7 @@ class DocumentCreate(BaseModel):
     content: str = Field(..., min_length=1)
     context: Optional[str] = None
     category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
     folder: Optional[str] = None
 
 
@@ -957,6 +969,7 @@ class DocumentUpdate(BaseModel):
     content: Optional[str] = None
     context: Optional[str] = None
     category: Optional[Category] = None
+    visibility: Optional[KnowledgeVisibility] = None
     folder: Optional[str] = None
 
 
@@ -978,6 +991,7 @@ def _doc_out(d: KnowledgeDocument, chunk_count: int) -> DocumentOut:
         source_filename=d.source_filename,
         context=d.context,
         category=d.category.value if isinstance(d.category, Category) else d.category,
+        visibility=d.visibility.value if isinstance(d.visibility, KnowledgeVisibility) else (d.visibility or "all"),
         folder=d.folder,
         chunk_count=chunk_count,
         created_at=d.created_at.isoformat() if d.created_at else "",
@@ -1007,6 +1021,7 @@ async def create_document(data: DocumentCreate, user: RequireUser, db: AsyncSess
         content=data.content.strip(),
         context=(data.context.strip() if data.context and data.context.strip() else None),
         category=data.category,
+        visibility=data.visibility or KnowledgeVisibility.all,
         folder=(data.folder.strip() if data.folder else None),
         created_by=user.ha_user_id,
     )
@@ -1023,6 +1038,7 @@ async def upload_document(
     title: Optional[str] = Query(None),
     context: Optional[str] = Query(None),
     category: Optional[Category] = Query(None),
+    visibility: KnowledgeVisibility = Query(KnowledgeVisibility.all),
     folder: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
@@ -1045,6 +1061,7 @@ async def upload_document(
         content=content,
         context=ctx,
         category=category,
+        visibility=visibility or KnowledgeVisibility.all,
         folder=(folder.strip() if folder else None),
         created_by=user.ha_user_id,
     )
@@ -1095,6 +1112,8 @@ async def update_document(
             content_changed = True  # context zit in de chunks → opnieuw opbouwen
     if "category" in updates:
         doc.category = updates["category"]
+    if "visibility" in updates and updates["visibility"] is not None:
+        doc.visibility = updates["visibility"]
     if "folder" in updates:
         folder = updates["folder"]
         doc.folder = folder.strip() if isinstance(folder, str) and folder.strip() else None

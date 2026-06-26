@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import {
   knowledgeApi,
   CATEGORY_LABELS,
+  VISIBILITY_LABELS,
   parseUTC,
   type KnowledgeEntry,
   type KnowledgeQuestion,
@@ -10,8 +11,11 @@ import {
   type KnowledgeSearchResults,
   type KnowledgeDocumentMatch,
   type Category,
+  type KnowledgeVisibility,
   type KnowledgeImportResult,
 } from "../api/client";
+
+const ALL_VISIBILITIES = Object.keys(VISIBILITY_LABELS) as KnowledgeVisibility[];
 
 /** Verwijder markdown-afbeeldingen uit een tekst voor een korte preview. */
 function stripImages(md: string): string {
@@ -41,6 +45,7 @@ type DocEdit = {
   content: string;
   context: string;
   category: Category | "";
+  visibility: KnowledgeVisibility;
   folder: string;
 };
 
@@ -50,6 +55,7 @@ const EMPTY_FORM = {
   answer: "",
   keywords: "",
   category: "" as Category | "",
+  visibility: "all" as KnowledgeVisibility,
   folder: "",
 };
 
@@ -81,6 +87,7 @@ export default function KennisbankBeheer() {
   // Documenten + AI
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
   const [docCategory, setDocCategory] = useState<Category | "">("");
+  const [docVisibility, setDocVisibility] = useState<KnowledgeVisibility>("all");
   const [docFolder, setDocFolder] = useState("");
   const [aiSettings, setAiSettings] = useState<KnowledgeAiSettings | null>(null);
   const [docTitle, setDocTitle] = useState("");
@@ -181,7 +188,8 @@ export default function KennisbankBeheer() {
           docTitle.trim() || undefined,
           docCategory || null,
           docFolder.trim() || null,
-          docContext.trim() || null
+          docContext.trim() || null,
+          docVisibility
         );
       } else {
         r = await knowledgeApi.createDocument({
@@ -189,6 +197,7 @@ export default function KennisbankBeheer() {
           content: docContent.trim(),
           context: docContext.trim() || null,
           category: docCategory || null,
+          visibility: docVisibility,
           folder: docFolder.trim() || null,
         });
       }
@@ -242,6 +251,7 @@ export default function KennisbankBeheer() {
         content: r.data.content,
         context: r.data.context ?? "",
         category: r.data.category ?? "",
+        visibility: r.data.visibility ?? "all",
         folder: r.data.folder ?? "",
       });
     } catch {
@@ -291,6 +301,7 @@ export default function KennisbankBeheer() {
         content: docEdit.content.trim(),
         context: docEdit.context.trim() || null,
         category: docEdit.category || null,
+        visibility: docEdit.visibility,
         folder: docEdit.folder.trim() || null,
       });
       setDocEdit(null);
@@ -337,6 +348,7 @@ export default function KennisbankBeheer() {
       answer: q.proposed_answer ?? "", // voorvullen met de oplossing van de medewerker
       keywords: "",
       category: q.category ?? "",
+      visibility: "all",
       folder: "",
     });
     setFormImages([]);
@@ -371,6 +383,7 @@ export default function KennisbankBeheer() {
       answer: e.answer,
       keywords: e.keywords ?? "",
       category: e.category ?? "",
+      visibility: e.visibility ?? "all",
       folder: e.folder ?? "",
     });
     setFormImages(e.images ?? []);
@@ -445,6 +458,7 @@ export default function KennisbankBeheer() {
       answer: form.answer.trim(),
       keywords: form.keywords.trim() || null,
       category: form.category || null,
+      visibility: form.visibility,
       folder: form.folder.trim() || null,
     };
     try {
@@ -769,6 +783,11 @@ export default function KennisbankBeheer() {
                         {e.source_ticket_id && (
                           <span className="text-[10px] text-gray-400">uit ticket</span>
                         )}
+                        {e.visibility !== "all" && (
+                          <span className="text-[10px] font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                            {VISIBILITY_LABELS[e.visibility]}
+                          </span>
+                        )}
                       </div>
                       <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">
                         {stripImages(e.answer)}
@@ -871,8 +890,21 @@ export default function KennisbankBeheer() {
                 className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
             </div>
+            <select
+              value={docVisibility}
+              onChange={(e) => setDocVisibility(e.target.value as KnowledgeVisibility)}
+              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+            >
+              {ALL_VISIBILITIES.map((v) => (
+                <option key={v} value={v}>
+                  Zichtbaar voor: {VISIBILITY_LABELS[v]}
+                </option>
+              ))}
+            </select>
             <p className="text-[11px] text-gray-400">
-              Afdeling + onderwerp gelden voor het volgende geplakte of geüploade document.
+              Afdeling, onderwerp + zichtbaarheid gelden voor het volgende geplakte of geüploade
+              document. "Alleen afdeling" gebruikt de afdeling hierboven; de bot geeft afgeschermde
+              documenten nooit aan onbevoegden prijs.
             </p>
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2">
@@ -941,7 +973,14 @@ export default function KennisbankBeheer() {
                     className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
                   >
                     <div className="min-w-0">
-                      <p className="font-semibold text-gray-900">{d.title}</p>
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <p className="font-semibold text-gray-900">{d.title}</p>
+                        {d.visibility !== "all" && (
+                          <span className="text-[10px] font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                            {VISIBILITY_LABELS[d.visibility]}
+                          </span>
+                        )}
+                      </div>
                       <p className="text-xs text-gray-400 mt-1">
                         {d.chunk_count} fragment{d.chunk_count === 1 ? "" : "en"}
                         {d.source_filename && ` · ${d.source_filename}`}
@@ -1085,6 +1124,24 @@ export default function KennisbankBeheer() {
               </select>
             </div>
             <div>
+              <label className="text-xs font-medium text-gray-600">Zichtbaar voor</label>
+              <select
+                value={form.visibility}
+                onChange={(e) => setForm({ ...form, visibility: e.target.value as KnowledgeVisibility })}
+                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
+              >
+                {ALL_VISIBILITIES.map((v) => (
+                  <option key={v} value={v}>
+                    {VISIBILITY_LABELS[v]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Bepaalt wie dit item ziet én via de kennisbot te horen krijgt. "Alleen afdeling"
+                gebruikt de afdeling hierboven. Admin & supervisor zien (vrijwel) alles.
+              </p>
+            </div>
+            <div>
               <label className="text-xs font-medium text-gray-600">Onderwerp / map (optioneel)</label>
               <input
                 value={form.folder}
@@ -1200,6 +1257,26 @@ export default function KennisbankBeheer() {
                 list="kb-folders"
                 className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
               />
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Zichtbaar voor</label>
+              <select
+                value={docEdit.visibility}
+                onChange={(e) =>
+                  setDocEdit({ ...docEdit, visibility: e.target.value as KnowledgeVisibility })
+                }
+                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
+              >
+                {ALL_VISIBILITIES.map((v) => (
+                  <option key={v} value={v}>
+                    {VISIBILITY_LABELS[v]}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-gray-400 mt-1">
+                Bepaalt wie dit document via de kennisbot te horen krijgt. "Alleen afdeling" gebruikt
+                de afdeling hierboven.
+              </p>
             </div>
             {docEditError && <p className="text-sm text-red-600">{docEditError}</p>}
             <div className="flex items-center justify-between gap-2 pt-1">
