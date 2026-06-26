@@ -86,6 +86,7 @@ export default function KennisbankBeheer() {
   const [docTitle, setDocTitle] = useState("");
   const [docContent, setDocContent] = useState("");
   const [docContext, setDocContext] = useState("");
+  const [docFile, setDocFile] = useState<File | null>(null);
   const [docSaving, setDocSaving] = useState(false);
   const [docMsg, setDocMsg] = useState("");
   const [cleaning, setCleaning] = useState(false);
@@ -146,51 +147,60 @@ export default function KennisbankBeheer() {
     setAiSettings(r.data);
   }
 
-  async function savePastedDoc() {
-    if (!docTitle.trim() || !docContent.trim()) return;
-    setDocSaving(true);
+  /** Zet een gekozen bestand klaar (nog niet opslaan). Vul de titel voor uit de
+   * bestandsnaam als die nog leeg is. */
+  function pickFile(file: File) {
+    setDocFile(file);
     setDocMsg("");
-    try {
-      const r = await knowledgeApi.createDocument({
-        title: docTitle.trim(),
-        content: docContent.trim(),
-        context: docContext.trim() || null,
-        category: docCategory || null,
-        folder: docFolder.trim() || null,
-      });
-      setDocMsg(`Toegevoegd: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
-      setDocTitle("");
-      setDocContent("");
-      setDocContext("");
-      loadDocuments();
-    } catch {
-      setDocMsg("Opslaan mislukt.");
-    } finally {
-      setDocSaving(false);
+    if (!docTitle.trim()) {
+      setDocTitle(file.name.replace(/\.[^.]+$/, ""));
     }
+    if (docInputRef.current) docInputRef.current.value = "";
   }
 
-  async function uploadDoc(file: File) {
+  function clearDocForm() {
+    setDocFile(null);
+    setDocTitle("");
+    setDocContent("");
+    setDocContext("");
+  }
+
+  /** Eén opslag-actie: een klaargezet bestand wordt geüpload, anders wordt de
+   * geplakte tekst opgeslagen. In beide gevallen gaan titel + context mee. */
+  async function saveDoc() {
+    const canUpload = !!docFile;
+    const canPaste = !!docTitle.trim() && !!docContent.trim();
+    if (!canUpload && !canPaste) return;
     setDocSaving(true);
     setDocMsg("");
     try {
-      const r = await knowledgeApi.uploadDocument(
-        file,
-        undefined,
-        docCategory || null,
-        docFolder.trim() || null,
-        docContext.trim() || null
-      );
-      setDocMsg(`Geüpload: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
-      setDocContext("");
+      let r;
+      if (docFile) {
+        r = await knowledgeApi.uploadDocument(
+          docFile,
+          docTitle.trim() || undefined,
+          docCategory || null,
+          docFolder.trim() || null,
+          docContext.trim() || null
+        );
+      } else {
+        r = await knowledgeApi.createDocument({
+          title: docTitle.trim(),
+          content: docContent.trim(),
+          context: docContext.trim() || null,
+          category: docCategory || null,
+          folder: docFolder.trim() || null,
+        });
+      }
+      setDocMsg(`Opgeslagen: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
+      clearDocForm();
       loadDocuments();
     } catch (err: unknown) {
       const detail =
-        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Upload mislukt.";
+        (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Opslaan mislukt.";
       setDocMsg(detail);
     } finally {
       setDocSaving(false);
-      if (docInputRef.current) docInputRef.current.value = "";
     }
   }
 
@@ -796,7 +806,8 @@ export default function KennisbankBeheer() {
         <div className="space-y-4">
           <p className="text-xs text-gray-500">
             Documenten zijn vrije tekst die de AI doorzoekt om antwoorden uit te formuleren.
-            Plak tekst of upload een bestand (.md, .txt, .pdf of .zip). Werkt alleen als AI aanstaat.
+            Plak tekst óf kies een bestand (.md, .txt, .pdf of .zip) en druk op Opslaan.
+            Werkt alleen als AI aanstaat.
           </p>
 
           {/* Plakken */}
@@ -807,13 +818,27 @@ export default function KennisbankBeheer() {
               placeholder="Titel van het document"
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
             />
-            <textarea
-              value={docContent}
-              onChange={(e) => setDocContent(e.target.value)}
-              placeholder="Plak hier de tekst... (mag leeg blijven bij een upload)"
-              rows={5}
-              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
-            />
+            {docFile ? (
+              <div className="flex items-center justify-between gap-2 border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
+                <span className="text-sm text-gray-700 truncate">📄 {docFile.name}</span>
+                <button
+                  type="button"
+                  onClick={() => setDocFile(null)}
+                  className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
+                  title="Bestand verwijderen"
+                >
+                  ×
+                </button>
+              </div>
+            ) : (
+              <textarea
+                value={docContent}
+                onChange={(e) => setDocContent(e.target.value)}
+                placeholder="Plak hier de tekst, of kies hieronder een bestand..."
+                rows={5}
+                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+              />
+            )}
             <textarea
               value={docContext}
               onChange={(e) => setDocContext(e.target.value)}
@@ -858,19 +883,21 @@ export default function KennisbankBeheer() {
                   className="hidden"
                   onChange={(e) => {
                     const f = e.target.files?.[0];
-                    if (f) uploadDoc(f);
+                    if (f) pickFile(f);
                   }}
                 />
-                <button
-                  onClick={() => docInputRef.current?.click()}
-                  disabled={docSaving}
-                  className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
-                >
-                  Bestand uploaden
-                </button>
+                {!docFile && (
+                  <button
+                    onClick={() => docInputRef.current?.click()}
+                    disabled={docSaving}
+                    className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Bestand kiezen
+                  </button>
+                )}
               </div>
               <div className="flex items-center gap-2">
-                {aiSettings?.ai_available && (
+                {aiSettings?.ai_available && !docFile && (
                   <button
                     onClick={cleanupNewDoc}
                     disabled={cleaning || !docContent.trim()}
@@ -881,11 +908,11 @@ export default function KennisbankBeheer() {
                   </button>
                 )}
                 <button
-                  onClick={savePastedDoc}
-                  disabled={docSaving || !docTitle.trim() || !docContent.trim()}
+                  onClick={saveDoc}
+                  disabled={docSaving || (!docFile && (!docTitle.trim() || !docContent.trim()))}
                   className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
                 >
-                  {docSaving ? "Bezig..." : "Tekst opslaan"}
+                  {docSaving ? "Bezig..." : "Opslaan"}
                 </button>
               </div>
             </div>
