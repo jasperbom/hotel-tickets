@@ -652,10 +652,17 @@ export interface KnowledgeQuestion {
   resolved_by: string | null;
 }
 
+export interface AskDocument {
+  id: string;
+  title: string;
+  images: string[];
+}
+
 export interface AskResponse {
   answered: boolean;
   question_id: string;
   entries: KnowledgeEntry[];
+  documents?: AskDocument[];
   ai_answer?: string | null;
   source?: "ai" | "entries" | null;
 }
@@ -669,6 +676,7 @@ export interface KnowledgeDocument {
   category: Category | null;
   visibility: KnowledgeVisibility;
   folder: string | null;
+  images: string[];
   chunk_count: number;
   created_at: string;
 }
@@ -811,6 +819,17 @@ export const knowledgeApi = {
     data: { title?: string; content?: string; context?: string | null; keywords?: string | null; category?: Category | null; visibility?: KnowledgeVisibility; folder?: string | null }
   ) => api.patch<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`, data),
   removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
+  docImageUrl: (documentId: string, filename: string) =>
+    `${API_BASE}/knowledge/documents/${documentId}/images/${filename}`,
+  uploadDocImage: (documentId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return api.post<{ filename: string }>(`/knowledge/documents/${documentId}/images`, form, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteDocImage: (documentId: string, filename: string) =>
+    api.delete(`/knowledge/documents/${documentId}/images/${filename}`),
   aiCleanup: (text: string) =>
     api.post<KnowledgeCleanupResult>("/knowledge/ai/cleanup", { text }),
   searchBeheer: (q: string) =>

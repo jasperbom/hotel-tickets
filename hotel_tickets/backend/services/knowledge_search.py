@@ -196,6 +196,42 @@ async def search_chunks(
         return []
 
 
+async def search_chunk_documents(
+    db: AsyncSession,
+    question: str,
+    category: "Category | None" = None,
+    limit: int = 8,
+    user=None,
+) -> list[str]:
+    """Geef de (gededupliceerde, op relevantie geordende) document-id's terug
+    waarvan de best matchende chunks komen — gebruikt om bijbehorende foto's bij
+    een bot-antwoord te tonen. Respecteert de zichtbaarheid van het document."""
+    fts_query = _build_fts_query(question)
+    if not fts_query:
+        return []
+    vis_sql, vis_params = _doc_visibility_sql(user)
+    try:
+        rows = await db.execute(
+            text(
+                "SELECT knowledge_chunk_fts.document_id FROM knowledge_chunk_fts "
+                "JOIN knowledge_documents d ON d.id = knowledge_chunk_fts.document_id "
+                "WHERE knowledge_chunk_fts MATCH :q AND " + vis_sql + " "
+                "ORDER BY bm25(knowledge_chunk_fts) LIMIT :lim"
+            ),
+            {"q": fts_query, "lim": limit, **vis_params},
+        )
+        seen: set[str] = set()
+        out: list[str] = []
+        for r in rows.fetchall():
+            if r[0] and r[0] not in seen:
+                seen.add(r[0])
+                out.append(r[0])
+        return out
+    except Exception as exc:  # pragma: no cover - defensief
+        logger.warning("Chunk-document-zoekopdracht mislukt: %s", exc)
+        return []
+
+
 # Singleton-instantie die de router gebruikt. Later kan dit op basis van de
 # 'knowledge_ai_enabled'-instelling een SemanticKnowledgeSearch worden.
 knowledge_search = FtsKnowledgeSearch()

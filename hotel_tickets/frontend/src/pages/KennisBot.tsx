@@ -22,12 +22,18 @@ function stripImageMarkdown(s: string): string {
   return s.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\n{3,}/g, "\n\n").trim();
 }
 
-/** Verzamel de foto's van de gevonden kennis-items (max een paar, met bron-titel). */
+/** Verzamel de foto's van de gevonden kennis (items + documenten), max een paar. */
 function imagesFromResponse(d: AskResponse): ChatImage[] {
   const out: ChatImage[] = [];
   for (const e of d.entries || []) {
     for (const f of e.images || []) {
       out.push({ url: knowledgeApi.imageUrl(e.id, f), alt: e.title });
+      if (out.length >= 8) return out;
+    }
+  }
+  for (const doc of d.documents || []) {
+    for (const f of doc.images || []) {
+      out.push({ url: knowledgeApi.docImageUrl(doc.id, f), alt: doc.title });
       if (out.length >= 8) return out;
     }
   }
