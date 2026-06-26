@@ -831,6 +831,7 @@ export default function KennisbankBeheer() {
 
           {/* Plakken */}
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-2">
+            <PrivacyNotice />
             <input
               value={docTitle}
               onChange={(e) => setDocTitle(e.target.value)}
@@ -1025,6 +1026,7 @@ export default function KennisbankBeheer() {
                 ? "Item bewerken"
                 : "Nieuw kennis-item"}
             </h2>
+            <PrivacyNotice />
             <div>
               <label className="text-xs font-medium text-gray-600">Titel / onderwerp</label>
               <input
@@ -1202,6 +1204,7 @@ export default function KennisbankBeheer() {
             className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto"
           >
             <h2 className="font-bold text-gray-900">Document bewerken</h2>
+            <PrivacyNotice />
             <div>
               <label className="text-xs font-medium text-gray-600">Titel</label>
               <input
@@ -1655,6 +1658,19 @@ function GroupedSections<T extends { id: string; category: Category | null; fold
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/** Waarschuwing tegen het opslaan van gevoelige gegevens — overal hetzelfde. */
+function PrivacyNotice() {
+  return (
+    <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+      <span aria-hidden>⚠️</span>
+      <span>
+        Zet hier <strong>geen persoonsgegevens, gebruikersnamen of wachtwoorden</strong> in — de
+        kennisbank is leesbaar voor medewerkers en wordt door de kennisbot gebruikt.
+      </span>
     </div>
   );
 }
