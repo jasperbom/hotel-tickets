@@ -911,8 +911,17 @@ def _extract_text(filename: str, raw: bytes) -> str:
 
 
 async def _store_document_chunks(db: AsyncSession, doc: KnowledgeDocument) -> int:
-    for ch in _chunk_text(doc.content):
-        db.add(KnowledgeChunk(document_id=doc.id, ordinal=0, content=ch))
+    # De toelichting (context) wordt voor elk fragment geplakt, zodat de AI bij
+    # élk opgehaald stuk weet waar het document over gaat — handig wanneer een
+    # PDF kromme of context-loze tekst oplevert.
+    context = (doc.context or "").strip()
+    prefix = f"[Context: {context}]\n\n" if context else ""
+    pieces = _chunk_text(doc.content)
+    if not pieces and context:
+        # Geen bruikbare inhoud, maar wél een toelichting → bewaar de context zelf.
+        pieces = [""]
+    for ch in pieces:
+        db.add(KnowledgeChunk(document_id=doc.id, ordinal=0, content=(prefix + ch).strip()))
     await db.flush()
     count = await db.scalar(
         select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == doc.id)
@@ -924,6 +933,7 @@ class DocumentOut(BaseModel):
     id: str
     title: str
     source_filename: Optional[str] = None
+    context: Optional[str] = None
     category: Optional[Category] = None
     folder: Optional[str] = None
     chunk_count: int = 0
@@ -937,6 +947,7 @@ class DocumentDetailOut(DocumentOut):
 class DocumentCreate(BaseModel):
     title: str = Field(..., min_length=1)
     content: str = Field(..., min_length=1)
+    context: Optional[str] = None
     category: Optional[Category] = None
     folder: Optional[str] = None
 
@@ -944,6 +955,7 @@ class DocumentCreate(BaseModel):
 class DocumentUpdate(BaseModel):
     title: Optional[str] = None
     content: Optional[str] = None
+    context: Optional[str] = None
     category: Optional[Category] = None
     folder: Optional[str] = None
 
@@ -964,6 +976,7 @@ def _doc_out(d: KnowledgeDocument, chunk_count: int) -> DocumentOut:
         id=d.id,
         title=d.title,
         source_filename=d.source_filename,
+        context=d.context,
         category=d.category.value if isinstance(d.category, Category) else d.category,
         folder=d.folder,
         chunk_count=chunk_count,
@@ -992,6 +1005,7 @@ async def create_document(data: DocumentCreate, user: RequireUser, db: AsyncSess
     doc = KnowledgeDocument(
         title=data.title.strip(),
         content=data.content.strip(),
+        context=(data.context.strip() if data.context and data.context.strip() else None),
         category=data.category,
         folder=(data.folder.strip() if data.folder else None),
         created_by=user.ha_user_id,
@@ -1007,20 +1021,29 @@ async def upload_document(
     user: RequireUser,
     file: UploadFile = File(...),
     title: Optional[str] = Query(None),
+    context: Optional[str] = Query(None),
     category: Optional[Category] = Query(None),
     folder: Optional[str] = Query(None),
     db: AsyncSession = Depends(get_db),
 ):
-    """Upload een document (.md/.txt/.pdf/.zip) als kennisbron voor de AI."""
+    """Upload een document (.md/.txt/.pdf/.zip) als kennisbron voor de AI.
+    Met `context` geef je een toelichting mee die de AI helpt de tekst te duiden
+    (handig bij PDF's die kromme of onsamenhangende tekst opleveren)."""
     _require_admin(user)
     raw = await file.read()
     content = _extract_text(file.filename or "", raw).strip()
-    if not content:
-        raise HTTPException(400, "Geen tekst gevonden in het bestand")
+    ctx = (context.strip() if context and context.strip() else None)
+    if not content and not ctx:
+        raise HTTPException(
+            400,
+            "Geen tekst gevonden in het bestand. Voeg een context/toelichting toe "
+            "om dit bestand toch op te slaan.",
+        )
     doc = KnowledgeDocument(
         title=(title or os.path.splitext(file.filename or "Document")[0]).strip() or "Document",
         source_filename=file.filename,
         content=content,
+        context=ctx,
         category=category,
         folder=(folder.strip() if folder else None),
         created_by=user.ha_user_id,
@@ -1064,6 +1087,12 @@ async def update_document(
         if new_content and new_content != (doc.content or ""):
             doc.content = new_content
             content_changed = True
+    if "context" in updates:
+        new_ctx = updates["context"]
+        new_ctx = new_ctx.strip() if isinstance(new_ctx, str) and new_ctx.strip() else None
+        if new_ctx != (doc.context or None):
+            doc.context = new_ctx
+            content_changed = True  # context zit in de chunks → opnieuw opbouwen
     if "category" in updates:
         doc.category = updates["category"]
     if "folder" in updates:
@@ -1159,6 +1188,7 @@ async def search_all(
             or_(
                 KnowledgeDocument.title.ilike(like),
                 KnowledgeDocument.content.ilike(like),
+                KnowledgeDocument.context.ilike(like),
                 KnowledgeDocument.folder.ilike(like),
             )
         )

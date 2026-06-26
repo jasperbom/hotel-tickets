@@ -653,6 +653,7 @@ export interface KnowledgeDocument {
   id: string;
   title: string;
   source_filename: string | null;
+  context: string | null;
   category: Category | null;
   folder: string | null;
   chunk_count: number;
@@ -764,13 +765,20 @@ export const knowledgeApi = {
   },
   // Documenten (RAG-bron)
   listDocuments: () => api.get<KnowledgeDocument[]>("/knowledge/documents"),
-  createDocument: (data: { title: string; content: string; category?: Category | null; folder?: string | null }) =>
+  createDocument: (data: { title: string; content: string; context?: string | null; category?: Category | null; folder?: string | null }) =>
     api.post<KnowledgeDocument>("/knowledge/documents", data),
-  uploadDocument: (file: File, title?: string, category?: Category | null, folder?: string | null) => {
+  uploadDocument: (
+    file: File,
+    title?: string,
+    category?: Category | null,
+    folder?: string | null,
+    context?: string | null
+  ) => {
     const form = new FormData();
     form.append("file", file);
     const params = new URLSearchParams();
     if (title) params.set("title", title);
+    if (context) params.set("context", context);
     if (category) params.set("category", category);
     if (folder) params.set("folder", folder);
     const qs = params.toString() ? `?${params.toString()}` : "";
@@ -781,7 +789,7 @@ export const knowledgeApi = {
   getDocument: (id: string) => api.get<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`),
   updateDocument: (
     id: string,
-    data: { title?: string; content?: string; category?: Category | null; folder?: string | null }
+    data: { title?: string; content?: string; context?: string | null; category?: Category | null; folder?: string | null }
   ) => api.patch<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`, data),
   removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
   aiCleanup: (text: string) =>
