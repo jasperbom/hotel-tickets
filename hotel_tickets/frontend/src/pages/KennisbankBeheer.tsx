@@ -39,6 +39,7 @@ type DocEdit = {
   id: string;
   title: string;
   content: string;
+  context: string;
   category: Category | "";
   folder: string;
 };
@@ -84,6 +85,7 @@ export default function KennisbankBeheer() {
   const [aiSettings, setAiSettings] = useState<KnowledgeAiSettings | null>(null);
   const [docTitle, setDocTitle] = useState("");
   const [docContent, setDocContent] = useState("");
+  const [docContext, setDocContext] = useState("");
   const [docSaving, setDocSaving] = useState(false);
   const [docMsg, setDocMsg] = useState("");
   const [cleaning, setCleaning] = useState(false);
@@ -152,12 +154,14 @@ export default function KennisbankBeheer() {
       const r = await knowledgeApi.createDocument({
         title: docTitle.trim(),
         content: docContent.trim(),
+        context: docContext.trim() || null,
         category: docCategory || null,
         folder: docFolder.trim() || null,
       });
       setDocMsg(`Toegevoegd: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
       setDocTitle("");
       setDocContent("");
+      setDocContext("");
       loadDocuments();
     } catch {
       setDocMsg("Opslaan mislukt.");
@@ -174,9 +178,11 @@ export default function KennisbankBeheer() {
         file,
         undefined,
         docCategory || null,
-        docFolder.trim() || null
+        docFolder.trim() || null,
+        docContext.trim() || null
       );
       setDocMsg(`Geüpload: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
+      setDocContext("");
       loadDocuments();
     } catch (err: unknown) {
       const detail =
@@ -224,6 +230,7 @@ export default function KennisbankBeheer() {
         id: r.data.id,
         title: r.data.title,
         content: r.data.content,
+        context: r.data.context ?? "",
         category: r.data.category ?? "",
         folder: r.data.folder ?? "",
       });
@@ -272,6 +279,7 @@ export default function KennisbankBeheer() {
       await knowledgeApi.updateDocument(docEdit.id, {
         title: docEdit.title.trim(),
         content: docEdit.content.trim(),
+        context: docEdit.context.trim() || null,
         category: docEdit.category || null,
         folder: docEdit.folder.trim() || null,
       });
@@ -802,10 +810,21 @@ export default function KennisbankBeheer() {
             <textarea
               value={docContent}
               onChange={(e) => setDocContent(e.target.value)}
-              placeholder="Plak hier de tekst..."
+              placeholder="Plak hier de tekst... (mag leeg blijven bij een upload)"
               rows={5}
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
             />
+            <textarea
+              value={docContext}
+              onChange={(e) => setDocContext(e.target.value)}
+              placeholder="Context / toelichting (optioneel) — bijv. waar dit document over gaat of hoe het gelezen moet worden"
+              rows={2}
+              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+            />
+            <p className="text-[11px] text-gray-400 -mt-1">
+              De context wordt bij elk zoekfragment gevoegd, zodat de AI de tekst beter begrijpt.
+              Handig bij PDF's die kromme of onsamenhangende tekst opleveren.
+            </p>
             <div className="flex gap-2">
               <select
                 value={docCategory}
@@ -899,6 +918,7 @@ export default function KennisbankBeheer() {
                       <p className="text-xs text-gray-400 mt-1">
                         {d.chunk_count} fragment{d.chunk_count === 1 ? "" : "en"}
                         {d.source_filename && ` · ${d.source_filename}`}
+                        {d.context && " · 📝 context"}
                       </p>
                     </div>
                     <div className="flex flex-col gap-1.5 shrink-0">
@@ -1116,6 +1136,19 @@ export default function KennisbankBeheer() {
               />
               <p className="text-[11px] text-gray-400 mt-1">
                 Bij opslaan worden de zoekfragmenten automatisch opnieuw opgebouwd.
+              </p>
+            </div>
+            <div>
+              <label className="text-xs font-medium text-gray-600">Context / toelichting</label>
+              <textarea
+                value={docEdit.context}
+                onChange={(e) => setDocEdit({ ...docEdit, context: e.target.value })}
+                rows={2}
+                placeholder="bijv. waar dit document over gaat of hoe het gelezen moet worden"
+                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
+              />
+              <p className="text-[11px] text-gray-400 mt-1">
+                Wordt bij elk zoekfragment gevoegd om de AI te helpen de tekst te duiden.
               </p>
             </div>
             <div className="flex gap-2">

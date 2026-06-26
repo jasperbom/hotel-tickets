@@ -66,6 +66,7 @@ async def _run_migrations(conn):
         ("knowledge_entries", "images", "TEXT"),
         ("knowledge_entries", "folder", "VARCHAR(100)"),
         ("knowledge_documents", "folder", "VARCHAR(100)"),
+        ("knowledge_documents", "context", "TEXT"),
         ("knowledge_questions", "proposed_answer", "TEXT"),
         ("knowledge_questions", "proposed_by", "VARCHAR(255)"),
         ("knowledge_questions", "conversation", "TEXT"),

@@ -272,6 +272,9 @@ class KnowledgeDocument(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)
     source_filename: Mapped[str | None] = mapped_column(String(255))
     content: Mapped[str] = mapped_column(Text, nullable=False)
+    # Door een mens aangeleverde toelichting bij het document. Helpt de AI de
+    # (soms kromme) tekst uit een PDF te duiden; wordt mee-doorzocht.
+    context: Mapped[str | None] = mapped_column(Text)
     category: Mapped[Category | None] = mapped_column(Enum(Category))
     folder: Mapped[str | None] = mapped_column(String(100))         # onderwerp/map binnen de afdeling
     created_by: Mapped[str] = mapped_column(String(255), nullable=False)
