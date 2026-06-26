@@ -39,25 +39,34 @@ function fmtWhen(iso: string): string {
 
 type Tab = "overzicht" | "queue" | "entries" | "documents";
 
-type DocEdit = {
-  id: string;
+// Eén gedeelde invul-vorm voor zowel kennis-items als documenten. `body` is het
+// antwoord (item) of de inhoud (document). Zo gebruiken beide tabs exact
+// hetzelfde formulier; alleen de opslag verschilt onder water.
+type KFValue = {
   title: string;
-  content: string;
+  body: string;
   context: string;
+  keywords: string;
   category: Category | "";
   visibility: KnowledgeVisibility;
   folder: string;
 };
 
-const EMPTY_FORM = {
-  id: null as string | null,
+const EMPTY_KF: KFValue = {
   title: "",
-  answer: "",
+  body: "",
+  context: "",
   keywords: "",
-  category: "" as Category | "",
-  visibility: "all" as KnowledgeVisibility,
+  category: "",
+  visibility: "all",
   folder: "",
 };
+
+// Entry- en document-bewerkstate = de gedeelde vorm + een id.
+type EntryForm = KFValue & { id: string | null };
+type DocEdit = KFValue & { id: string };
+
+const EMPTY_FORM: EntryForm = { ...EMPTY_KF, id: null };
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
@@ -84,20 +93,16 @@ export default function KennisbankBeheer() {
   const [searching, setSearching] = useState(false);
   const searchActive = searchQ.trim().length > 0;
 
-  // Documenten + AI
+  // Documenten + AI — nieuw document via dezelfde modal als kennis-items
   const [documents, setDocuments] = useState<KnowledgeDocument[]>([]);
-  const [docCategory, setDocCategory] = useState<Category | "">("");
-  const [docVisibility, setDocVisibility] = useState<KnowledgeVisibility>("all");
-  const [docFolder, setDocFolder] = useState("");
   const [aiSettings, setAiSettings] = useState<KnowledgeAiSettings | null>(null);
-  const [docTitle, setDocTitle] = useState("");
-  const [docContent, setDocContent] = useState("");
-  const [docContext, setDocContext] = useState("");
+  const [showDocForm, setShowDocForm] = useState(false);
+  const [docForm, setDocForm] = useState<KFValue>(EMPTY_KF);
   const [docFile, setDocFile] = useState<File | null>(null);
   const [docSaving, setDocSaving] = useState(false);
   const [docMsg, setDocMsg] = useState("");
+  const [docError, setDocError] = useState("");
   const [cleaning, setCleaning] = useState(false);
-  const docInputRef = useRef<HTMLInputElement>(null);
 
   // Document bewerken (modal)
   const [docEdit, setDocEdit] = useState<DocEdit | null>(null);
@@ -158,56 +163,68 @@ export default function KennisbankBeheer() {
    * bestandsnaam als die nog leeg is. */
   function pickFile(file: File) {
     setDocFile(file);
-    setDocMsg("");
-    if (!docTitle.trim()) {
-      setDocTitle(file.name.replace(/\.[^.]+$/, ""));
-    }
-    if (docInputRef.current) docInputRef.current.value = "";
+    setDocError("");
+    setDocForm((f) => (f.title.trim() ? f : { ...f, title: file.name.replace(/\.[^.]+$/, "") }));
   }
 
-  function clearDocForm() {
+  function openDocForm() {
+    setDocForm(EMPTY_KF);
     setDocFile(null);
-    setDocTitle("");
-    setDocContent("");
-    setDocContext("");
+    setDocError("");
+    setDocMsg("");
+    setShowDocForm(true);
+  }
+
+  function closeDocForm() {
+    setShowDocForm(false);
+    setDocForm(EMPTY_KF);
+    setDocFile(null);
   }
 
   /** Eén opslag-actie: een klaargezet bestand wordt geüpload, anders wordt de
-   * geplakte tekst opgeslagen. In beide gevallen gaan titel + context mee. */
-  async function saveDoc() {
+   * geplakte tekst opgeslagen. In beide gevallen gaan alle velden mee. */
+  async function saveDoc(e: React.FormEvent) {
+    e.preventDefault();
+    const v = docForm;
     const canUpload = !!docFile;
-    const canPaste = !!docTitle.trim() && !!docContent.trim();
-    if (!canUpload && !canPaste) return;
+    const canPaste = !!v.title.trim() && !!v.body.trim();
+    if (!canUpload && !canPaste) {
+      setDocError("Geef een titel en inhoud op, of kies een bestand.");
+      return;
+    }
     setDocSaving(true);
+    setDocError("");
     setDocMsg("");
     try {
       let r;
       if (docFile) {
         r = await knowledgeApi.uploadDocument(
           docFile,
-          docTitle.trim() || undefined,
-          docCategory || null,
-          docFolder.trim() || null,
-          docContext.trim() || null,
-          docVisibility
+          v.title.trim() || undefined,
+          v.category || null,
+          v.folder.trim() || null,
+          v.context.trim() || null,
+          v.visibility,
+          v.keywords.trim() || null
         );
       } else {
         r = await knowledgeApi.createDocument({
-          title: docTitle.trim(),
-          content: docContent.trim(),
-          context: docContext.trim() || null,
-          category: docCategory || null,
-          visibility: docVisibility,
-          folder: docFolder.trim() || null,
+          title: v.title.trim(),
+          content: v.body.trim(),
+          context: v.context.trim() || null,
+          keywords: v.keywords.trim() || null,
+          category: v.category || null,
+          visibility: v.visibility,
+          folder: v.folder.trim() || null,
         });
       }
       setDocMsg(`Opgeslagen: "${r.data.title}" (${r.data.chunk_count} fragmenten)`);
-      clearDocForm();
+      closeDocForm();
       loadDocuments();
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ?? "Opslaan mislukt.";
-      setDocMsg(detail);
+      setDocError(detail);
     } finally {
       setDocSaving(false);
     }
@@ -219,23 +236,25 @@ export default function KennisbankBeheer() {
     loadDocuments();
   }
 
-  /** Laat Claude de geplakte tekst herstructureren en vul titel/afdeling/onderwerp voor. */
+  /** Laat Claude de tekst van het nieuwe document herstructureren en titel/afdeling/onderwerp voorstellen. */
   async function cleanupNewDoc() {
-    if (!docContent.trim()) return;
+    if (!docForm.body.trim()) return;
     setCleaning(true);
-    setDocMsg("");
+    setDocError("");
     try {
-      const r = await knowledgeApi.aiCleanup(docContent);
-      if (r.data.title) setDocTitle(r.data.title);
-      if (r.data.category) setDocCategory(r.data.category);
-      if (r.data.folder) setDocFolder(r.data.folder);
-      if (r.data.content) setDocContent(r.data.content);
-      setDocMsg("✨ Netjes gemaakt. Controleer het resultaat en sla op.");
+      const r = await knowledgeApi.aiCleanup(docForm.body);
+      setDocForm((f) => ({
+        ...f,
+        title: r.data.title || f.title,
+        category: (r.data.category as Category) || f.category,
+        folder: r.data.folder || f.folder,
+        body: r.data.content || f.body,
+      }));
     } catch (err: unknown) {
       const detail =
         (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail ??
         "Opschonen mislukt.";
-      setDocMsg(detail);
+      setDocError(detail);
     } finally {
       setCleaning(false);
     }
@@ -248,8 +267,9 @@ export default function KennisbankBeheer() {
       setDocEdit({
         id: r.data.id,
         title: r.data.title,
-        content: r.data.content,
+        body: r.data.content,
         context: r.data.context ?? "",
+        keywords: r.data.keywords ?? "",
         category: r.data.category ?? "",
         visibility: r.data.visibility ?? "all",
         folder: r.data.folder ?? "",
@@ -260,18 +280,18 @@ export default function KennisbankBeheer() {
   }
 
   async function cleanupEditDoc() {
-    if (!docEdit || !docEdit.content.trim()) return;
+    if (!docEdit || !docEdit.body.trim()) return;
     setDocEditCleaning(true);
     setDocEditError("");
     try {
-      const r = await knowledgeApi.aiCleanup(docEdit.content);
+      const r = await knowledgeApi.aiCleanup(docEdit.body);
       setDocEdit((prev) =>
         prev
           ? {
               ...prev,
               title: r.data.title || prev.title,
-              content: r.data.content || prev.content,
-              category: r.data.category ?? prev.category,
+              body: r.data.content || prev.body,
+              category: (r.data.category as Category) ?? prev.category,
               folder: r.data.folder ?? prev.folder,
             }
           : prev
@@ -289,7 +309,7 @@ export default function KennisbankBeheer() {
   async function saveDocEdit(e: React.FormEvent) {
     e.preventDefault();
     if (!docEdit) return;
-    if (!docEdit.title.trim() || !docEdit.content.trim()) {
+    if (!docEdit.title.trim() || !docEdit.body.trim()) {
       setDocEditError("Titel en inhoud zijn verplicht.");
       return;
     }
@@ -298,8 +318,9 @@ export default function KennisbankBeheer() {
     try {
       await knowledgeApi.updateDocument(docEdit.id, {
         title: docEdit.title.trim(),
-        content: docEdit.content.trim(),
+        content: docEdit.body.trim(),
         context: docEdit.context.trim() || null,
+        keywords: docEdit.keywords.trim() || null,
         category: docEdit.category || null,
         visibility: docEdit.visibility,
         folder: docEdit.folder.trim() || null,
@@ -316,7 +337,7 @@ export default function KennisbankBeheer() {
   /** Laat Claude het huidige kennis-item (titel + inhoud) herschrijven tot nette
    * tekst en afdeling/onderwerp voorstellen. Werkt voor nieuwe én bestaande items. */
   async function cleanupEntryForm() {
-    const raw = `${form.title}\n\n${form.answer}`.trim();
+    const raw = `${form.title}\n\n${form.body}`.trim();
     if (!raw) return;
     setEntryCleaning(true);
     setError("");
@@ -325,7 +346,7 @@ export default function KennisbankBeheer() {
       setForm((prev) => ({
         ...prev,
         title: r.data.title || prev.title,
-        answer: r.data.content || prev.answer,
+        body: r.data.content || prev.body,
         category: (r.data.category as Category) || prev.category,
         folder: r.data.folder || prev.folder,
       }));
@@ -343,13 +364,10 @@ export default function KennisbankBeheer() {
 
   function answerQuestion(q: KnowledgeQuestion) {
     setForm({
-      id: null,
+      ...EMPTY_FORM,
       title: q.question_text,
-      answer: q.proposed_answer ?? "", // voorvullen met de oplossing van de medewerker
-      keywords: "",
+      body: q.proposed_answer ?? "", // voorvullen met de oplossing van de medewerker
       category: q.category ?? "",
-      visibility: "all",
-      folder: "",
     });
     setFormImages([]);
     setError("");
@@ -380,8 +398,9 @@ export default function KennisbankBeheer() {
     setForm({
       id: e.id,
       title: e.title,
-      answer: e.answer,
+      body: e.answer,
       keywords: e.keywords ?? "",
+      context: e.context ?? "",
       category: e.category ?? "",
       visibility: e.visibility ?? "all",
       folder: e.folder ?? "",
@@ -400,7 +419,7 @@ export default function KennisbankBeheer() {
       const fname = r.data.filename;
       setFormImages((prev) => [...prev, fname]);
       // Voeg de afbeelding toe aan het antwoord (markdown)
-      setForm((prev) => ({ ...prev, answer: `${prev.answer}\n\n![](${fname})`.trim() }));
+      setForm((prev) => ({ ...prev, body: `${prev.body}\n\n![](${fname})`.trim() }));
     } catch {
       alert("Uploaden mislukt.");
     } finally {
@@ -414,7 +433,7 @@ export default function KennisbankBeheer() {
     setFormImages((prev) => prev.filter((f) => f !== fname));
     setForm((prev) => ({
       ...prev,
-      answer: prev.answer.replace(new RegExp(`!\\[[^\\]]*\\]\\(${fname}\\)`, "g"), "").trim(),
+      body: prev.body.replace(new RegExp(`!\\[[^\\]]*\\]\\(${fname}\\)`, "g"), "").trim(),
     }));
   }
 
@@ -447,16 +466,17 @@ export default function KennisbankBeheer() {
 
   async function save(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.title.trim() || !form.answer.trim()) {
-      setError("Titel en antwoord zijn verplicht.");
+    if (!form.title.trim() || !form.body.trim()) {
+      setError("Titel en inhoud zijn verplicht.");
       return;
     }
     setSaving(true);
     setError("");
     const payload = {
       title: form.title.trim(),
-      answer: form.answer.trim(),
+      answer: form.body.trim(),
       keywords: form.keywords.trim() || null,
+      context: form.context.trim() || null,
       category: form.category || null,
       visibility: form.visibility,
       folder: form.folder.trim() || null,
@@ -523,6 +543,14 @@ export default function KennisbankBeheer() {
               + Nieuw item
             </button>
           </div>
+        )}
+        {tab === "documents" && (
+          <button
+            onClick={openDocForm}
+            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+          >
+            + Nieuw document
+          </button>
         )}
       </div>
 
@@ -825,138 +853,10 @@ export default function KennisbankBeheer() {
         <div className="space-y-4">
           <p className="text-xs text-gray-500">
             Documenten zijn vrije tekst die de AI doorzoekt om antwoorden uit te formuleren.
-            Plak tekst óf kies een bestand (.md, .txt, .pdf of .zip) en druk op Opslaan.
-            Werkt alleen als AI aanstaat.
+            Voeg er een toe via <strong>+ Nieuw document</strong> — plak tekst óf kies een bestand
+            (.md, .txt, .pdf of .zip). Werkt alleen als AI aanstaat.
           </p>
-
-          {/* Plakken */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 space-y-2">
-            <PrivacyNotice />
-            <input
-              value={docTitle}
-              onChange={(e) => setDocTitle(e.target.value)}
-              placeholder="Titel van het document"
-              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
-            />
-            {docFile ? (
-              <div className="flex items-center justify-between gap-2 border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
-                <span className="text-sm text-gray-700 truncate">📄 {docFile.name}</span>
-                <button
-                  type="button"
-                  onClick={() => setDocFile(null)}
-                  className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
-                  title="Bestand verwijderen"
-                >
-                  ×
-                </button>
-              </div>
-            ) : (
-              <textarea
-                value={docContent}
-                onChange={(e) => setDocContent(e.target.value)}
-                placeholder="Plak hier de tekst, of kies hieronder een bestand..."
-                rows={5}
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
-              />
-            )}
-            <textarea
-              value={docContext}
-              onChange={(e) => setDocContext(e.target.value)}
-              placeholder="Context / toelichting (optioneel) — bijv. waar dit document over gaat of hoe het gelezen moet worden"
-              rows={2}
-              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
-            />
-            <p className="text-[11px] text-gray-400 -mt-1">
-              De context wordt bij elk zoekfragment gevoegd, zodat de AI de tekst beter begrijpt.
-              Handig bij PDF's die kromme of onsamenhangende tekst opleveren.
-            </p>
-            <div className="flex gap-2">
-              <select
-                value={docCategory}
-                onChange={(e) => setDocCategory(e.target.value as Category | "")}
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-              >
-                <option value="">Afdeling (optioneel)</option>
-                {ALL_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {CATEGORY_LABELS[c]}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={docFolder}
-                onChange={(e) => setDocFolder(e.target.value)}
-                placeholder="Onderwerp / map"
-                list="kb-folders"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-            <select
-              value={docVisibility}
-              onChange={(e) => setDocVisibility(e.target.value as KnowledgeVisibility)}
-              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              {ALL_VISIBILITIES.map((v) => (
-                <option key={v} value={v}>
-                  Zichtbaar voor: {VISIBILITY_LABELS[v]}
-                </option>
-              ))}
-            </select>
-            <p className="text-[11px] text-gray-400">
-              Afdeling, onderwerp + zichtbaarheid gelden voor het volgende geplakte of geüploade
-              document. "Alleen afdeling" gebruikt de afdeling hierboven; de bot geeft afgeschermde
-              documenten nooit aan onbevoegden prijs.
-            </p>
-            <div className="flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <input
-                  ref={docInputRef}
-                  type="file"
-                  accept=".md,.markdown,.txt,.pdf,.zip"
-                  className="hidden"
-                  onChange={(e) => {
-                    const f = e.target.files?.[0];
-                    if (f) pickFile(f);
-                  }}
-                />
-                {!docFile && (
-                  <button
-                    onClick={() => docInputRef.current?.click()}
-                    disabled={docSaving}
-                    className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
-                  >
-                    Bestand kiezen
-                  </button>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                {aiSettings?.ai_available && !docFile && (
-                  <button
-                    onClick={cleanupNewDoc}
-                    disabled={cleaning || !docContent.trim()}
-                    title="Laat de AI je tekst herschrijven tot een nette pagina en afdeling/onderwerp voorstellen"
-                    className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50"
-                  >
-                    {cleaning ? "Bezig..." : "✨ Netjes maken"}
-                  </button>
-                )}
-                <button
-                  onClick={saveDoc}
-                  disabled={docSaving || (!docFile && (!docTitle.trim() || !docContent.trim()))}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {docSaving ? "Bezig..." : "Opslaan"}
-                </button>
-              </div>
-            </div>
-            {aiSettings?.ai_available && (
-              <p className="text-[11px] text-gray-400">
-                ✨ Netjes maken gebruikt je Claude API-sleutel om ruwe tekst te herschrijven tot een
-                overzichtelijke pagina en stelt afdeling + onderwerp voor.
-              </p>
-            )}
-            {docMsg && <p className="text-sm text-blue-700">{docMsg}</p>}
-          </div>
+          {docMsg && <p className="text-sm text-blue-700">{docMsg}</p>}
 
           {/* Lijst — gegroepeerd per afdeling → onderwerp */}
           {documents.length === 0 ? (
@@ -1012,308 +912,76 @@ export default function KennisbankBeheer() {
       </>
       )}
 
-      {/* Formulier (modal) */}
+      {/* Item-formulier (modal) — gedeeld component */}
       {showForm && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[60]">
-          <form
-            onSubmit={save}
-            className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto"
-          >
-            <h2 className="font-bold text-gray-900">
-              {answeringQuestionId
-                ? "Vraag beantwoorden"
-                : form.id
-                ? "Item bewerken"
-                : "Nieuw kennis-item"}
-            </h2>
-            <PrivacyNotice />
-            <div>
-              <label className="text-xs font-medium text-gray-600">Titel / onderwerp</label>
-              <input
-                value={form.title}
-                onChange={(e) => setForm({ ...form, title: e.target.value })}
-                placeholder="bijv. een vraag, of gewoon een onderwerp"
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">Informatie / antwoord</label>
-              <textarea
-                value={form.answer}
-                onChange={(e) => setForm({ ...form, answer: e.target.value })}
-                rows={5}
-                placeholder="Informatie hoeft geen antwoord op een vraag te zijn — je mag hier ook gewoon losse kennis kwijt."
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                Vrije tekst — een vraag/antwoord óf gewoon informatie. Markdown ondersteund
-                (koppen, lijsten, **vet**, afbeeldingen).
-              </p>
-            </div>
-
-            {/* Afbeeldingen — alleen bij een bestaand item */}
-            <div>
-              <label className="text-xs font-medium text-gray-600">Afbeeldingen</label>
-              {!form.id ? (
-                <p className="text-[11px] text-gray-400 mt-1">
-                  Sla het item eerst op; daarna kun je afbeeldingen toevoegen.
-                </p>
-              ) : (
-                <div className="mt-1 space-y-2">
-                  {formImages.length > 0 && (
-                    <div className="flex flex-wrap gap-2">
-                      {formImages.map((img) => (
-                        <div key={img} className="relative">
-                          <img
-                            src={knowledgeApi.imageUrl(form.id!, img)}
-                            alt=""
-                            className="h-16 w-16 object-cover rounded-lg border border-gray-200"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => deleteFormImage(img)}
-                            className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none"
-                            title="Verwijderen"
-                          >
-                            ×
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                  <label className="inline-block">
-                    <span className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 cursor-pointer inline-block">
-                      {uploadingImg ? "Uploaden..." : "+ Afbeelding"}
-                    </span>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      className="hidden"
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        if (f) uploadFormImage(f);
-                        e.target.value = "";
-                      }}
-                    />
-                  </label>
-                </div>
-              )}
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">
-                Trefwoorden (optioneel, verbetert zoeken)
-              </label>
-              <input
-                value={form.keywords}
-                onChange={(e) => setForm({ ...form, keywords: e.target.value })}
-                placeholder="bijv. ontkalken, reset, foutcode"
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">Afdeling (optioneel)</label>
-              <select
-                value={form.category}
-                onChange={(e) => setForm({ ...form, category: e.target.value as Category | "" })}
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
-              >
-                <option value="">Algemeen / alle afdelingen</option>
-                {ALL_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {CATEGORY_LABELS[c]}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">Zichtbaar voor</label>
-              <select
-                value={form.visibility}
-                onChange={(e) => setForm({ ...form, visibility: e.target.value as KnowledgeVisibility })}
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
-              >
-                {ALL_VISIBILITIES.map((v) => (
-                  <option key={v} value={v}>
-                    {VISIBILITY_LABELS[v]}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Bepaalt wie dit item ziet én via de kennisbot te horen krijgt. "Alleen afdeling"
-                gebruikt de afdeling hierboven. Admin & supervisor zien (vrijwel) alles.
-              </p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">Onderwerp / map (optioneel)</label>
-              <input
-                value={form.folder}
-                onChange={(e) => setForm({ ...form, folder: e.target.value })}
-                placeholder="bijv. Koffiemachine, Check-in, Wasserij"
-                list="kb-folders"
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                Groepeert items binnen een afdeling. Hergebruik bestaande namen voor overzicht.
-              </p>
-            </div>
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex items-center justify-between gap-2 pt-1">
-              {aiSettings?.ai_available ? (
-                <button
-                  type="button"
-                  onClick={cleanupEntryForm}
-                  disabled={entryCleaning || (!form.title.trim() && !form.answer.trim())}
-                  title="Laat de AI dit item herschrijven tot nette tekst en afdeling/onderwerp voorstellen"
-                  className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50"
-                >
-                  {entryCleaning ? "Bezig..." : "✨ Netjes maken"}
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setShowForm(false);
-                    setAnsweringQuestionId(null);
-                    setFormImages([]);
-                  }}
-                  className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
-                >
-                  Annuleren
-                </button>
-                <button
-                  type="submit"
-                  disabled={saving}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {saving ? "Opslaan..." : "Opslaan"}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
+        <KnowledgeFormModal
+          heading={
+            answeringQuestionId ? "Vraag beantwoorden" : form.id ? "Item bewerken" : "Nieuw kennis-item"
+          }
+          onSubmit={save}
+          onCancel={() => {
+            setShowForm(false);
+            setAnsweringQuestionId(null);
+            setFormImages([]);
+          }}
+          saving={saving}
+          error={error}
+        >
+          <KnowledgeForm
+            value={form}
+            onChange={(patch) => setForm((f) => ({ ...f, ...patch }))}
+            aiAvailable={aiSettings?.ai_available}
+            onCleanup={cleanupEntryForm}
+            cleaning={entryCleaning}
+            images={formImages}
+            onUploadImage={uploadFormImage}
+            onDeleteImage={deleteFormImage}
+            imageUrlFor={(name) => knowledgeApi.imageUrl(form.id!, name)}
+            imagesHint={form.id ? undefined : "Sla het item eerst op; daarna kun je afbeeldingen toevoegen."}
+            uploadingImg={uploadingImg}
+          />
+        </KnowledgeFormModal>
       )}
 
-      {/* Document bewerken (modal) */}
+      {/* Nieuw document (modal) — zelfde gedeelde component */}
+      {showDocForm && (
+        <KnowledgeFormModal
+          heading="Nieuw document"
+          onSubmit={saveDoc}
+          onCancel={closeDocForm}
+          saving={docSaving}
+          error={docError}
+        >
+          <KnowledgeForm
+            value={docForm}
+            onChange={(patch) => setDocForm((f) => ({ ...f, ...patch }))}
+            aiAvailable={aiSettings?.ai_available}
+            onCleanup={cleanupNewDoc}
+            cleaning={cleaning}
+            file={docFile}
+            onPickFile={pickFile}
+            onClearFile={() => setDocFile(null)}
+          />
+        </KnowledgeFormModal>
+      )}
+
+      {/* Document bewerken (modal) — zelfde gedeelde component */}
       {docEdit && (
-        <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[60]">
-          <form
-            onSubmit={saveDocEdit}
-            className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto"
-          >
-            <h2 className="font-bold text-gray-900">Document bewerken</h2>
-            <PrivacyNotice />
-            <div>
-              <label className="text-xs font-medium text-gray-600">Titel</label>
-              <input
-                value={docEdit.title}
-                onChange={(e) => setDocEdit({ ...docEdit, title: e.target.value })}
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">Inhoud</label>
-              <textarea
-                value={docEdit.content}
-                onChange={(e) => setDocEdit({ ...docEdit, content: e.target.value })}
-                rows={10}
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1 font-mono"
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                Bij opslaan worden de zoekfragmenten automatisch opnieuw opgebouwd.
-              </p>
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">Context / toelichting</label>
-              <textarea
-                value={docEdit.context}
-                onChange={(e) => setDocEdit({ ...docEdit, context: e.target.value })}
-                rows={2}
-                placeholder="bijv. waar dit document over gaat of hoe het gelezen moet worden"
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
-              />
-              <p className="text-[11px] text-gray-400 mt-1">
-                Wordt bij elk zoekfragment gevoegd om de AI te helpen de tekst te duiden.
-              </p>
-            </div>
-            <div className="flex gap-2">
-              <select
-                value={docEdit.category}
-                onChange={(e) =>
-                  setDocEdit({ ...docEdit, category: e.target.value as Category | "" })
-                }
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-              >
-                <option value="">Afdeling (optioneel)</option>
-                {ALL_CATEGORIES.map((c) => (
-                  <option key={c} value={c}>
-                    {CATEGORY_LABELS[c]}
-                  </option>
-                ))}
-              </select>
-              <input
-                value={docEdit.folder}
-                onChange={(e) => setDocEdit({ ...docEdit, folder: e.target.value })}
-                placeholder="Onderwerp / map"
-                list="kb-folders"
-                className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="text-xs font-medium text-gray-600">Zichtbaar voor</label>
-              <select
-                value={docEdit.visibility}
-                onChange={(e) =>
-                  setDocEdit({ ...docEdit, visibility: e.target.value as KnowledgeVisibility })
-                }
-                className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
-              >
-                {ALL_VISIBILITIES.map((v) => (
-                  <option key={v} value={v}>
-                    {VISIBILITY_LABELS[v]}
-                  </option>
-                ))}
-              </select>
-              <p className="text-[11px] text-gray-400 mt-1">
-                Bepaalt wie dit document via de kennisbot te horen krijgt. "Alleen afdeling" gebruikt
-                de afdeling hierboven.
-              </p>
-            </div>
-            {docEditError && <p className="text-sm text-red-600">{docEditError}</p>}
-            <div className="flex items-center justify-between gap-2 pt-1">
-              {aiSettings?.ai_available ? (
-                <button
-                  type="button"
-                  onClick={cleanupEditDoc}
-                  disabled={docEditCleaning || !docEdit.content.trim()}
-                  className="border border-purple-300 text-purple-700 px-4 py-2 rounded-lg text-sm hover:bg-purple-50 disabled:opacity-50"
-                >
-                  {docEditCleaning ? "Bezig..." : "✨ Netjes maken"}
-                </button>
-              ) : (
-                <span />
-              )}
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setDocEdit(null)}
-                  className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
-                >
-                  Annuleren
-                </button>
-                <button
-                  type="submit"
-                  disabled={docEditSaving}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-                >
-                  {docEditSaving ? "Opslaan..." : "Opslaan"}
-                </button>
-              </div>
-            </div>
-          </form>
-        </div>
+        <KnowledgeFormModal
+          heading="Document bewerken"
+          onSubmit={saveDocEdit}
+          onCancel={() => setDocEdit(null)}
+          saving={docEditSaving}
+          error={docEditError}
+        >
+          <KnowledgeForm
+            value={docEdit}
+            onChange={(patch) => setDocEdit((d) => (d ? { ...d, ...patch } : d))}
+            aiAvailable={aiSettings?.ai_available}
+            onCleanup={cleanupEditDoc}
+            cleaning={docEditCleaning}
+          />
+        </KnowledgeFormModal>
       )}
     </div>
   );
@@ -1658,6 +1326,295 @@ function GroupedSections<T extends { id: string; category: Category | null; fold
           </div>
         );
       })}
+    </div>
+  );
+}
+
+/**
+ * Eén gedeeld invul-formulier voor zowel kennis-items als documenten. Toont
+ * overal exact dezelfde velden; alleen de type-eigen extra's (afbeeldingen bij
+ * items, bestand-upload bij documenten) verschijnen waar ze logisch zijn.
+ */
+function KnowledgeForm({
+  value,
+  onChange,
+  bodyLabel = "Informatie / inhoud",
+  aiAvailable,
+  onCleanup,
+  cleaning,
+  file,
+  onPickFile,
+  onClearFile,
+  images,
+  onUploadImage,
+  onDeleteImage,
+  imageUrlFor,
+  imagesHint,
+  uploadingImg,
+}: {
+  value: KFValue;
+  onChange: (patch: Partial<KFValue>) => void;
+  bodyLabel?: string;
+  aiAvailable?: boolean;
+  onCleanup?: () => void;
+  cleaning?: boolean;
+  file?: File | null;
+  onPickFile?: (f: File) => void;
+  onClearFile?: () => void;
+  images?: string[];
+  onUploadImage?: (f: File) => void;
+  onDeleteImage?: (name: string) => void;
+  imageUrlFor?: (name: string) => string;
+  imagesHint?: string;
+  uploadingImg?: boolean;
+}) {
+  const fileRef = useRef<HTMLInputElement>(null);
+  const allowFile = !!onPickFile;
+  const showImages = imagesHint != null || !!onUploadImage;
+  return (
+    <div className="space-y-3">
+      <div>
+        <label className="text-xs font-medium text-gray-600">Titel / onderwerp</label>
+        <input
+          value={value.title}
+          onChange={(e) => onChange({ title: e.target.value })}
+          placeholder="bijv. een vraag, of gewoon een onderwerp"
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-gray-600">{bodyLabel}</label>
+        {file ? (
+          <div className="mt-1 flex items-center justify-between gap-2 border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
+            <span className="text-sm text-gray-700 truncate">📄 {file.name}</span>
+            {onClearFile && (
+              <button
+                type="button"
+                onClick={onClearFile}
+                className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
+                title="Bestand verwijderen"
+              >
+                ×
+              </button>
+            )}
+          </div>
+        ) : (
+          <textarea
+            value={value.body}
+            onChange={(e) => onChange({ body: e.target.value })}
+            rows={5}
+            placeholder="Vrije tekst — een vraag/antwoord óf gewoon informatie."
+            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
+          />
+        )}
+        {(allowFile || (aiAvailable && onCleanup)) && (
+          <div className="flex items-center justify-between gap-2 mt-1.5">
+            <div>
+              {allowFile && !file && (
+                <>
+                  <input
+                    ref={fileRef}
+                    type="file"
+                    accept=".md,.markdown,.txt,.pdf,.zip"
+                    className="hidden"
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      if (f && onPickFile) onPickFile(f);
+                      e.target.value = "";
+                    }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => fileRef.current?.click()}
+                    className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50"
+                  >
+                    Bestand kiezen
+                  </button>
+                </>
+              )}
+            </div>
+            {aiAvailable && onCleanup && !file && (
+              <button
+                type="button"
+                onClick={onCleanup}
+                disabled={cleaning || !value.body.trim()}
+                title="Laat de AI dit herschrijven tot nette tekst en afdeling/onderwerp voorstellen"
+                className="border border-purple-300 text-purple-700 px-3 py-1.5 rounded-lg text-xs hover:bg-purple-50 disabled:opacity-50"
+              >
+                {cleaning ? "Bezig..." : "✨ Netjes maken"}
+              </button>
+            )}
+          </div>
+        )}
+        <p className="text-[11px] text-gray-400 mt-1">
+          {file
+            ? "De tekst wordt automatisch uit het bestand gehaald."
+            : "Markdown ondersteund (koppen, lijsten, **vet**, afbeeldingen)."}
+        </p>
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-gray-600">Context / toelichting (optioneel)</label>
+        <textarea
+          value={value.context}
+          onChange={(e) => onChange({ context: e.target.value })}
+          rows={2}
+          placeholder="bijv. waar dit over gaat of hoe het gelezen moet worden"
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
+        />
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-gray-600">Trefwoorden (optioneel, verbetert zoeken)</label>
+        <input
+          value={value.keywords}
+          onChange={(e) => onChange({ keywords: e.target.value })}
+          placeholder="bijv. ontkalken, reset, foutcode"
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+        />
+      </div>
+
+      {showImages && (
+        <div>
+          <label className="text-xs font-medium text-gray-600">Afbeeldingen</label>
+          {imagesHint ? (
+            <p className="text-[11px] text-gray-400 mt-1">{imagesHint}</p>
+          ) : (
+            <div className="mt-1 space-y-2">
+              {!!images?.length && (
+                <div className="flex flex-wrap gap-2">
+                  {images.map((img) => (
+                    <div key={img} className="relative">
+                      <img
+                        src={imageUrlFor ? imageUrlFor(img) : ""}
+                        alt=""
+                        className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => onDeleteImage?.(img)}
+                        className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none"
+                        title="Verwijderen"
+                      >
+                        ×
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
+              <label className="inline-block">
+                <span className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 cursor-pointer inline-block">
+                  {uploadingImg ? "Uploaden..." : "+ Afbeelding"}
+                </span>
+                <input
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={(e) => {
+                    const f = e.target.files?.[0];
+                    if (f) onUploadImage?.(f);
+                    e.target.value = "";
+                  }}
+                />
+              </label>
+            </div>
+          )}
+        </div>
+      )}
+
+      <div>
+        <label className="text-xs font-medium text-gray-600">Afdeling (optioneel)</label>
+        <select
+          value={value.category}
+          onChange={(e) => onChange({ category: e.target.value as Category | "" })}
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
+        >
+          <option value="">Algemeen / alle afdelingen</option>
+          {ALL_CATEGORIES.map((c) => (
+            <option key={c} value={c}>
+              {CATEGORY_LABELS[c]}
+            </option>
+          ))}
+        </select>
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-gray-600">Zichtbaar voor</label>
+        <select
+          value={value.visibility}
+          onChange={(e) => onChange({ visibility: e.target.value as KnowledgeVisibility })}
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
+        >
+          {ALL_VISIBILITIES.map((v) => (
+            <option key={v} value={v}>
+              {VISIBILITY_LABELS[v]}
+            </option>
+          ))}
+        </select>
+        <p className="text-[11px] text-gray-400 mt-1">
+          Bepaalt wie dit ziet én via de kennisbot te horen krijgt. "Alleen afdeling" gebruikt de
+          afdeling hierboven. Admin & supervisor zien (vrijwel) alles.
+        </p>
+      </div>
+
+      <div>
+        <label className="text-xs font-medium text-gray-600">Onderwerp / map (optioneel)</label>
+        <input
+          value={value.folder}
+          onChange={(e) => onChange({ folder: e.target.value })}
+          placeholder="bijv. Koffiemachine, Check-in, Wasserij"
+          list="kb-folders"
+          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+        />
+      </div>
+    </div>
+  );
+}
+
+/** Modal-omhulsel rond het gedeelde formulier: kop, privacy-melding, knoppen. */
+function KnowledgeFormModal({
+  heading,
+  onSubmit,
+  onCancel,
+  saving,
+  error,
+  children,
+}: {
+  heading: string;
+  onSubmit: (e: React.FormEvent) => void;
+  onCancel: () => void;
+  saving: boolean;
+  error?: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[60]">
+      <form
+        onSubmit={onSubmit}
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto"
+      >
+        <h2 className="font-bold text-gray-900">{heading}</h2>
+        <PrivacyNotice />
+        {children}
+        {error && <p className="text-sm text-red-600">{error}</p>}
+        <div className="flex justify-end gap-2 pt-1">
+          <button
+            type="button"
+            onClick={onCancel}
+            className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+          >
+            Annuleren
+          </button>
+          <button
+            type="submit"
+            disabled={saving}
+            className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+          >
+            {saving ? "Opslaan..." : "Opslaan"}
+          </button>
+        </div>
+      </form>
     </div>
   );
 }

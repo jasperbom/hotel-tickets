@@ -616,6 +616,7 @@ export interface KnowledgeEntry {
   title: string;
   answer: string;
   keywords: string | null;
+  context: string | null;
   category: Category | null;
   visibility: KnowledgeVisibility;
   folder: string | null;
@@ -664,6 +665,7 @@ export interface KnowledgeDocument {
   title: string;
   source_filename: string | null;
   context: string | null;
+  keywords: string | null;
   category: Category | null;
   visibility: KnowledgeVisibility;
   folder: string | null;
@@ -715,6 +717,7 @@ export interface KnowledgeEntryInput {
   title?: string;
   answer?: string;
   keywords?: string | null;
+  context?: string | null;
   category?: Category | null;
   visibility?: KnowledgeVisibility;
   folder?: string | null;
@@ -777,7 +780,7 @@ export const knowledgeApi = {
   },
   // Documenten (RAG-bron)
   listDocuments: () => api.get<KnowledgeDocument[]>("/knowledge/documents"),
-  createDocument: (data: { title: string; content: string; context?: string | null; category?: Category | null; visibility?: KnowledgeVisibility; folder?: string | null }) =>
+  createDocument: (data: { title: string; content: string; context?: string | null; keywords?: string | null; category?: Category | null; visibility?: KnowledgeVisibility; folder?: string | null }) =>
     api.post<KnowledgeDocument>("/knowledge/documents", data),
   uploadDocument: (
     file: File,
@@ -785,13 +788,15 @@ export const knowledgeApi = {
     category?: Category | null,
     folder?: string | null,
     context?: string | null,
-    visibility?: KnowledgeVisibility
+    visibility?: KnowledgeVisibility,
+    keywords?: string | null
   ) => {
     const form = new FormData();
     form.append("file", file);
     const params = new URLSearchParams();
     if (title) params.set("title", title);
     if (context) params.set("context", context);
+    if (keywords) params.set("keywords", keywords);
     if (category) params.set("category", category);
     if (visibility) params.set("visibility", visibility);
     if (folder) params.set("folder", folder);
@@ -803,7 +808,7 @@ export const knowledgeApi = {
   getDocument: (id: string) => api.get<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`),
   updateDocument: (
     id: string,
-    data: { title?: string; content?: string; context?: string | null; category?: Category | null; visibility?: KnowledgeVisibility; folder?: string | null }
+    data: { title?: string; content?: string; context?: string | null; keywords?: string | null; category?: Category | null; visibility?: KnowledgeVisibility; folder?: string | null }
   ) => api.patch<KnowledgeDocumentDetail>(`/knowledge/documents/${id}`, data),
   removeDocument: (id: string) => api.delete(`/knowledge/documents/${id}`),
   aiCleanup: (text: string) =>

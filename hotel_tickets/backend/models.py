@@ -239,6 +239,7 @@ class KnowledgeEntry(Base):
     title: Mapped[str] = mapped_column(String(255), nullable=False)  # het probleem / de vraag
     answer: Mapped[str] = mapped_column(Text, nullable=False)        # de oplossing / het antwoord
     keywords: Mapped[str | None] = mapped_column(Text)              # extra trefwoorden / alternatieve formuleringen
+    context: Mapped[str | None] = mapped_column(Text)              # optionele toelichting (zelfde veld als bij documenten)
     category: Mapped[Category | None] = mapped_column(Enum(Category))  # afdeling (filter + grondslag voor afdeling-afscherming)
     visibility: Mapped[KnowledgeVisibility] = mapped_column(
         Enum(KnowledgeVisibility), default=KnowledgeVisibility.all, nullable=False
@@ -287,6 +288,7 @@ class KnowledgeDocument(Base):
     # Door een mens aangeleverde toelichting bij het document. Helpt de AI de
     # (soms kromme) tekst uit een PDF te duiden; wordt mee-doorzocht.
     context: Mapped[str | None] = mapped_column(Text)
+    keywords: Mapped[str | None] = mapped_column(Text)            # extra trefwoorden (zelfde veld als bij items)
     category: Mapped[Category | None] = mapped_column(Enum(Category))
     visibility: Mapped[KnowledgeVisibility] = mapped_column(
         Enum(KnowledgeVisibility), default=KnowledgeVisibility.all, nullable=False
