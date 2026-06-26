@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Routes, Route, NavLink, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, NavLink, useNavigate, useLocation } from "react-router-dom";
 import MijnOverzicht from "./pages/MijnOverzicht";
 import Dashboard from "./pages/Dashboard";
 import TicketList from "./pages/TicketList";
@@ -502,7 +502,21 @@ export default function App() {
               <Route path="/bikes/instellingen" element={<BikeInstellingen />} />
               {/* Kennisbank module */}
               <Route path="/kennis" element={<KennisBot />} />
-              <Route path="/kennis/beheer" element={<KennisbankBeheer />} />
+              <Route
+                path="/kennis/beheer"
+                element={
+                  // Beheer is alleen voor admins. Tijdens het laden (currentUser
+                  // nog niet bekend) niet beslissen, zodat een admin niet ten
+                  // onrechte wordt weggestuurd.
+                  currentUser == null ? (
+                    <div className="text-sm text-gray-400">Laden…</div>
+                  ) : currentUser.role === "admin" ? (
+                    <KennisbankBeheer />
+                  ) : (
+                    <Navigate to="/kennis" replace />
+                  )
+                }
+              />
               {/* Instellingen (globaal) */}
               <Route path="/instellingen" element={<Instellingen />} />
             </Routes>
