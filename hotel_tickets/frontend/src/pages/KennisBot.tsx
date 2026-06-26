@@ -1,7 +1,12 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import ReactMarkdown from "react-markdown";
-import { knowledgeApi, type ChatTurn } from "../api/client";
+import { knowledgeApi, type ChatTurn, type AskResponse } from "../api/client";
+
+interface ChatImage {
+  url: string;
+  alt: string;
+}
 
 interface ChatMessage {
   role: "user" | "bot";
@@ -9,6 +14,24 @@ interface ChatMessage {
   kind?: "answer" | "no_answer";
   question?: string; // originele vraag (voor 'maak ticket')
   questionId?: string; // id van de gelogde vraag (voor 'oplossing aandragen')
+  images?: ChatImage[]; // foto's uit de gevonden kennis
+}
+
+/** Haal de markdown-afbeeldingen uit een tekst (we tonen foto's apart als galerij). */
+function stripImageMarkdown(s: string): string {
+  return s.replace(/!\[[^\]]*\]\([^)]*\)/g, "").replace(/\n{3,}/g, "\n\n").trim();
+}
+
+/** Verzamel de foto's van de gevonden kennis-items (max een paar, met bron-titel). */
+function imagesFromResponse(d: AskResponse): ChatImage[] {
+  const out: ChatImage[] = [];
+  for (const e of d.entries || []) {
+    for (const f of e.images || []) {
+      out.push({ url: knowledgeApi.imageUrl(e.id, f), alt: e.title });
+      if (out.length >= 8) return out;
+    }
+  }
+  return out;
 }
 
 const WELCOME =
@@ -22,6 +45,8 @@ export default function KennisBot() {
   const [sending, setSending] = useState(false);
   // Als gezet: het volgende bericht is de oplossing voor deze vraag-id
   const [solutionFor, setSolutionFor] = useState<string | null>(null);
+  // Vergrote foto (lightbox)
+  const [lightbox, setLightbox] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
 
@@ -132,8 +157,16 @@ export default function KennisBot() {
       const d = res.data;
       let botMsg: ChatMessage;
       if (d.answered) {
-        const content = d.ai_answer || d.entries.map((e) => e.answer).join("\n\n") || "—";
-        botMsg = { role: "bot", content, kind: "answer", question: text, questionId: d.question_id };
+        const raw = d.ai_answer || d.entries.map((e) => e.answer).join("\n\n") || "—";
+        const content = stripImageMarkdown(raw) || "—";
+        botMsg = {
+          role: "bot",
+          content,
+          kind: "answer",
+          question: text,
+          questionId: d.question_id,
+          images: imagesFromResponse(d),
+        };
       } else {
         botMsg = {
           role: "bot",
@@ -246,6 +279,26 @@ export default function KennisBot() {
                   <div className="prose prose-sm max-w-none text-gray-700 break-words">
                     <ReactMarkdown>{m.content}</ReactMarkdown>
                   </div>
+                  {!!m.images?.length && (
+                    <div className="flex flex-wrap gap-2 pt-0.5">
+                      {m.images.map((img, j) => (
+                        <button
+                          key={j}
+                          type="button"
+                          onClick={() => setLightbox(img.url)}
+                          className="block"
+                          title={img.alt || "Foto bekijken"}
+                        >
+                          <img
+                            src={img.url}
+                            alt={img.alt}
+                            loading="lazy"
+                            className="h-20 w-20 object-cover rounded-lg border border-gray-200 hover:opacity-90"
+                          />
+                        </button>
+                      ))}
+                    </div>
+                  )}
                   {m.kind === "answer" && m.questionId && (
                     <button
                       onClick={() => startSolution(m.questionId)}
@@ -301,6 +354,28 @@ export default function KennisBot() {
           Jaisper antwoordt alleen op basis van onze eigen kennis.
         </p>
       </div>
+
+      {/* Vergrote foto */}
+      {lightbox && (
+        <div
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-[70]"
+          onClick={() => setLightbox(null)}
+        >
+          <img
+            src={lightbox}
+            alt=""
+            className="max-h-full max-w-full rounded-lg object-contain"
+          />
+          <button
+            type="button"
+            onClick={() => setLightbox(null)}
+            className="absolute top-4 right-4 text-white/90 hover:text-white text-3xl leading-none"
+            title="Sluiten"
+          >
+            ×
+          </button>
+        </div>
+      )}
     </div>
   );
 }
