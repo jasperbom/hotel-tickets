@@ -70,6 +70,12 @@ const EMPTY_FORM: EntryForm = { ...EMPTY_KF, id: null };
 
 const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
+// Gedeelde veld-stijlen zodat alle formuliervelden er hetzelfde (en niet "los") uitzien.
+const FLD =
+  "block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400";
+const FLD_AREA = FLD + " resize-none";
+const FLD_SEL = FLD + " bg-white";
+
 export default function KennisbankBeheer() {
   const [tab, setTab] = useState<Tab>("overzicht");
   const [queue, setQueue] = useState<KnowledgeQuestion[]>([]);
@@ -1468,7 +1474,7 @@ function KnowledgeForm({
           value={value.title}
           onChange={(e) => onChange({ title: e.target.value })}
           placeholder="bijv. een vraag, of gewoon een onderwerp"
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+          className={FLD}
         />
       </div>
 
@@ -1494,7 +1500,7 @@ function KnowledgeForm({
             onChange={(e) => onChange({ body: e.target.value })}
             rows={5}
             placeholder="Vrije tekst — een vraag/antwoord óf gewoon informatie."
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
+            className={FLD_AREA}
           />
         )}
         {(allowFile || (aiAvailable && onCleanup)) && (
@@ -1550,7 +1556,7 @@ function KnowledgeForm({
           onChange={(e) => onChange({ context: e.target.value })}
           rows={2}
           placeholder="bijv. waar dit over gaat of hoe het gelezen moet worden"
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none mt-1"
+          className={FLD_AREA}
         />
       </div>
 
@@ -1560,7 +1566,7 @@ function KnowledgeForm({
           value={value.keywords}
           onChange={(e) => onChange({ keywords: e.target.value })}
           placeholder="bijv. ontkalken, reset, foutcode"
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+          className={FLD}
         />
       </div>
 
@@ -1617,7 +1623,7 @@ function KnowledgeForm({
         <select
           value={value.category}
           onChange={(e) => onChange({ category: e.target.value as Category | "" })}
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
+          className={FLD_SEL}
         >
           <option value="">Algemeen / alle afdelingen</option>
           {ALL_CATEGORIES.map((c) => (
@@ -1633,7 +1639,7 @@ function KnowledgeForm({
         <select
           value={value.visibility}
           onChange={(e) => onChange({ visibility: e.target.value as KnowledgeVisibility })}
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white mt-1"
+          className={FLD_SEL}
         >
           {ALL_VISIBILITIES.map((v) => (
             <option key={v} value={v}>
@@ -1654,7 +1660,7 @@ function KnowledgeForm({
           onChange={(e) => onChange({ folder: e.target.value })}
           placeholder="bijv. Koffiemachine, Check-in, Wasserij"
           list="kb-folders"
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1"
+          className={FLD}
         />
       </div>
     </div>
@@ -1678,30 +1684,47 @@ function KnowledgeFormModal({
   children: React.ReactNode;
 }) {
   return (
-    <div className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[60]">
+    <div
+      className="fixed inset-0 bg-black/40 flex items-center justify-center p-4 z-[60]"
+      onClick={onCancel}
+    >
       <form
         onSubmit={onSubmit}
-        className="bg-white rounded-xl shadow-xl w-full max-w-lg p-5 space-y-3 max-h-[90vh] overflow-y-auto"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
       >
-        <h2 className="font-bold text-gray-900">{heading}</h2>
-        <PrivacyNotice />
-        {children}
-        {error && <p className="text-sm text-red-600">{error}</p>}
-        <div className="flex justify-end gap-2 pt-1">
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-white border-b border-gray-100 px-5 py-3 rounded-t-xl">
+          <h2 className="font-bold text-gray-900">{heading}</h2>
           <button
             type="button"
             onClick={onCancel}
-            className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+            className="text-gray-400 hover:text-gray-600 text-2xl leading-none shrink-0 -mr-1"
+            title="Sluiten"
+            aria-label="Sluiten"
           >
-            Annuleren
+            ×
           </button>
-          <button
-            type="submit"
-            disabled={saving}
-            className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
-          >
-            {saving ? "Opslaan..." : "Opslaan"}
-          </button>
+        </div>
+        <div className="p-5 space-y-3">
+          <PrivacyNotice />
+          {children}
+          {error && <p className="text-sm text-red-600">{error}</p>}
+          <div className="flex justify-end gap-2 pt-1">
+            <button
+              type="button"
+              onClick={onCancel}
+              className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+            >
+              Annuleren
+            </button>
+            <button
+              type="submit"
+              disabled={saving}
+              className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+            >
+              {saving ? "Opslaan..." : "Opslaan"}
+            </button>
+          </div>
         </div>
       </form>
     </div>
