@@ -171,36 +171,24 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Herstel de laatst bezochte pagina bij app-start. Alleen als de app op de
-  // default route opent (`/`) EN er is een eerdere route bewaard. Deep-links
-  // (bijv. via een push-notificatie naar `#/tickets/...`) worden gerespecteerd
-  // omdat de URL dan niet gelijk is aan "/".
+  // Bepaal de actieve module uit het huidige pad. De HashRouter bewaart de
+  // route zelf al bij een refresh; het oude "laatste route herstellen" via
+  // localStorage is verwijderd omdat het op gedeelde tablets naar de pagina
+  // van een vórige gebruiker sprong (bv. terug naar zwembadcontrole terwijl
+  // je bij tickets was).
   useEffect(() => {
-    const saved = localStorage.getItem("lastRoute");
-    const shouldRestore = location.pathname === "/" && saved && saved !== "/";
-    const pathToDetect = shouldRestore ? saved! : location.pathname;
-
-    if (pathToDetect.startsWith("/pools")) {
+    const p = location.pathname;
+    if (p.startsWith("/pools")) {
       setActiveModuleId("zwembaden");
-    } else if (pathToDetect.startsWith("/bikes")) {
+    } else if (p.startsWith("/bikes")) {
       setActiveModuleId("fietsen");
-    } else if (pathToDetect.startsWith("/kennis")) {
+    } else if (p.startsWith("/kennis")) {
       setActiveModuleId("kennis");
-    } else if (pathToDetect.startsWith("/instellingen")) {
-      // Geen module — instellingen heeft geen module-context
+    } else if (p.startsWith("/instellingen")) {
+      setActiveModuleId(null); // Instellingen heeft geen module-context
     } else {
       setActiveModuleId("taken");
     }
-
-    if (shouldRestore) {
-      navigate(saved!, { replace: true });
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Onthoud de huidige route zodat we bij volgende app-start hier terugkomen
-  useEffect(() => {
-    localStorage.setItem("lastRoute", location.pathname);
   }, [location.pathname]);
 
   // Zorg dat het gefocuste input-veld op mobiel zichtbaar blijft wanneer
@@ -229,7 +217,9 @@ export default function App() {
       // zou daar de hele webview omhoog duwen en het invoerveld laten verspringen.
       if (el.closest("[data-no-kb-scroll]")) return false;
       const tag = el.tagName.toLowerCase();
-      if (tag === "textarea" || tag === "select") return true;
+      // Geen <select>: die opent een picker, geen toetsenbord — scrollen
+      // veroorzaakte daar alleen een storende sprong.
+      if (tag === "textarea") return true;
       if (tag === "input") {
         const type = ((el as HTMLInputElement).type || "text").toLowerCase();
         return SCROLLABLE_INPUT_TYPES.has(type);
@@ -245,11 +235,25 @@ export default function App() {
       if (scrollTimer !== null) window.clearTimeout(scrollTimer);
       scrollTimer = window.setTimeout(() => {
         scrollTimer = null;
-        // Plain scrollIntoView zonder opties: de enige variant die in iOS
-        // WKWebView-iframes stabiel werkt. De scroll-padding-bottom op <html>
-        // zorgt dat het veld boven het toetsenbord landt.
-        if (document.activeElement === target) {
-          (target as HTMLElement).scrollIntoView();
+        if (document.activeElement !== target) return;
+        // Alleen scrollen als het veld daadwerkelijk (deels) buiten beeld of
+        // achter het toetsenbord staat. Een veld dat al zichtbaar is met rust
+        // laten — het geforceerde springen liet ingevulde formulieren uit
+        // beeld schieten alsof alles "weg" was.
+        const el = target as HTMLElement;
+        const rect = el.getBoundingClientRect();
+        const visibleHeight = Math.min(
+          window.visualViewport?.height ?? Infinity,
+          window.innerHeight,
+        );
+        if (rect.top < 0) {
+          // Boven beeld: plain scrollIntoView (block: start) — de enige
+          // variant die in iOS WKWebView-iframes stabiel werkt.
+          el.scrollIntoView();
+        } else if (rect.bottom > visibleHeight - 8) {
+          // Achter het toetsenbord: minimaal omhoog scrollen (block: end);
+          // de scroll-padding-bottom op <html> houdt het veld erboven.
+          el.scrollIntoView(false);
         }
       }, 500);
     }
@@ -273,13 +277,6 @@ export default function App() {
   // Sluit mobile menu bij navigatie
   useEffect(() => {
     setMobileMenuOpen(false);
-  }, [location.pathname]);
-
-  // Wis actieve module bij navigatie naar instellingen
-  useEffect(() => {
-    if (location.pathname === "/instellingen") {
-      setActiveModuleId(null);
-    }
   }, [location.pathname]);
 
   // Sluit mobile menu bij klik buiten het menu

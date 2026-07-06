@@ -1,5 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { ticketApi, userApi, locationApi, knowledgeApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role, type Category } from "../api/client";
@@ -21,6 +21,7 @@ const STATUS_OPTIONS: { value: Status; label: string }[] = [
 export default function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [users, setUsers] = useState<UserRole[]>([]);
@@ -213,7 +214,9 @@ export default function TicketDetail() {
     <div className="max-w-2xl mx-auto space-y-4">
       {/* Header met terug-knop en ticket sluiten/heropenen */}
       <div className="flex items-start gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
+        {/* Terug: als het ticket direct geopend is (deep-link/notificatie/refresh)
+            is er geen historie — val dan terug op de ticketlijst */}
+        <button onClick={() => (location.key === "default" ? navigate("/tickets") : navigate(-1))} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
