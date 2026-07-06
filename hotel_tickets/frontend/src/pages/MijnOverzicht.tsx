@@ -113,7 +113,8 @@ export default function MijnOverzicht() {
   }
 
   async function loadData(dept?: Category | "") {
-    const params = dept ? `?department=${dept}` : "";
+    // "all" = expliciet alle afdelingen — ook voor gewone medewerkers
+    const params = `?department=${dept || "all"}`;
     const [ov, locs] = await Promise.all([
       api.get<Overview>(`/users/me/overview${params}`),
       locationApi.list(),
@@ -198,6 +199,8 @@ export default function MijnOverzicht() {
 
   const { user, stats, urgent_tickets = [], my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
   const isManager = user.role === "admin" || user.role === "supervisor";
+  // Iedereen ziet alles, maar afvinken/claimen kan alleen binnen de eigen afdeling
+  const canActOn = (category: Category) => isManager || user.department === category;
   const visibleToday = showAllToday ? today_recurring : today_recurring.slice(0, 3);
 
   return (
@@ -213,24 +216,22 @@ export default function MijnOverzicht() {
         </p>
       </div>
 
-      {/* Afdelingsfilter voor admin/supervisor */}
-      {isManager && (
-        <div className="flex gap-2 flex-wrap">
-          {([["", "Alle afdelingen"], ...ALL_CATEGORIES.map((c) => [c, DEPT_LABELS[c]] as [Category, string])] as Array<[Category | "", string]>).map(([val, label]) => (
-            <button
-              key={val}
-              onClick={() => changeDeptFilter(val as Category | "")}
-              className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
-                deptFilter === val
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Afdelingsfilter — voor iedereen zichtbaar */}
+      <div className="flex gap-2 flex-wrap">
+        {([["", "Alle afdelingen"], ...ALL_CATEGORIES.map((c) => [c, DEPT_LABELS[c]] as [Category, string])] as Array<[Category | "", string]>).map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => changeDeptFilter(val as Category | "")}
+            className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+              deptFilter === val
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
 
       {/* Statistieken */}
       <div className="grid grid-cols-4 gap-3">
@@ -273,7 +274,7 @@ export default function MijnOverzicht() {
           </div>
           <div className="space-y-2">
             {urgent_tickets.map((t) => (
-              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={() => closeTicket(t.id, t.title)} />
+              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
             ))}
           </div>
         </section>
@@ -289,7 +290,7 @@ export default function MijnOverzicht() {
           </div>
           <div className="space-y-2">
             {visibleToday.map((t) => (
-              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={() => completeRecurring(t.id, t.title)} />
+              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
             ))}
           </div>
           {!showAllToday && today_recurring.length > 3 && (
@@ -362,7 +363,7 @@ export default function MijnOverzicht() {
           </div>
           <div className="space-y-2">
             {available_tickets.map((t) => (
-              <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={() => claimTicket(t.id)} onClose={() => closeTicket(t.id, t.title)} />
+              <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={canActOn(t.category) ? () => claimTicket(t.id) : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
             ))}
           </div>
         </section>
@@ -389,7 +390,7 @@ export default function MijnOverzicht() {
             <>
               <div className="space-y-2">
                 {upcoming_recurring.map((t) => (
-                  <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={() => completeRecurring(t.id, t.title)} />
+                  <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
                 ))}
               </div>
               <button
@@ -540,7 +541,7 @@ function SortableMyTicketRow(props: { ticket: Ticket; locationName?: string; occ
   );
 }
 
-function UrgentTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void }) {
+function UrgentTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose?: () => void }) {
   return (
     <OverviewRow
       to={`/tickets/${ticket.id}`}
@@ -565,15 +566,15 @@ function UrgentTicketRow({ ticket, locationName, occupied, onClose }: { ticket: 
   );
 }
 
-function AvailableTicketRow({ ticket, locationName, occupied, onClaim, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim: () => void; onClose: () => void }) {
-  const claimBtn = (
+function AvailableTicketRow({ ticket, locationName, occupied, onClaim, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim?: () => void; onClose?: () => void }) {
+  const claimBtn = onClaim ? (
     <button
       onClick={(e) => { e.preventDefault(); onClaim(); }}
       className="text-sm text-blue-600 font-medium border border-blue-200 rounded-lg px-3 py-1 hover:bg-blue-50 transition-colors"
     >
       Pakken
     </button>
-  );
+  ) : undefined;
   return (
     <OverviewRow
       to={`/tickets/${ticket.id}`}
@@ -600,7 +601,7 @@ function RecurringTaskRow({ task, locationName, occupied, keycards, locations, o
   occupied?: boolean | null;
   keycards?: Record<string, boolean | null>;
   locations?: Record<string, string>;
-  onComplete: () => void;
+  onComplete?: () => void;
 }) {
   const nextRunDate = parseUTC(task.next_run);
   const isOverdue = nextRunDate < new Date();
@@ -642,7 +643,7 @@ function UpcomingRecurringRow({ task, locationName, occupied, keycards, location
   occupied?: boolean | null;
   keycards?: Record<string, boolean | null>;
   locations?: Record<string, string>;
-  onComplete: () => void;
+  onComplete?: () => void;
 }) {
   const rooms = roomsModeExtras(task, locations, keycards);
   const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
