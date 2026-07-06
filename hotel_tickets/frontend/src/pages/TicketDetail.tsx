@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, knowledgeApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role } from "../api/client";
+import { ticketApi, userApi, locationApi, knowledgeApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role, type Category } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "../components/StatusBadge";
 
 const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
@@ -21,6 +21,7 @@ const STATUS_OPTIONS: { value: Status; label: string }[] = [
 export default function TicketDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
   const [users, setUsers] = useState<UserRole[]>([]);
@@ -30,6 +31,7 @@ export default function TicketDetail() {
   const [saving, setSaving] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const [currentUserRole, setCurrentUserRole] = useState<Role | null>(null);
+  const [currentUserDept, setCurrentUserDept] = useState<Category | null>(null);
   const [kbStatus, setKbStatus] = useState<"idle" | "saving" | "done">("idle");
   const [editingCommentId, setEditingCommentId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
@@ -63,6 +65,7 @@ export default function TicketDetail() {
     userApi.me().then((r) => {
       setCurrentUserId(r.data.ha_user_id);
       setCurrentUserRole(r.data.role);
+      setCurrentUserDept(r.data.department);
     }).catch(() => {});
 
     // Keycard sensor ophalen als er een locatie is
@@ -198,11 +201,22 @@ export default function TicketDetail() {
 
   const locationName = ticket.location_id ? locations[ticket.location_id] : null;
 
+  // Iedereen mag alle tickets bekijken en commentaar/foto's toevoegen, maar
+  // wijzigen (sluiten, claimen, subtaken, velden) kan alleen binnen de eigen
+  // afdeling, als toegewezene/aanmaker of als admin/supervisor.
+  const isManagerUser = currentUserRole === "admin" || currentUserRole === "supervisor";
+  const canEdit =
+    isManagerUser ||
+    (currentUserId !== null && (ticket.assigned_to === currentUserId || ticket.created_by === currentUserId)) ||
+    (currentUserDept !== null && ticket.category === currentUserDept);
+
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       {/* Header met terug-knop en ticket sluiten/heropenen */}
       <div className="flex items-start gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
+        {/* Terug: als het ticket direct geopend is (deep-link/notificatie/refresh)
+            is er geen historie — val dan terug op de ticketlijst */}
+        <button onClick={() => (location.key === "default" ? navigate("/tickets") : navigate(-1))} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -233,9 +247,9 @@ export default function TicketDetail() {
                 </span>
               </button>
               <h1
-                className="text-xl font-bold text-gray-900 cursor-text hover:bg-gray-50 rounded px-0.5 -mx-0.5 flex-1 min-w-0"
-                onClick={() => { setEditingField("title"); setEditValue(ticket.title); }}
-                title="Klik om te bewerken"
+                className={`text-xl font-bold text-gray-900 rounded px-0.5 -mx-0.5 flex-1 min-w-0 ${canEdit ? "cursor-text hover:bg-gray-50" : ""}`}
+                onClick={() => { if (canEdit) { setEditingField("title"); setEditValue(ticket.title); } }}
+                title={canEdit ? "Klik om te bewerken" : undefined}
               >
                 {ticket.title}
               </h1>
@@ -257,9 +271,9 @@ export default function TicketDetail() {
               </select>
             ) : (
               <span
-                className="cursor-pointer hover:opacity-80"
-                onClick={() => setEditingField("priority")}
-                title="Klik om prioriteit te wijzigen"
+                className={canEdit ? "cursor-pointer hover:opacity-80" : ""}
+                onClick={() => { if (canEdit) setEditingField("priority"); }}
+                title={canEdit ? "Klik om prioriteit te wijzigen" : undefined}
               >
                 <PriorityBadge priority={ticket.priority} />
               </span>
@@ -267,7 +281,7 @@ export default function TicketDetail() {
             <CategoryBadge category={ticket.category} />
           </div>
         </div>
-        {ticket.status !== "closed" ? (
+        {canEdit && (ticket.status !== "closed" ? (
           <button
             onClick={() => updateField({ status: "closed" })}
             className="shrink-0 px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white font-semibold text-sm transition-colors flex items-center gap-1.5"
@@ -281,8 +295,16 @@ export default function TicketDetail() {
           >
             Heropenen
           </button>
-        )}
+        ))}
       </div>
+
+      {/* Alleen-lezen melding voor tickets van een andere afdeling */}
+      {!canEdit && currentUserRole !== null && (
+        <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-sm text-blue-800">
+          <span>👀</span>
+          <p>Ticket van een andere afdeling — je kunt meekijken en commentaar of foto's toevoegen, maar niet wijzigen of afvinken.</p>
+        </div>
+      )}
 
       {/* Kamer-banner */}
       {locationName && (
@@ -369,7 +391,8 @@ export default function TicketDetail() {
           <select
             value={ticket.assigned_to || ""}
             onChange={(e) => updateField({ assigned_to: e.target.value || null })}
-            className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white min-w-0 max-w-full"
+            disabled={!canEdit}
+            className="border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white min-w-0 max-w-full disabled:bg-gray-50 disabled:text-gray-500"
           >
             <option value="">— Niet toegewezen —</option>
             {users.map((u) => (
@@ -380,7 +403,7 @@ export default function TicketDetail() {
       </div>
 
       {/* Subtaken */}
-      {((ticket.subtasks && ticket.subtasks.length > 0) || ticket.status !== "closed") && (
+      {((ticket.subtasks && ticket.subtasks.length > 0) || (ticket.status !== "closed" && canEdit)) && (
         <div className="card space-y-2">
           <div className="flex items-center justify-between">
             <h2 className="font-semibold">Subtaken</h2>
@@ -395,7 +418,7 @@ export default function TicketDetail() {
               key={idx}
               type="button"
               onClick={() => toggleSubtask(idx, subtask.done)}
-              disabled={ticket.status === "closed"}
+              disabled={ticket.status === "closed" || !canEdit}
               className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all disabled:opacity-60 ${
                 subtask.done
                   ? "border-green-200 bg-green-50"
@@ -412,7 +435,7 @@ export default function TicketDetail() {
               </span>
             </button>
           ))}
-          {ticket.status !== "closed" && (
+          {ticket.status !== "closed" && canEdit && (
             <form onSubmit={addSubtask} className="flex gap-2 pt-1">
               <input
                 type="text"
@@ -451,11 +474,11 @@ export default function TicketDetail() {
             />
           ) : (
             <p
-              className={`text-sm whitespace-pre-wrap cursor-text hover:bg-gray-50 rounded px-1 -mx-1 py-0.5 ${ticket.description ? "text-gray-700" : "text-gray-400 italic"}`}
-              onClick={() => { setEditingField("description"); setEditValue(ticket.description || ""); }}
-              title="Klik om te bewerken"
+              className={`text-sm whitespace-pre-wrap rounded px-1 -mx-1 py-0.5 ${canEdit ? "cursor-text hover:bg-gray-50" : ""} ${ticket.description ? "text-gray-700" : "text-gray-400 italic"}`}
+              onClick={() => { if (canEdit) { setEditingField("description"); setEditValue(ticket.description || ""); } }}
+              title={canEdit ? "Klik om te bewerken" : undefined}
             >
-              {ticket.description || "Klik om een omschrijving toe te voegen"}
+              {ticket.description || (canEdit ? "Klik om een omschrijving toe te voegen" : "Geen omschrijving")}
             </p>
           )}
         </div>
@@ -466,7 +489,8 @@ export default function TicketDetail() {
             <select
               value={ticket.status}
               onChange={(e) => updateField({ status: e.target.value as Status })}
-              className="mt-1 border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white w-full"
+              disabled={!canEdit}
+              className="mt-1 border border-gray-300 rounded-lg px-2 py-1 text-sm bg-white w-full disabled:bg-gray-50 disabled:text-gray-500"
             >
               {STATUS_OPTIONS.map((s) => (
                 <option key={s.value} value={s.value}>{s.label}</option>
@@ -476,7 +500,7 @@ export default function TicketDetail() {
         </div>
 
         <div className="flex flex-col gap-2 pt-1">
-          {ticket.status === "open" && !ticket.assigned_to && (
+          {ticket.status === "open" && !ticket.assigned_to && canEdit && (
             <button onClick={claimTicket} className="btn-secondary w-full">
               Ticket overnemen
             </button>
@@ -664,12 +688,14 @@ export default function TicketDetail() {
         </div>
       )}
 
-      {/* Gevaarzone */}
-      <div className="card border-red-100">
-        <button onClick={deleteTicket} className="text-red-600 hover:text-red-700 text-sm font-medium">
-          Ticket verwijderen
-        </button>
-      </div>
+      {/* Gevaarzone — verwijderen kan alleen als admin/supervisor */}
+      {isManagerUser && (
+        <div className="card border-red-100">
+          <button onClick={deleteTicket} className="text-red-600 hover:text-red-700 text-sm font-medium">
+            Ticket verwijderen
+          </button>
+        </div>
+      )}
     </div>
   );
 }

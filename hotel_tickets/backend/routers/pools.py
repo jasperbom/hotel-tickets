@@ -104,6 +104,12 @@ class PoolLogOut(PoolLogCreate):
         from_attributes = True
 
 
+class ChemicalReplacement(BaseModel):
+    datum: str
+    tijd: str
+    door: Optional[str] = None
+
+
 class PoolStatus(BaseModel):
     pool_id: str
     label: str
@@ -111,6 +117,9 @@ class PoolStatus(BaseModel):
     measurements_today: int
     compliant: bool  # >= 2 metingen vandaag
     latest: Optional[PoolLogOut] = None
+    # Laatste vervanging per chemicalie (chloor/zuur/vlokmiddel), op basis van
+    # NFC-tankscans én handmatige logboek-invoer in het chemicaliën-veld
+    chemicalien_vervangen: dict[str, Optional[ChemicalReplacement]] = {}
 
 
 def _row_to_out(row: PoolLog) -> dict:
@@ -145,6 +154,15 @@ def _row_to_out(row: PoolLog) -> dict:
 # --- Endpoints ---
 
 POOL_LABELS = {"wellness": "Wellness", "zwembad": "Zwembad"}
+
+# Tekstpatronen om chemicaliën-vervangingen in het vrije-tekstveld te herkennen.
+# De NFC-scans loggen "Chloor tank vervangen" / "Zuur tank vervangen" /
+# "Vlokmiddel bijgevuld" (zie nfc.py), maar handmatige invoer telt zo ook mee.
+CHEMICAL_PATTERNS = {
+    "chloor": "%chloor%",
+    "zuur": "%zuur%",
+    "vlokmiddel": "%vlok%",
+}
 
 
 def _has_measurement_filter():
@@ -192,6 +210,20 @@ async def pool_status(db: AsyncSession = Depends(get_db)):
         )
         latest_row = latest_q.scalar_one_or_none()
 
+        chemicalien: dict[str, ChemicalReplacement | None] = {}
+        for chem_key, pattern in CHEMICAL_PATTERNS.items():
+            chem_q = await db.execute(
+                select(PoolLog)
+                .where(and_(PoolLog.pool_id == pid, PoolLog.chemicalien.ilike(pattern)))
+                .order_by(PoolLog.datum.desc(), PoolLog.tijd.desc())
+                .limit(1)
+            )
+            chem_row = chem_q.scalar_one_or_none()
+            chemicalien[chem_key] = (
+                ChemicalReplacement(datum=chem_row.datum, tijd=chem_row.tijd, door=chem_row.gemeten_door)
+                if chem_row else None
+            )
+
         result.append(PoolStatus(
             pool_id=pid.value,
             label=POOL_LABELS[pid.value],
@@ -199,6 +231,7 @@ async def pool_status(db: AsyncSession = Depends(get_db)):
             measurements_today=count,
             compliant=count >= 2,
             latest=_row_to_out(latest_row) if latest_row else None,
+            chemicalien_vervangen=chemicalien,
         ))
     return result
 

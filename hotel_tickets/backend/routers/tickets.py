@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, or_, case
+from sqlalchemy import select, and_, case
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
@@ -124,16 +124,21 @@ class CommentOut(BaseModel):
 
 # --- Helpers ---
 
-def _visible_filter(user: CurrentUser):
-    """Bouw een filter op basis van de rol van de gebruiker."""
+def _require_edit_access(user: CurrentUser, ticket: Ticket) -> None:
+    """Iedereen mag alle tickets zien, maar wijzigen (status, claimen,
+    subtaken afvinken, velden aanpassen) is voorbehouden aan de eigen
+    afdeling, de toegewezene, de aanmaker en admins/supervisors.
+    Commentaar en foto's blijven voor iedereen open."""
     if user.is_admin:
-        return None  # Ziet alles
-    if user.department:
-        return or_(
-            Ticket.category == user.department,
-            Ticket.assigned_to == user.ha_user_id,
-        )
-    return None
+        return
+    if ticket.assigned_to == user.ha_user_id or ticket.created_by == user.ha_user_id:
+        return
+    if user.department and ticket.category == user.department:
+        return
+    raise HTTPException(
+        status_code=403,
+        detail="Tickets van een andere afdeling kun je niet wijzigen — commentaar toevoegen kan wel",
+    )
 
 
 # --- Endpoints ---
@@ -151,9 +156,6 @@ async def list_tickets(
     offset: int = Query(0),
 ):
     filters = []
-    vis = _visible_filter(user)
-    if vis is not None:
-        filters.append(vis)
     if category:
         filters.append(Ticket.category == category)
     if status_param:
@@ -179,10 +181,12 @@ async def list_tickets(
         and all(s.strip() == "closed" for s in status_param.split(",") if s.strip())
     )
 
+    stmt = select(Ticket)
+    if filters:
+        stmt = stmt.where(and_(*filters))
     if only_closed:
         stmt = (
-            select(Ticket)
-            .where(and_(*filters))
+            stmt
             .order_by(Ticket.closed_at.desc().nulls_last(), Ticket.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -196,8 +200,7 @@ async def list_tickets(
             else_=4,
         )
         stmt = (
-            select(Ticket)
-            .where(and_(*filters))
+            stmt
             .order_by(priority_sort, Ticket.created_at.desc())
             .limit(limit)
             .offset(offset)
@@ -410,6 +413,7 @@ async def update_ticket(
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    _require_edit_access(user, ticket)
 
     old_assigned = ticket.assigned_to
 
@@ -458,6 +462,7 @@ async def claim_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Dep
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    _require_edit_access(user, ticket)
     if ticket.assigned_to:
         raise HTTPException(status_code=409, detail="Ticket al toegewezen")
     ticket.assigned_to = user.ha_user_id
@@ -494,6 +499,7 @@ async def add_subtask(
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    _require_edit_access(user, ticket)
     if ticket.status == Status.closed:
         raise HTTPException(status_code=400, detail="Subtaken kunnen niet toegevoegd worden aan een gesloten ticket")
 
@@ -519,6 +525,7 @@ async def update_subtask(
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    _require_edit_access(user, ticket)
     if not ticket.subtasks:
         raise HTTPException(status_code=400, detail="Ticket heeft geen subtaken")
 

@@ -92,6 +92,20 @@ def _validate_cron(expr: str) -> None:
         raise HTTPException(status_code=422, detail=f"Ongeldige cron expressie: {expr}")
 
 
+def _can_manage(user, category: Category) -> bool:
+    """Sjablonen beheren/afronden mag als admin/supervisor, of als medewerker
+    voor de eigen afdeling."""
+    return user.is_admin or (user.department is not None and category == user.department)
+
+
+def _require_manage(user, category: Category, action: str) -> None:
+    if not _can_manage(user, category):
+        raise HTTPException(
+            status_code=403,
+            detail=f"Je kunt alleen taken van je eigen afdeling {action}",
+        )
+
+
 def _calc_next_run(cron_expression: str) -> str | None:
     try:
         now = datetime.now()
@@ -147,18 +161,16 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
 
 @router.get("/", response_model=list[TemplateOut])
 async def list_templates(user: RequireUser, db: AsyncSession = Depends(get_db)):
-    stmt = select(RecurringTemplate)
-    if not user.is_admin and user.department:
-        stmt = stmt.where(RecurringTemplate.category == user.department)
-    result = await db.execute(stmt.order_by(RecurringTemplate.title))
+    # Iedereen ziet alle sjablonen (net als tickets); beheren blijft beperkt
+    # tot eigen afdeling of admin/supervisor.
+    result = await db.execute(select(RecurringTemplate).order_by(RecurringTemplate.title))
     templates = result.scalars().all()
     return [_template_with_next_run(t) for t in templates]
 
 
 @router.post("/", response_model=TemplateOut, status_code=status.HTTP_201_CREATED)
 async def create_template(body: TemplateCreate, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Alleen admins en supervisors kunnen sjablonen aanmaken")
+    _require_manage(user, body.category, "aanmaken")
     _validate_cron(body.cron_expression)
     data = body.model_dump()
     data["subtask_items"] = json.dumps(data["subtask_items"]) if data.get("subtask_items") else None
@@ -182,8 +194,6 @@ async def get_template(template_id: str, user: RequireUser, db: AsyncSession = D
     template = await db.get(RecurringTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
-    if not user.is_admin and user.department and template.category != user.department:
-        raise HTTPException(status_code=403, detail="Geen toegang tot dit sjabloon")
     return _template_with_next_run(template)
 
 
@@ -194,11 +204,13 @@ async def update_template(
     user: RequireUser,
     db: AsyncSession = Depends(get_db),
 ):
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Geen toegang")
     template = await db.get(RecurringTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
+    _require_manage(user, template.category, "bewerken")
+    if body.category is not None:
+        # Verplaatsen naar een andere afdeling vereist ook beheer op die afdeling
+        _require_manage(user, body.category, "bewerken")
 
     if body.cron_expression:
         _validate_cron(body.cron_expression)
@@ -227,11 +239,10 @@ async def update_template(
 
 @router.delete("/{template_id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_template(template_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
-    if not user.is_admin:
-        raise HTTPException(status_code=403, detail="Geen toegang")
     template = await db.get(RecurringTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
+    _require_manage(user, template.category, "verwijderen")
 
     from ..scheduler import remove_template
     await remove_template(template.id)
@@ -254,6 +265,7 @@ async def start_template(template_id: str, user: RequireUser, db: AsyncSession =
     template = await db.get(RecurringTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
+    _require_manage(user, template.category, "starten")
 
     existing = await db.scalar(
         select(func.count()).where(
@@ -314,6 +326,8 @@ async def complete_template(template_id: str, body: CompleteRequest = CompleteRe
     template = await db.get(RecurringTemplate, template_id)
     if not template:
         raise HTTPException(status_code=404, detail="Sjabloon niet gevonden")
+    if user is not None:
+        _require_manage(user, template.category, "afronden")
 
     now = datetime.now(timezone.utc)
     closed_ids = []

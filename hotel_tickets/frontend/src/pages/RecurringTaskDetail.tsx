@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useParams, useNavigate, Link } from "react-router-dom";
+import { useParams, useNavigate, useLocation, Link } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { recurringApi, locationApi, ticketApi, userApi, parseUTC, type RecurringTemplate, type HistoryEntry, type ActiveTicket, type KeycardStatus, type UserRole } from "../api/client";
@@ -9,6 +9,8 @@ import { cronToHuman } from "../components/RecurrenceEditor";
 export default function RecurringTaskDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const [me, setMe] = useState<UserRole | null>(null);
   const [template, setTemplate] = useState<RecurringTemplate | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [activeTickets, setActiveTickets] = useState<ActiveTicket[]>([]);
@@ -22,13 +24,15 @@ export default function RecurringTaskDetail() {
 
   async function load() {
     if (!id) return;
-    const [tmpl, hist, locs, active, u] = await Promise.all([
+    const [tmpl, hist, locs, active, u, meRes] = await Promise.all([
       recurringApi.get(id),
       recurringApi.history(id),
       locationApi.list(),
       recurringApi.activeTickets(id),
       userApi.list(),
+      userApi.me(),
     ]);
+    setMe(meRes.data);
     setTemplate(tmpl.data);
     setHistory(hist.data);
     setActiveTickets(active.data);
@@ -130,6 +134,11 @@ export default function RecurringTaskDetail() {
   const isSubtaskMode = template.subtask_mode === "subtasks";
   const activeTicket = activeTickets[0] ?? null;
 
+  // Afronden/starten/afvinken kan alleen binnen de eigen afdeling (of als
+  // admin/supervisor) — bekijken mag iedereen.
+  const isManager = me?.role === "admin" || me?.role === "supervisor";
+  const canManage = isManager || me?.department === template.category;
+
   // For rooms mode: all rooms done today?
   const allRoomsDoneToday = isRoomsMode && activeTickets.length === 0 && doneToday;
 
@@ -137,7 +146,7 @@ export default function RecurringTaskDetail() {
     <div className="space-y-4">
       {/* Header boven de kaart — zoals TicketDetail */}
       <div className="flex items-start gap-3">
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
+        <button onClick={() => (location.key === "default" ? navigate("/recurring") : navigate(-1))} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
@@ -156,7 +165,7 @@ export default function RecurringTaskDetail() {
           </div>
         </div>
         {/* Afrond-knop rechtsboven (enkelvoudig/subtaken) */}
-        {!isRoomsMode && (
+        {!isRoomsMode && canManage && (
           <button
             onClick={() => handleComplete()}
             disabled={doneToday || completing !== null || !template.is_active}
@@ -239,7 +248,7 @@ export default function RecurringTaskDetail() {
         )}
 
         {/* Notify when free toggle (enkelvoudig/subtaken met actief ticket) */}
-        {!isRoomsMode && activeTicket && locationName && (
+        {!isRoomsMode && activeTicket && locationName && canManage && (
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -253,7 +262,7 @@ export default function RecurringTaskDetail() {
         )}
 
         {/* Alles afronden (kamers) */}
-        {isRoomsMode && !doneToday && (activeTickets.length > 0 || (template.subtask_items?.length ?? 0) > 0) && (
+        {isRoomsMode && canManage && !doneToday && (activeTickets.length > 0 || (template.subtask_items?.length ?? 0) > 0) && (
           <button
             onClick={() => handleComplete()}
             disabled={completing !== null || !template.is_active}
@@ -287,7 +296,7 @@ export default function RecurringTaskDetail() {
                     key={idx}
                     type="button"
                     onClick={() => toggleSubtask(activeTicket, idx)}
-                    disabled={subtaskLoading}
+                    disabled={subtaskLoading || !canManage}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
                       subtask.done
                         ? "border-green-200 bg-green-50"
@@ -324,7 +333,7 @@ export default function RecurringTaskDetail() {
               </div>
               <button
                 onClick={startTask}
-                disabled={starting || doneToday || !template.is_active}
+                disabled={starting || doneToday || !template.is_active || !canManage}
                 className="w-full mt-3 py-2.5 rounded-xl font-semibold text-sm border-2 border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-all disabled:opacity-50"
               >
                 {starting ? "Bezig..." : "▶ Taak activeren om te beginnen"}
@@ -365,7 +374,7 @@ export default function RecurringTaskDetail() {
                     </div>
                     <button
                       onClick={() => handleComplete(ticket.location_id ?? undefined)}
-                      disabled={completing !== null}
+                      disabled={completing !== null || !canManage}
                       className="shrink-0 text-sm text-green-700 font-medium border border-green-200 rounded-lg px-3 py-1.5 hover:bg-green-50 transition-colors disabled:opacity-50"
                     >
                       {isCompletingRoom ? "Bezig..." : "✓ Afronden"}
@@ -395,7 +404,7 @@ export default function RecurringTaskDetail() {
                     </div>
                     <button
                       onClick={() => handleComplete(roomId)}
-                      disabled={completing !== null || !template.is_active}
+                      disabled={completing !== null || !template.is_active || !canManage}
                       className="shrink-0 text-sm text-green-700 font-medium border border-green-200 rounded-lg px-3 py-1.5 hover:bg-green-50 transition-colors disabled:opacity-50"
                     >
                       {isCompletingRoom ? "Bezig..." : "✓ Afronden"}
