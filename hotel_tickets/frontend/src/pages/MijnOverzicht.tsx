@@ -2,7 +2,7 @@ import { useEffect, useState, useRef, type CSSProperties } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import api, { ticketApi, locationApi, recurringApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
+import api, { ticketApi, locationApi, userApi, recurringApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
 import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
 import { OverviewRow, type ExtraRoom } from "../components/OverviewRow";
 import {
@@ -77,7 +77,9 @@ export default function MijnOverzicht() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState<Record<string, string>>({});
+  const [users, setUsers] = useState<Record<string, string>>({});
   const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
+  const [assignedMe, setAssignedMe] = useState(() => localStorage.getItem("ht_assigned_me") === "1");
   const [showAllToday, setShowAllToday] = useState(() => localStorage.getItem("ht_show_all_today") === "1");
   const [deptFilter, setDeptFilter] = useState<Category | "">(() => {
     const saved = localStorage.getItem("ht_dept_filter");
@@ -93,6 +95,10 @@ export default function MijnOverzicht() {
   useEffect(() => {
     localStorage.setItem("ht_show_all_today", showAllToday ? "1" : "0");
   }, [showAllToday]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_assigned_me", assignedMe ? "1" : "0");
+  }, [assignedMe]);
   const todaySectionRef = useRef<HTMLElement>(null);
   const navigate = useNavigate();
 
@@ -115,11 +121,13 @@ export default function MijnOverzicht() {
   async function loadData(dept?: Category | "") {
     // "all" = expliciet alle afdelingen — ook voor gewone medewerkers
     const params = `?department=${dept || "all"}`;
-    const [ov, locs] = await Promise.all([
+    const [ov, locs, usrs] = await Promise.all([
       api.get<Overview>(`/users/me/overview${params}`),
       locationApi.list(),
+      userApi.list(),
     ]);
     setOverview(ov.data);
+    setUsers(Object.fromEntries(usrs.data.map((u) => [u.ha_user_id, u.display_name])));
     const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
     const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
     const allRecurring = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
@@ -203,6 +211,12 @@ export default function MijnOverzicht() {
   const canActOn = (category: Category) => isManager || user.department === category;
   const visibleToday = showAllToday ? today_recurring : today_recurring.slice(0, 3);
 
+  // Filter "Toegewezen aan mij": urgente tickets beperken tot eigen tickets en
+  // de sectie met niet-toegewezen tickets verbergen. Herhalende taken zijn
+  // niet persoonsgebonden en blijven zichtbaar.
+  const visibleUrgent = assignedMe ? urgent_tickets.filter((t) => t.assigned_to === user.ha_user_id) : urgent_tickets;
+  const visibleAvailable = assignedMe ? [] : available_tickets;
+
   return (
     <div className="space-y-6">
 
@@ -231,6 +245,18 @@ export default function MijnOverzicht() {
             {label}
           </button>
         ))}
+        <button
+          onClick={() => setAssignedMe(!assignedMe)}
+          className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+            assignedMe
+              ? "bg-purple-600 text-white border-purple-600"
+              : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
+          }`}
+          title="Toon alleen tickets die aan jou zijn toegewezen"
+        >
+          {assignedMe && <span className="text-xs mr-1">✓</span>}
+          👤 Toegewezen aan mij
+        </button>
       </div>
 
       {/* Statistieken */}
@@ -265,16 +291,16 @@ export default function MijnOverzicht() {
       </div>
 
       {/* Urgente tickets */}
-      {urgent_tickets.length > 0 && (
+      {visibleUrgent.length > 0 && (
         <section>
           <div className="flex items-center gap-2 mb-3">
             <span className="text-red-600 text-lg">🚨</span>
             <h2 className="font-semibold text-red-700">Urgente tickets</h2>
-            <span className="text-xs font-bold bg-red-600 text-white px-1.5 py-0.5 rounded-full">{urgent_tickets.length}</span>
+            <span className="text-xs font-bold bg-red-600 text-white px-1.5 py-0.5 rounded-full">{visibleUrgent.length}</span>
           </div>
           <div className="space-y-2">
-            {urgent_tickets.map((t) => (
-              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
+            {visibleUrgent.map((t) => (
+              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} assigneeName={t.assigned_to ? users[t.assigned_to] || t.assigned_to : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
             ))}
           </div>
         </section>
@@ -350,7 +376,7 @@ export default function MijnOverzicht() {
       </section>
 
       {/* Beschikbaar om op te pakken */}
-      {available_tickets.length > 0 && (
+      {visibleAvailable.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
@@ -362,7 +388,7 @@ export default function MijnOverzicht() {
             </Link>
           </div>
           <div className="space-y-2">
-            {available_tickets.map((t) => (
+            {visibleAvailable.map((t) => (
               <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={canActOn(t.category) ? () => claimTicket(t.id) : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
             ))}
           </div>
@@ -541,7 +567,7 @@ function SortableMyTicketRow(props: { ticket: Ticket; locationName?: string; occ
   );
 }
 
-function UrgentTicketRow({ ticket, locationName, occupied, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose?: () => void }) {
+function UrgentTicketRow({ ticket, locationName, occupied, assigneeName, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; assigneeName?: string; onClose?: () => void }) {
   return (
     <OverviewRow
       to={`/tickets/${ticket.id}`}
@@ -552,6 +578,7 @@ function UrgentTicketRow({ ticket, locationName, occupied, onClose }: { ticket: 
       occupied={occupied}
       titleIcon="🚨"
       title={ticket.title}
+      assigneeName={assigneeName}
       titleClassName="font-semibold text-red-900"
       statusSlot={<StatusBadge status={ticket.status} />}
       prioritySlot={<PriorityBadge priority={ticket.priority} />}
