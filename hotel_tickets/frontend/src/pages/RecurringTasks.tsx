@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { recurringApi, locationApi, type RecurringTemplate, type Category, type Priority, type SubtaskMode } from "../api/client";
+import { recurringApi, locationApi, userApi, type RecurringTemplate, type Category, type Priority, type SubtaskMode, type UserRole } from "../api/client";
 import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
 import AreaSelector from "../components/AreaSelector";
 import MultiAreaSelector from "../components/MultiAreaSelector";
@@ -28,6 +28,16 @@ const EMPTY_FORM = {
 const NO_FOLDER_KEY = "__no_folder__";
 const NO_FOLDER_LABEL = "Zonder map";
 
+const CATEGORY_OPTIONS: { value: Category; label: string }[] = [
+  { value: "technical", label: "TD" },
+  { value: "housekeeping", label: "Huishouding" },
+  { value: "reception", label: "Receptie" },
+  { value: "service", label: "Bediening" },
+  { value: "kitchen", label: "Keuken" },
+  { value: "sales", label: "Sales" },
+  { value: "garden", label: "Tuin" },
+];
+
 function folderKey(t: RecurringTemplate): string {
   const f = (t.folder || "").trim();
   return f === "" ? NO_FOLDER_KEY : f;
@@ -43,21 +53,41 @@ export default function RecurringTasks() {
   const [newSubtask, setNewSubtask] = useState("");
   const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
   const [search, setSearch] = useState("");
+  const [me, setMe] = useState<UserRole | null>(null);
+  const [formError, setFormError] = useState("");
 
   useEffect(() => {
-    Promise.all([recurringApi.list(), locationApi.list()])
-      .then(([r, locs]) => {
+    Promise.all([recurringApi.list(), locationApi.list(), userApi.me()])
+      .then(([r, locs, meRes]) => {
         setTemplates(r.data);
         setLocations(Object.fromEntries(locs.data.map((l) => [l.id, l.name])));
+        setMe(meRes.data);
       })
       .finally(() => setLoading(false));
   }, []);
+
+  const isManager = me?.role === "admin" || me?.role === "supervisor";
+  // Medewerkers beheren alleen sjablonen van hun eigen afdeling
+  const canManage = (category: Category) => isManager || me?.department === category;
+  const categoryOptions = isManager || !me?.department
+    ? CATEGORY_OPTIONS
+    : CATEGORY_OPTIONS.filter((c) => c.value === me.department);
+
+  function openNewForm() {
+    // Medewerkers kunnen alleen voor hun eigen afdeling aanmaken — vul die vast in
+    const category = !isManager && me?.department ? me.department : EMPTY_FORM.category;
+    setForm({ ...EMPTY_FORM, category });
+    setEditId(null);
+    setFormError("");
+    setShowForm(true);
+  }
 
   function resetForm() {
     setForm({ ...EMPTY_FORM });
     setEditId(null);
     setShowForm(false);
     setNewSubtask("");
+    setFormError("");
   }
 
   function setSubtaskMode(mode: SubtaskMode) {
@@ -74,6 +104,11 @@ export default function RecurringTasks() {
     setForm({ ...form, subtask_items: form.subtask_items.filter((_, i) => i !== idx) });
   }
 
+  function apiErrorText(err: unknown): string {
+    const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+    return typeof detail === "string" ? detail : "Opslaan mislukt — probeer het opnieuw";
+  }
+
   async function saveTemplate() {
     if (!form.title.trim()) return;
     const payload: Partial<RecurringTemplate> = {
@@ -83,25 +118,38 @@ export default function RecurringTasks() {
       folder: form.folder.trim(),
       subtask_items: form.subtask_items.length > 0 ? form.subtask_items : null,
     };
-    if (editId) {
-      const r = await recurringApi.update(editId, payload);
-      setTemplates((prev) => prev.map((t) => t.id === editId ? r.data : t));
-    } else {
-      const r = await recurringApi.create(payload);
-      setTemplates((prev) => [...prev, r.data]);
+    setFormError("");
+    try {
+      if (editId) {
+        const r = await recurringApi.update(editId, payload);
+        setTemplates((prev) => prev.map((t) => t.id === editId ? r.data : t));
+      } else {
+        const r = await recurringApi.create(payload);
+        setTemplates((prev) => [...prev, r.data]);
+      }
+      resetForm();
+    } catch (err) {
+      setFormError(apiErrorText(err));
     }
-    resetForm();
   }
 
   async function toggleActive(template: RecurringTemplate) {
-    const r = await recurringApi.update(template.id, { is_active: !template.is_active });
-    setTemplates((prev) => prev.map((t) => t.id === template.id ? r.data : t));
+    try {
+      const r = await recurringApi.update(template.id, { is_active: !template.is_active });
+      setTemplates((prev) => prev.map((t) => t.id === template.id ? r.data : t));
+    } catch (err) {
+      alert(apiErrorText(err));
+    }
   }
 
   async function deleteTemplate(id: string) {
     if (!confirm("Sjabloon verwijderen?")) return;
-    await recurringApi.remove(id);
-    setTemplates((prev) => prev.filter((t) => t.id !== id));
+    try {
+      await recurringApi.remove(id);
+      setTemplates((prev) => prev.filter((t) => t.id !== id));
+    } catch (err) {
+      alert(apiErrorText(err));
+    }
   }
 
   function startEdit(template: RecurringTemplate) {
@@ -122,6 +170,7 @@ export default function RecurringTasks() {
       folder: template.folder || "",
     });
     setEditId(template.id);
+    setFormError("");
     setShowForm(true);
   }
 
@@ -171,7 +220,7 @@ export default function RecurringTasks() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-900">Terugkerende taken</h1>
-        <button onClick={() => setShowForm(true)} className="btn-primary">+ Nieuw sjabloon</button>
+        <button onClick={openNewForm} className="btn-primary">+ Nieuw sjabloon</button>
       </div>
 
       {/* Zoekbalk */}
@@ -239,14 +288,13 @@ export default function RecurringTasks() {
                 onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
                 className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
               >
-                <option value="technical">TD</option>
-                <option value="housekeeping">Huishouding</option>
-                <option value="reception">Receptie</option>
-                <option value="service">Bediening</option>
-                <option value="kitchen">Keuken</option>
-                <option value="sales">Sales</option>
-                <option value="garden">Tuin</option>
+                {categoryOptions.map((c) => (
+                  <option key={c.value} value={c.value}>{c.label}</option>
+                ))}
               </select>
+              {!isManager && me?.department && (
+                <p className="text-xs text-gray-500 mt-1">Je kunt alleen taken voor je eigen afdeling aanmaken.</p>
+              )}
             </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Prioriteit</label>
@@ -360,6 +408,13 @@ export default function RecurringTasks() {
             />
           </div>
 
+          {formError && (
+            <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3 text-sm text-red-700">
+              <span>⚠</span>
+              <p>{formError}</p>
+            </div>
+          )}
+
           <div className="flex gap-2">
             <button onClick={saveTemplate} className="btn-primary">Opslaan</button>
             <button onClick={resetForm} className="btn-secondary">Annuleren</button>
@@ -434,17 +489,19 @@ export default function RecurringTasks() {
                               <span className="text-xs bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression, t.interval_days)}</span>
                             </div>
                           </div>
-                          <div className="flex gap-2 shrink-0">
-                            <button onClick={() => toggleActive(t)} className="text-sm text-gray-500 hover:text-gray-700">
-                              {t.is_active ? "Pauzeren" : "Activeren"}
-                            </button>
-                            <button onClick={() => startEdit(t)} className="text-sm text-blue-600 hover:text-blue-700">
-                              Bewerken
-                            </button>
-                            <button onClick={() => deleteTemplate(t.id)} className="text-sm text-red-600 hover:text-red-700">
-                              Verwijderen
-                            </button>
-                          </div>
+                          {canManage(t.category) && (
+                            <div className="flex gap-2 shrink-0">
+                              <button onClick={() => toggleActive(t)} className="text-sm text-gray-500 hover:text-gray-700">
+                                {t.is_active ? "Pauzeren" : "Activeren"}
+                              </button>
+                              <button onClick={() => startEdit(t)} className="text-sm text-blue-600 hover:text-blue-700">
+                                Bewerken
+                              </button>
+                              <button onClick={() => deleteTemplate(t.id)} className="text-sm text-red-600 hover:text-red-700">
+                                Verwijderen
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </div>
                     ))}
