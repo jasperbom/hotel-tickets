@@ -24,6 +24,8 @@ export type OverviewRowProps = {
   titleIcon?: string;
   title: string;
   titleClassName?: string;
+  /** Naam van de toegewezen medewerker — getoond als chip achter de titel */
+  assigneeName?: string;
 
   statusSlot?: ReactNode;
   prioritySlot?: ReactNode;
@@ -64,6 +66,7 @@ export function OverviewRow(props: OverviewRowProps) {
     titleIcon,
     title,
     titleClassName = "",
+    assigneeName,
     statusSlot,
     prioritySlot,
     dateText,
@@ -126,6 +129,14 @@ export function OverviewRow(props: OverviewRowProps) {
         <div className="flex items-center gap-2 pl-3 flex-wrap sm:pl-0 sm:flex-nowrap sm:contents">
           <div className="flex items-center gap-1.5 flex-1 min-w-0 sm:flex-1 sm:min-w-0 sm:order-3">
             <p className={`font-medium text-sm truncate ${titleClassName || "text-gray-900"}`}>{title}</p>
+            {assigneeName && (
+              <span
+                className="text-xs font-medium text-gray-600 bg-gray-100 px-1.5 py-0.5 rounded whitespace-nowrap shrink-0"
+                title={`Toegewezen aan ${assigneeName}`}
+              >
+                👤 {assigneeName}
+              </span>
+            )}
           </div>
           <div className="sm:w-16 sm:shrink-0 sm:flex sm:justify-end sm:order-7">
             {subtasks && (
