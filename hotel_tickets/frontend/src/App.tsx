@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Routes, Route, Navigate, NavLink, useNavigate, useLocation } from "react-router-dom";
+import { Routes, Route, Navigate, NavLink, useNavigate, useLocation, useNavigationType } from "react-router-dom";
 import MijnOverzicht from "./pages/MijnOverzicht";
 import Dashboard from "./pages/Dashboard";
 import TicketList from "./pages/TicketList";
@@ -150,6 +150,18 @@ export default function App() {
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const navigationType = useNavigationType();
+
+  // Scroll naar boven bij het openen van een nieuwe pagina. Zonder dit behoudt
+  // de app de scrollpositie van de vorige pagina — wie onderin de ticketlijst
+  // een ticket opende, landde onderaan het ticket (bij het commentaar) in
+  // plaats van bovenaan. Bij terug-navigatie (POP) niet forceren, zodat de
+  // browser de positie in bv. de lijst kan bewaren.
+  useEffect(() => {
+    if (navigationType !== "POP") {
+      window.scrollTo(0, 0);
+    }
+  }, [location.pathname, navigationType]);
 
   useEffect(() => {
     Promise.all([userApi.me(), userApi.list(), bikesModuleApi.getSetting(), brandingApi.get()])
