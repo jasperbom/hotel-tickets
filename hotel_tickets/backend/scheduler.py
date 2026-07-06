@@ -21,9 +21,13 @@ def calc_next_due_after_completion(template, closed_at: datetime) -> datetime | 
     gegeven dat de taak nu (op ``closed_at``) is afgerond.
 
     - Interval-modus (``interval_days`` gevuld): closed_at + interval_days.
-    - Cron-modus: de eerstvolgende cron-tick *na* closed_at. Zo verschijnt de
-      taak pas weer op de eerstvolgende geplande dag, ook als je 'm vroeger
-      hebt afgevinkt.
+    - Cron-modus: de eerstvolgende cron-tick ná de geplande uitvoering die nu
+      vervuld wordt. Wie de taak vóór de geplande datum afrondt, vervult
+      daarmee díe geplande uitvoering — de volgende komt pas een hele cyclus
+      later. Voorbeeld: airco-controle op de 15e elke 3 maanden, gepland
+      15 maart, uitgevoerd op 10 maart → volgende uitvoering 15 juni (niet
+      alsnog 15 maart). Bij (te) laat afronden telt het sluitmoment, zodat
+      er nooit een extra cyclus wordt overgeslagen.
     """
     if closed_at.tzinfo is None:
         closed_at = closed_at.replace(tzinfo=timezone.utc)
@@ -31,7 +35,15 @@ def calc_next_due_after_completion(template, closed_at: datetime) -> datetime | 
         return closed_at + timedelta(days=template.interval_days)
     if template.cron_expression:
         try:
-            return croniter(template.cron_expression, closed_at).get_next(datetime)
+            base = closed_at
+            planned = getattr(template, "next_due_at", None)
+            if planned is not None:
+                if planned.tzinfo is None:
+                    planned = planned.replace(tzinfo=timezone.utc)
+                if planned > base:
+                    # Vroeg afgerond: schuif door vanaf de geplande uitvoering
+                    base = planned
+            return croniter(template.cron_expression, base).get_next(datetime)
         except Exception:
             return None
     return None
