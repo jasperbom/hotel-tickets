@@ -331,6 +331,12 @@ export interface PoolLog {
   updated_at: string;
 }
 
+export interface ChemicalReplacement {
+  datum: string;
+  tijd: string;
+  door: string | null;
+}
+
 export interface PoolStatus {
   pool_id: string;
   label: string;
@@ -338,6 +344,7 @@ export interface PoolStatus {
   measurements_today: number;
   compliant: boolean;
   latest: PoolLog | null;
+  chemicalien_vervangen?: Record<string, ChemicalReplacement | null>;
 }
 
 export interface PoolConfigItem {

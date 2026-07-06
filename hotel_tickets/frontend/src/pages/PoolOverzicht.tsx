@@ -76,6 +76,31 @@ function StatusCard({ pool, logs }: { pool: PoolStatus; logs: PoolLog[] }) {
         <p className="text-gray-400 italic">Nog geen metingen</p>
       )}
 
+      {/* Chemicaliën: wanneer voor het laatst vervangen/bijgevuld */}
+      <div className="mt-4 pt-3 border-t border-gray-100">
+        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+          🧪 Chemicaliën laatst vervangen
+        </p>
+        <div className="grid grid-cols-3 gap-3 text-sm">
+          {([["chloor", "Chloor"], ["zuur", "Zuur"], ["vlokmiddel", "Vlokmiddel"]] as const).map(([key, label]) => {
+            const c = pool.chemicalien_vervangen?.[key];
+            return (
+              <div key={key}>
+                <span className="text-gray-500 block">{label}</span>
+                {c ? (
+                  <>
+                    <span className="font-medium">{formatDateNL(c.datum)}</span>
+                    {c.door && <span className="block text-xs text-gray-400 truncate">{c.door}</span>}
+                  </>
+                ) : (
+                  <span className="text-gray-400">—</span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Grafische weergave t.o.v. streefbereik */}
       <PoolValueVisualization logs={logs} />
 
