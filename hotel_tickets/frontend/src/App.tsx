@@ -23,6 +23,7 @@ import Instellingen from "./pages/Instellingen";
 import KennisBot from "./pages/KennisBot";
 import KennisbankBeheer from "./pages/KennisbankBeheer";
 import { userApi, bikesModuleApi, brandingApi, type UserRole, type BikesModuleRoles } from "./api/client";
+import { saveLastRoute } from "./lastRoute";
 
 // --- Kleurpalet hulpfuncties ---
 
@@ -67,13 +68,6 @@ function applyButtonPalette(hex: string) {
   root.style.setProperty("--blue-800", hslToHex(h, sat, 35));
   root.style.setProperty("--blue-900", hslToHex(h, sat, 28));
 }
-
-// --- Route-herstel na refresh (HA ingress iframe verliest de URL-hash) ---
-
-const LAST_ROUTE_KEY = "lastRoute";
-// Kort genoeg dat een andere gebruiker op een gedeelde tablet niet op de
-// pagina van de vorige gebruiker belandt; ruim genoeg voor een refresh.
-const LAST_ROUTE_TTL_MS = 30_000;
 
 // --- Module configuratie ---
 
@@ -190,49 +184,12 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  // Herstel de route na een refresh. De HashRouter bewaart de route in een
-  // gewone browsertab, maar via HA ingress draait de app in een iframe: een
-  // refresh herlaadt dat iframe op de basis-URL zónder hash, waardoor de app
-  // op "/" opende (bv. terug naar tickets vanuit zwembadcontrole). Daarom
-  // bewaren we de route in sessionStorage — maar alléén kort geldig (TTL),
-  // zodat op gedeelde tablets een latere gebruiker niet op de pagina van de
-  // vorige gebruiker belandt (de reden waarom de eerdere localStorage-variant
-  // is verwijderd). Deep-links (pathname ≠ "/") worden gerespecteerd.
+  // Onthoud de huidige route met tijdstempel — het herstel gebeurt vóór de
+  // eerste render in main.tsx (zie lastRoute.ts). Ook vlak vóór unload
+  // (pagehide firet bij een refresh) verversen, zodat lang stilstaan op één
+  // pagina de TTL niet laat verlopen.
   useEffect(() => {
-    if (location.pathname !== "/") return;
-    try {
-      const raw = sessionStorage.getItem(LAST_ROUTE_KEY);
-      if (!raw) return;
-      const { path, ts } = JSON.parse(raw);
-      if (
-        typeof path === "string" &&
-        path !== "/" &&
-        typeof ts === "number" &&
-        Date.now() - ts < LAST_ROUTE_TTL_MS
-      ) {
-        navigate(path, { replace: true });
-      }
-    } catch {
-      // Ongeldige opslag negeren
-    }
-    // Alleen bij app-start — daarna is elke "/" een bewuste navigatie.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Onthoud de huidige route met tijdstempel. Ook vlak vóór unload (pagehide
-  // firet bij een refresh) verversen, zodat lang stilstaan op één pagina de
-  // TTL niet laat verlopen.
-  useEffect(() => {
-    const save = () => {
-      try {
-        sessionStorage.setItem(
-          LAST_ROUTE_KEY,
-          JSON.stringify({ path: location.pathname, ts: Date.now() })
-        );
-      } catch {
-        // Opslag niet beschikbaar (bv. private mode) — dan geen herstel
-      }
-    };
+    const save = () => saveLastRoute(location.pathname);
     save();
     window.addEventListener("pagehide", save);
     return () => window.removeEventListener("pagehide", save);
