@@ -39,6 +39,14 @@ export default api;
 
 // --- Standalone login (sessietokens) ---
 
+export interface LoginBan {
+  ip: string;
+  failed_count: number;
+  last_username: string | null;
+  last_attempt_at: string;
+  banned: boolean;
+}
+
 export const authApi = {
   login: (username: string, password: string) =>
     api.post<{ token: string; expires_at: number; display_name: string }>("/auth/login", {
@@ -47,6 +55,9 @@ export const authApi = {
     }),
   changePassword: (current_password: string, new_password: string) =>
     api.post<{ ok: boolean }>("/auth/change-password", { current_password, new_password }),
+  // Admin: IP's met mislukte inlogpogingen / blokkades
+  listBans: () => api.get<LoginBan[]>("/auth/bans"),
+  removeBan: (ip: string) => api.delete(`/auth/bans/${encodeURIComponent(ip)}`),
 };
 
 /** True wanneer de app draait op een sessietoken van de loginpagina. */

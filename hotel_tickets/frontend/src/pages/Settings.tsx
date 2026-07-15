@@ -1,5 +1,52 @@
 import { useEffect, useState } from "react";
-import { userApi, integrationApi, systemSettingsApi, type UserRole, type Role, type Category, type IntegrationStatus } from "../api/client";
+import { userApi, integrationApi, systemSettingsApi, authApi, type UserRole, type Role, type Category, type IntegrationStatus, type LoginBan } from "../api/client";
+
+function SecurityWidget() {
+  const [bans, setBans] = useState<LoginBan[] | null>(null);
+
+  useEffect(() => {
+    authApi.listBans().then((r) => setBans(r.data)).catch(() => {});
+  }, []);
+
+  async function removeBan(ip: string) {
+    await authApi.removeBan(ip);
+    setBans((prev) => (prev ?? []).filter((b) => b.ip !== ip));
+  }
+
+  if (!bans) return null;
+
+  return (
+    <div className="card space-y-3">
+      <h2 className="font-semibold">Beveiliging — loginpagina</h2>
+      <p className="text-xs text-gray-500">
+        Een IP-adres wordt na 25 mislukte inlogpogingen permanent geblokkeerd (je krijgt
+        daarvan een pushmelding). Hier hef je blokkades op en zie je lopende tellers.
+      </p>
+      {bans.length === 0 ? (
+        <p className="text-sm text-gray-500">Geen mislukte inlogpogingen geregistreerd.</p>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {bans.map((b) => (
+            <div key={b.ip} className="py-2 flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-sm">{b.ip}</p>
+                <p className="text-xs text-gray-500">
+                  {b.failed_count} mislukte poging{b.failed_count === 1 ? "" : "en"}
+                  {b.last_username && <> · laatste gebruikersnaam: <span className="font-mono">{b.last_username}</span></>}
+                  {" · "}{new Date(b.last_attempt_at).toLocaleString("nl-NL")}
+                </p>
+              </div>
+              {b.banned && <span className="badge bg-red-100 text-red-700">Geblokkeerd</span>}
+              <button onClick={() => removeBan(b.ip)} className="text-sm text-blue-600 hover:text-blue-700 shrink-0">
+                {b.banned ? "Blokkade opheffen" : "Teller wissen"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
 
 function IntegrationWidget() {
   const [status, setStatus] = useState<IntegrationStatus | null>(null);
@@ -217,6 +264,7 @@ export default function Settings() {
 
       <IntegrationWidget />
       <NotificationSettings />
+      {isAdmin && <SecurityWidget />}
 
       <div className="card space-y-4">
         <div className="flex items-center justify-between">

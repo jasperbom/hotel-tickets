@@ -246,6 +246,21 @@ class UserRole(Base):
         return self.password_hash is not None
 
 
+class LoginBan(Base):
+    """Mislukte inlogpogingen per IP-adres, persistent (overleeft herstarts).
+
+    Naast de vluchtige rate-limiter (5 pogingen/minuut) wordt een IP na
+    LOGIN_BAN_THRESHOLD echt mislukte pogingen permanent geblokkeerd, tot een
+    admin de blokkade opheft — vergelijkbaar met HA's ip_bans.yaml."""
+    __tablename__ = "login_bans"
+
+    ip: Mapped[str] = mapped_column(String(64), primary_key=True)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_username: Mapped[str | None] = mapped_column(String(255))
+    last_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime)
+
+
 # ── Kennisbank / bot module ──────────────────────────────────────────────────────
 
 class KnowledgeQuestionStatus(str, PyEnum):

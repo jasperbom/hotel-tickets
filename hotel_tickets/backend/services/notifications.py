@@ -179,6 +179,26 @@ async def notify_new_department_ticket(
         await notify_push(service, title, ticket_title, data=data)
 
 
+async def notify_login_ban(
+    ip: str,
+    failed_count: int,
+    last_username: str | None,
+    admin_services: list[str],
+) -> None:
+    """Stuur een push naar alle admins wanneer een IP geblokkeerd wordt."""
+    message = f"{ip} is geblokkeerd na {failed_count} mislukte inlogpogingen"
+    if last_username:
+        message += f" (laatst geprobeerde gebruikersnaam: {last_username})"
+    message += ". Opheffen kan bij Instellingen → Beveiliging."
+    for service in admin_services:
+        await notify_push(
+            service,
+            title="🔒 IP-adres geblokkeerd",
+            message=message,
+            data={"tag": "login_ban"},
+        )
+
+
 async def notify_urgent_ticket(
     ticket_title: str,
     admin_services: list[str],
