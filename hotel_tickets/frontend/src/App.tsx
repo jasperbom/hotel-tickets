@@ -417,25 +417,48 @@ export default function App() {
           >
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 min-w-0">
-                {/* Modulewisselaar knop (mobiel: toont dropdown, desktop: verborgen want zijbalk) */}
-                <div className="md:hidden relative shrink-0" ref={menuRef}>
+                {/* Modulewisselaar knop (mobiel: toont dropdown, desktop: verborgen want
+                    zijbalk). Logo + modulenaam + chevron vormen samen één knop, zodat
+                    zichtbaar is dát dit een menu opent — een kaal logo nodigt niet uit. */}
+                <div className="md:hidden relative min-w-0 shrink-0" ref={menuRef}>
                   <button
                     onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
                     title="Modules"
-                    className={`flex items-center justify-center w-9 h-9 -ml-1 rounded-lg transition-colors ${
-                      mobileMenuOpen ? "bg-white/20" : "hover:bg-white/10"
+                    aria-haspopup="menu"
+                    aria-expanded={mobileMenuOpen}
+                    className={`flex items-center gap-1.5 h-9 -ml-1 pl-1 pr-1.5 rounded-lg transition-colors ${
+                      mobileMenuOpen ? "bg-white/20" : "hover:bg-white/10 active:bg-white/10"
                     }`}
                   >
                     {brandLogo ? (
-                      <img src={brandLogo} alt="Menu" className="w-6 h-6 object-contain rounded" />
+                      <img src={brandLogo} alt="" className="w-6 h-6 object-contain rounded shrink-0" />
                     ) : (
-                      <span className="text-xl font-bold text-white select-none">S</span>
+                      <span className="text-xl font-bold text-white select-none shrink-0">S</span>
                     )}
+                    <span className="font-bold text-base text-white truncate">
+                      {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : "Instellingen")}
+                    </span>
+                    {activeModule?.id === "kennis" && (
+                      <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none shrink-0">
+                        Beta
+                      </span>
+                    )}
+                    <svg
+                      className={`w-3 h-3 text-white/70 shrink-0 transition-transform ${mobileMenuOpen ? "rotate-180" : ""}`}
+                      viewBox="0 0 12 12"
+                      fill="none"
+                      aria-hidden="true"
+                    >
+                      <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+                    </svg>
                   </button>
 
                   {/* Module-dropdown */}
                   {mobileMenuOpen && (
-                    <div className="absolute top-full left-0 mt-2 w-52 bg-gray-900 rounded-xl shadow-2xl z-50 py-1.5 border border-white/10">
+                    <div className="absolute top-full left-0 mt-2 w-56 bg-gray-900 rounded-xl shadow-2xl z-50 py-1.5 border border-white/10">
+                      <div className="px-4 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40 select-none">
+                        Modules
+                      </div>
                       {visibleModules.map((mod) => (
                         <button
                           key={mod.id}
@@ -497,7 +520,8 @@ export default function App() {
                   )}
                 </div>
 
-                <span className="font-bold text-base md:text-lg mr-1 md:mr-3 text-white shrink-0 flex items-center gap-1.5">
+                {/* Op mobiel staat de titel al in de modulewisselaar-knop hierboven */}
+                <span className="hidden md:flex font-bold text-lg mr-3 text-white shrink-0 items-center gap-1.5">
                   {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : "Instellingen")}
                   {activeModule?.id === "kennis" && (
                     <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none">
