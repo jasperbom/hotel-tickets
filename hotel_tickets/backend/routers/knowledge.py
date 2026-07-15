@@ -262,6 +262,51 @@ async def _ai_enabled(db: AsyncSession) -> bool:
     return bool(await _ai_key(db))
 
 
+def _clean_domain(d: str) -> str:
+    return re.sub(r"^https?://", "", d.strip(), flags=re.IGNORECASE).strip("/")
+
+
+def _parse_web_sites(raw: str) -> list[tuple[str, str]]:
+    """Zet de door de admin ingevoerde websites om naar (domein, omschrijving)-
+    paren. Per regel één website; alles achter het domein (optioneel na een
+    streepje/dubbele punt) is de omschrijving waarvoor die site dient. Een regel
+    zonder omschrijving mag ook meerdere komma-gescheiden websites bevatten."""
+    sites: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        first, _, rest = line.partition(" ")
+        rest = rest.strip()
+        if first.endswith((",", ";")) or rest.startswith((",", ";")):
+            rest = ""  # komma-gescheiden websitelijst zonder omschrijving
+        else:
+            rest = re.sub(r"^[-—:|]\s*", "", rest)
+        if rest:
+            d = _clean_domain(first.rstrip(",;:"))
+            if d and d not in seen:
+                seen.add(d)
+                sites.append((d, rest))
+        else:
+            for part in re.split(r"[\s,;]+", line):
+                d = _clean_domain(part)
+                if d and d not in seen:
+                    seen.add(d)
+                    sites.append((d, ""))
+    return sites
+
+
+async def _web_sites(db: AsyncSession) -> list[tuple[str, str]]:
+    """De websites waarop de bot mag zoeken (met omschrijving). Leeg = websearch
+    uit: de instelling moet aanstaan én er moet minstens één website ingevuld
+    zijn."""
+    row = await db.get(SystemSetting, "knowledge_web_search_enabled")
+    if not (row and row.value == "true"):
+        return []
+    return _parse_web_sites(await _setting(db, "knowledge_web_domains"))
+
+
 async def _log_pending(db: AsyncSession, data: "AskRequest", user) -> AskResponse:
     """Log een onbeantwoorde vraag in de wachtrij (dedup op tekst)."""
     existing = await db.execute(
@@ -354,9 +399,11 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
             contexts.append(f"{e.title}\n{e.answer}")
 
         history = [{"role": t.role, "content": t.content} for t in data.history]
-        if contexts or history:
+        web_sites = await _web_sites(db)
+        if contexts or history or web_sites:
             result = await ai_client.answer_from_context(
-                data.question, contexts, key, model, history=history
+                data.question, contexts, key, model, history=history,
+                web_sites=web_sites or None,
             )
             if result is not None:
                 if result["answered"] and result["answer"]:
@@ -1351,12 +1398,16 @@ class AiSettingsOut(BaseModel):
     model: str                  # actief model
     has_key: bool               # is er überhaupt een sleutel ingesteld?
     key_from_addon: bool        # komt de sleutel uit de addon-optie (env)?
+    web_search_enabled: bool    # mag de bot (op toegestane websites) zoeken?
+    web_domains: str            # toegestane websites, zoals door de admin ingevoerd
 
 
 class AiSettingsUpdate(BaseModel):
     enabled: Optional[bool] = None
     api_key: Optional[str] = None   # "" of null = niet wijzigen; spaties = wissen
     model: Optional[str] = None
+    web_search_enabled: Optional[bool] = None
+    web_domains: Optional[str] = None   # null = niet wijzigen; leeg/spaties = wissen
 
 
 async def _set_setting(db: AsyncSession, key: str, value: str | None) -> None:
@@ -1373,6 +1424,7 @@ async def _set_setting(db: AsyncSession, key: str, value: str | None) -> None:
 
 async def _ai_settings_out(db: AsyncSession) -> AiSettingsOut:
     enabled_row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    web_row = await db.get(SystemSetting, "knowledge_web_search_enabled")
     app_key = await _setting(db, "knowledge_ai_key")
     env_key = ai_client.env_api_key()
     return AiSettingsOut(
@@ -1381,6 +1433,8 @@ async def _ai_settings_out(db: AsyncSession) -> AiSettingsOut:
         model=await _ai_model(db),
         has_key=bool(app_key or env_key),
         key_from_addon=not app_key and bool(env_key),
+        web_search_enabled=bool(web_row and web_row.value == "true"),
+        web_domains=await _setting(db, "knowledge_web_domains"),
     )
 
 
@@ -1456,5 +1510,12 @@ async def update_ai_settings(
             await _set_setting(db, "knowledge_ai_key", data.api_key.strip())
     if data.model is not None:
         await _set_setting(db, "knowledge_ai_model", data.model.strip())
+    if data.web_search_enabled is not None:
+        await _set_setting(
+            db, "knowledge_web_search_enabled", "true" if data.web_search_enabled else "false"
+        )
+    if data.web_domains is not None:
+        # lege waarde wist de lijst (en zet websearch daarmee effectief uit)
+        await _set_setting(db, "knowledge_web_domains", data.web_domains.strip())
     await db.flush()
     return await _ai_settings_out(db)
