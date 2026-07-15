@@ -30,6 +30,14 @@ if bashio::config.has_value 'smtp_from'; then
     export SMTP_FROM=$(bashio::config 'smtp_from')
 fi
 
+# Standalone toegang: toegestane netwerken (CIDR's) en sessieduur
+if bashio::config.has_value 'allowed_networks'; then
+    export ALLOWED_NETWORKS=$(bashio::config 'allowed_networks' | tr '\n' ',' | sed 's/,*$//')
+fi
+if bashio::config.has_value 'session_hours'; then
+    export SESSION_HOURS=$(bashio::config 'session_hours')
+fi
+
 # Claude / AI kennisbot (optioneel)
 if bashio::config.has_value 'claude_api_key'; then
     export CLAUDE_API_KEY=$(bashio::config 'claude_api_key')

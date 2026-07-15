@@ -216,6 +216,10 @@ class UserRole(Base):
 
     ha_user_id: Mapped[str] = mapped_column(String(255), primary_key=True)
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
+    # HA-inlognaam; nodig om de standalone loginpagina (Supervisor auth-API
+    # geeft alleen geldig/ongeldig terug) aan dit profiel te koppelen.
+    # Wordt automatisch gevuld bij inloggen via ingress.
+    ha_username: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[Role] = mapped_column(Enum(Role), nullable=False)
     department: Mapped[Category | None] = mapped_column(Enum(Category))
     email: Mapped[str | None] = mapped_column(String(255))
