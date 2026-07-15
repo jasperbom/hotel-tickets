@@ -262,6 +262,26 @@ async def _ai_enabled(db: AsyncSession) -> bool:
     return bool(await _ai_key(db))
 
 
+def _parse_web_domains(raw: str) -> list[str]:
+    """Zet de door de admin ingevoerde websites om naar een nette domeinlijst
+    (één per regel of komma-gescheiden; scheme en slashes worden weggehaald)."""
+    domains: list[str] = []
+    for part in re.split(r"[\s,;]+", raw or ""):
+        d = re.sub(r"^https?://", "", part.strip(), flags=re.IGNORECASE).strip("/")
+        if d and d not in domains:
+            domains.append(d)
+    return domains
+
+
+async def _web_domains(db: AsyncSession) -> list[str]:
+    """De websites waarop de bot mag zoeken. Leeg = websearch uit: de instelling
+    moet aanstaan én er moet minstens één website ingevuld zijn."""
+    row = await db.get(SystemSetting, "knowledge_web_search_enabled")
+    if not (row and row.value == "true"):
+        return []
+    return _parse_web_domains(await _setting(db, "knowledge_web_domains"))
+
+
 async def _log_pending(db: AsyncSession, data: "AskRequest", user) -> AskResponse:
     """Log een onbeantwoorde vraag in de wachtrij (dedup op tekst)."""
     existing = await db.execute(
@@ -354,9 +374,11 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
             contexts.append(f"{e.title}\n{e.answer}")
 
         history = [{"role": t.role, "content": t.content} for t in data.history]
-        if contexts or history:
+        web_domains = await _web_domains(db)
+        if contexts or history or web_domains:
             result = await ai_client.answer_from_context(
-                data.question, contexts, key, model, history=history
+                data.question, contexts, key, model, history=history,
+                web_domains=web_domains or None,
             )
             if result is not None:
                 if result["answered"] and result["answer"]:
@@ -1351,12 +1373,16 @@ class AiSettingsOut(BaseModel):
     model: str                  # actief model
     has_key: bool               # is er überhaupt een sleutel ingesteld?
     key_from_addon: bool        # komt de sleutel uit de addon-optie (env)?
+    web_search_enabled: bool    # mag de bot (op toegestane websites) zoeken?
+    web_domains: str            # toegestane websites, zoals door de admin ingevoerd
 
 
 class AiSettingsUpdate(BaseModel):
     enabled: Optional[bool] = None
     api_key: Optional[str] = None   # "" of null = niet wijzigen; spaties = wissen
     model: Optional[str] = None
+    web_search_enabled: Optional[bool] = None
+    web_domains: Optional[str] = None   # null = niet wijzigen; leeg/spaties = wissen
 
 
 async def _set_setting(db: AsyncSession, key: str, value: str | None) -> None:
@@ -1373,6 +1399,7 @@ async def _set_setting(db: AsyncSession, key: str, value: str | None) -> None:
 
 async def _ai_settings_out(db: AsyncSession) -> AiSettingsOut:
     enabled_row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    web_row = await db.get(SystemSetting, "knowledge_web_search_enabled")
     app_key = await _setting(db, "knowledge_ai_key")
     env_key = ai_client.env_api_key()
     return AiSettingsOut(
@@ -1381,6 +1408,8 @@ async def _ai_settings_out(db: AsyncSession) -> AiSettingsOut:
         model=await _ai_model(db),
         has_key=bool(app_key or env_key),
         key_from_addon=not app_key and bool(env_key),
+        web_search_enabled=bool(web_row and web_row.value == "true"),
+        web_domains=await _setting(db, "knowledge_web_domains"),
     )
 
 
@@ -1456,5 +1485,12 @@ async def update_ai_settings(
             await _set_setting(db, "knowledge_ai_key", data.api_key.strip())
     if data.model is not None:
         await _set_setting(db, "knowledge_ai_model", data.model.strip())
+    if data.web_search_enabled is not None:
+        await _set_setting(
+            db, "knowledge_web_search_enabled", "true" if data.web_search_enabled else "false"
+        )
+    if data.web_domains is not None:
+        # lege waarde wist de lijst (en zet websearch daarmee effectief uit)
+        await _set_setting(db, "knowledge_web_domains", data.web_domains.strip())
     await db.flush()
     return await _ai_settings_out(db)
