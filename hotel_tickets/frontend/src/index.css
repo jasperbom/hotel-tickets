@@ -26,6 +26,17 @@
     html {
       scroll-padding-bottom: 50vh;
     }
+
+    /* iOS Safari zoomt automatisch in op invoervelden met een lettergrootte
+       kleiner dan 16px — de pagina "schiet omhoog" bij focus en blijft na
+       inloggen ingezoomd staan. Minimaal 16px op alle formuliervelden
+       voorkomt die auto-zoom volledig; !important is nodig om Tailwind-
+       utilities als text-sm/text-xs op de velden te overrulen. */
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
   }
 
   html, body {

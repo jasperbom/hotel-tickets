@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { authApi, loginBrandingApi, setSessionToken, type LoginBranding } from "../api/client";
+import { applyButtonPalette, applyAppBackground, readCachedLoginBranding, saveCachedLoginBranding } from "../branding";
 
 /**
  * Standalone loginpagina voor toegang buiten HA ingress om (LAN).
@@ -14,19 +15,20 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [branding, setBranding] = useState<LoginBranding | null>(null);
+  // Start met de laatst bekende loginhuisstijl uit de cache, zodat titel,
+  // logo en kleuren niet opflitsen van standaard naar eigen huisstijl.
+  const [branding, setBranding] = useState<LoginBranding | null>(() => readCachedLoginBranding());
 
   useEffect(() => {
+    // De achtergrond-variabelen zijn vóór de mount al uit de cache gezet
+    // (main.tsx); de verse API-respons corrigeert hier eventuele wijzigingen.
     loginBrandingApi.get().then((r) => {
       const b = r.data;
       setBranding(b);
+      applyButtonPalette(b.btn_color);
       // Achtergrond via dezelfde CSS-variabelen als de app zelf (body::before)
-      const root = document.documentElement;
-      if (b.bg_image) {
-        root.style.setProperty("--app-bg-image", `url("${b.bg_image}")`);
-      } else if (b.bg_color) {
-        root.style.setProperty("--app-bg", b.bg_color);
-      }
+      applyAppBackground(b.bg_image, b.bg_color);
+      saveCachedLoginBranding(b);
     }).catch(() => {});
   }, []);
 
