@@ -2,14 +2,21 @@
 Standalone login voor toegang buiten HA ingress om (bijv. de app op een
 telefoon via het LAN).
 
-Inloggegevens worden geverifieerd tegen de bestaande Home Assistant
-gebruikersaccounts via de Supervisor auth-API (vereist `auth_api: true` in
-config.yaml — staat al aan). Er worden dus nergens wachtwoorden opgeslagen.
+Twee soorten accounts:
 
-De Supervisor bevestigt alleen geldig/ongeldig en geeft geen user-ID terug;
-daarom wordt de HA-gebruikersnaam gekoppeld via `user_roles.ha_username`.
-Die kolom wordt automatisch gevuld zodra iemand één keer via ingress inlogt
-(X-Remote-User-Name header), of kan door een admin worden ingesteld.
+1. HA-gekoppelde accounts — inloggegevens worden geverifieerd tegen de
+   bestaande Home Assistant gebruikersaccounts via de Supervisor auth-API
+   (vereist `auth_api: true` in config.yaml — staat al aan). Er worden dan
+   nergens wachtwoorden opgeslagen. De Supervisor bevestigt alleen
+   geldig/ongeldig en geeft geen user-ID terug; daarom wordt de
+   HA-gebruikersnaam gekoppeld via `user_roles.ha_username`. Die kolom wordt
+   automatisch gevuld zodra iemand één keer via ingress inlogt
+   (X-Remote-User-Name header), of kan door een admin worden ingesteld.
+
+2. Lokale app-accounts — door een admin aangemaakt bij Instellingen →
+   Medewerkers, mét een wachtwoord. Het wachtwoord staat als PBKDF2-hash in
+   `user_roles.password_hash` en wordt volledig binnen de addon geverifieerd:
+   de medewerker heeft géén Home Assistant-account nodig.
 """
 import logging
 import os
@@ -24,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import RequireUser
 from ..database import get_db
 from ..models import UserRole
+from ..passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from ..session import SESSION_HOURS, create_session_token
 
 logger = logging.getLogger(__name__)
@@ -60,10 +68,6 @@ class LoginIn(BaseModel):
 class ChangePasswordIn(BaseModel):
     current_password: str
     new_password: str
-
-
-# HA dwingt zelf nauwelijks een wachtwoordbeleid af; hanteer een minimum.
-MIN_PASSWORD_LENGTH = 8
 
 
 class LoginOut(BaseModel):
@@ -174,11 +178,16 @@ async def change_password(
     user: RequireUser,
     db: AsyncSession = Depends(get_db),
 ):
-    """Zelfservice: de ingelogde medewerker wijzigt het eigen HA-wachtwoord.
+    """Zelfservice: de ingelogde medewerker wijzigt het eigen wachtwoord.
 
-    Het huidige wachtwoord wordt eerst geverifieerd via de Supervisor auth-API,
-    daarna wordt het nieuwe wachtwoord gezet via /auth/reset. Er worden nergens
-    wachtwoorden opgeslagen. Deelt de rate-limiting met de loginpagina.
+    Lokale app-accounts: het huidige wachtwoord wordt tegen de eigen hash
+    geverifieerd en de nieuwe hash wordt in de database gezet.
+
+    HA-gekoppelde accounts: het huidige wachtwoord wordt geverifieerd via de
+    Supervisor auth-API, daarna wordt het nieuwe wachtwoord gezet via
+    /auth/reset. Er worden dan nergens wachtwoorden opgeslagen.
+
+    Deelt de rate-limiting met de loginpagina.
     """
     client_ip = request.client.host if request.client else "?"
     _check_rate_limit(client_ip)
@@ -192,6 +201,20 @@ async def change_password(
         raise HTTPException(status_code=422, detail="Het nieuwe wachtwoord is gelijk aan het huidige")
 
     profile = await db.get(UserRole, user.ha_user_id)
+
+    if profile and profile.password_hash:
+        # Lokaal app-account — volledig binnen de addon afhandelen
+        if not verify_password(body.current_password, profile.password_hash):
+            logger.info(
+                "[auth] Wachtwoordwijziging geweigerd voor lokaal account %s: huidig wachtwoord onjuist (vanaf %s)",
+                user.ha_user_id, client_ip,
+            )
+            raise HTTPException(status_code=401, detail="Het huidige wachtwoord is onjuist")
+        profile.password_hash = hash_password(body.new_password)
+        _attempts.pop(client_ip, None)
+        logger.info("[auth] Wachtwoord gewijzigd voor lokaal account %s", user.ha_user_id)
+        return {"ok": True}
+
     if not profile or not profile.ha_username:
         raise HTTPException(
             status_code=400,
@@ -238,7 +261,15 @@ async def login(body: LoginIn, request: Request, db: AsyncSession = Depends(get_
     if not username or not body.password:
         raise HTTPException(status_code=422, detail="Vul gebruikersnaam en wachtwoord in")
 
-    if DEV_MODE:
+    result = await db.execute(
+        select(UserRole).where(func.lower(UserRole.ha_username) == username.lower())
+    )
+    user = result.scalars().first()
+
+    if user and user.password_hash:
+        # Lokaal app-account: wachtwoord staat (gehasht) in de eigen database
+        valid = verify_password(body.password, user.password_hash)
+    elif DEV_MODE:
         # Dev: wachtwoord "dev" is geldig voor elke bestaande gebruikersnaam
         valid = body.password == "dev"
     else:
@@ -253,10 +284,6 @@ async def login(body: LoginIn, request: Request, db: AsyncSession = Depends(get_
         logger.info("[auth] Mislukte inlogpoging voor %r vanaf %s", username, client_ip)
         raise HTTPException(status_code=401, detail="Ongeldige gebruikersnaam of wachtwoord")
 
-    result = await db.execute(
-        select(UserRole).where(func.lower(UserRole.ha_username) == username.lower())
-    )
-    user = result.scalars().first()
     if not user:
         logger.info("[auth] Geldige login voor %r maar geen gekoppeld profiel", username)
         raise HTTPException(

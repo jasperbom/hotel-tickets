@@ -149,7 +149,8 @@ export default function Settings() {
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserRole>>({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "employee" as Role, email: "", ha_notify_service: "" });
+  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee" as Role, email: "", ha_notify_service: "" });
+  const [newError, setNewError] = useState<string | null>(null);
 
   const isAdmin = me?.role === "admin" || me?.role === "supervisor";
 
@@ -173,14 +174,41 @@ export default function Settings() {
   }
 
   async function createUser() {
-    const r = await userApi.create({
-      ...newForm,
-      notify_push: true,
-      notify_email: !!newForm.email,
-    });
-    setUsers((prev) => [...prev, r.data]);
-    setNewForm({ ha_user_id: "", display_name: "", role: "employee", email: "", ha_notify_service: "" });
-    setShowNew(false);
+    setNewError(null);
+    try {
+      const r = await userApi.create({
+        display_name: newForm.display_name,
+        role: newForm.role,
+        // Lege velden weglaten: zonder ha_user_id + mét wachtwoord maakt de
+        // backend een lokaal app-account aan (inloggen zonder HA)
+        ha_user_id: newForm.ha_user_id.trim() || undefined,
+        ha_username: newForm.ha_username.trim() || undefined,
+        password: newForm.password || undefined,
+        email: newForm.email || undefined,
+        ha_notify_service: newForm.ha_notify_service || undefined,
+        notify_push: true,
+        notify_email: !!newForm.email,
+      });
+      setUsers((prev) => [...prev, r.data]);
+      setNewForm({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee", email: "", ha_notify_service: "" });
+      setShowNew(false);
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      setNewError(typeof detail === "string" ? detail : "Aanmaken mislukt — controleer de invoer");
+    }
+  }
+
+  async function resetPassword(u: UserRole) {
+    const pw = prompt(`Nieuw wachtwoord voor ${u.display_name} (minimaal 8 tekens):`);
+    if (!pw) return;
+    try {
+      const r = await userApi.setPassword(u.ha_user_id, pw);
+      setUsers((prev) => prev.map((x) => x.ha_user_id === u.ha_user_id ? r.data : x));
+      alert(`Wachtwoord ingesteld. ${u.display_name} kan nu op de loginpagina inloggen met gebruikersnaam "${r.data.ha_username}".`);
+    } catch (err) {
+      const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+      alert(typeof detail === "string" ? detail : "Wachtwoord instellen mislukt");
+    }
   }
 
   return (
@@ -200,9 +228,6 @@ export default function Settings() {
           <div className="bg-blue-50 rounded-lg p-4 space-y-3">
             <h3 className="text-sm font-semibold">Nieuwe medewerker</h3>
             <div className="grid grid-cols-2 gap-2">
-              <input placeholder="HA user_id" value={newForm.ha_user_id}
-                onChange={(e) => setNewForm({ ...newForm, ha_user_id: e.target.value })}
-                className="border border-gray-300 rounded px-2 py-1 text-sm" />
               <input placeholder="Naam" value={newForm.display_name}
                 onChange={(e) => setNewForm({ ...newForm, display_name: e.target.value })}
                 className="border border-gray-300 rounded px-2 py-1 text-sm" />
@@ -213,6 +238,17 @@ export default function Settings() {
                   <option key={r} value={r}>{ROLE_LABELS[r]}</option>
                 ))}
               </select>
+              <input placeholder="Inlognaam (gebruikersnaam)" value={newForm.ha_username}
+                onChange={(e) => setNewForm({ ...newForm, ha_username: e.target.value })}
+                autoCapitalize="none" autoCorrect="off"
+                className="border border-gray-300 rounded px-2 py-1 text-sm" />
+              <input placeholder="Wachtwoord (min. 8 tekens)" type="password" value={newForm.password}
+                onChange={(e) => setNewForm({ ...newForm, password: e.target.value })}
+                autoComplete="new-password"
+                className="border border-gray-300 rounded px-2 py-1 text-sm" />
+              <input placeholder="HA user_id (alleen voor HA-account)" value={newForm.ha_user_id}
+                onChange={(e) => setNewForm({ ...newForm, ha_user_id: e.target.value })}
+                className="border border-gray-300 rounded px-2 py-1 text-sm" />
               <input placeholder="E-mail (optioneel)" value={newForm.email}
                 onChange={(e) => setNewForm({ ...newForm, email: e.target.value })}
                 className="border border-gray-300 rounded px-2 py-1 text-sm" />
@@ -220,9 +256,15 @@ export default function Settings() {
                 onChange={(e) => setNewForm({ ...newForm, ha_notify_service: e.target.value })}
                 className="col-span-2 border border-gray-300 rounded px-2 py-1 text-sm" />
             </div>
+            <p className="text-xs text-gray-500">
+              Met een inlognaam + wachtwoord maak je een <strong>app-account</strong> aan: de medewerker
+              logt in op de loginpagina zonder Home Assistant-account. Laat het wachtwoord leeg en vul
+              een HA user_id in om een bestaande HA-gebruiker te koppelen.
+            </p>
+            {newError && <p className="text-sm text-red-600 bg-red-50 rounded px-2 py-1">{newError}</p>}
             <div className="flex gap-2">
               <button onClick={createUser} className="btn-primary text-sm">Opslaan</button>
-              <button onClick={() => setShowNew(false)} className="btn-secondary text-sm">Annuleren</button>
+              <button onClick={() => { setShowNew(false); setNewError(null); }} className="btn-secondary text-sm">Annuleren</button>
             </div>
           </div>
         )}
@@ -261,6 +303,13 @@ export default function Settings() {
                         onChange={(e) => setEditForm({ ...editForm, ha_notify_service: e.target.value })}
                         placeholder="Notify service"
                         className="border border-gray-300 rounded px-2 py-1 text-sm" />
+                      {isAdmin && (
+                        <input value={editForm.ha_username || ""}
+                          onChange={(e) => setEditForm({ ...editForm, ha_username: e.target.value })}
+                          placeholder="Inlognaam (voor de loginpagina)"
+                          autoCapitalize="none" autoCorrect="off"
+                          className="border border-gray-300 rounded px-2 py-1 text-sm" />
+                      )}
                     </div>
                     <div className="flex gap-2">
                       <button onClick={() => saveEdit(user.ha_user_id)} className="btn-primary text-sm">Opslaan</button>
@@ -277,11 +326,20 @@ export default function Settings() {
                         {user.department && (
                           <span className="badge bg-gray-100 text-gray-600">{DEPT_LABELS[user.department]}</span>
                         )}
+                        {user.has_password && (
+                          <span className="badge bg-purple-100 text-purple-700">App-account</span>
+                        )}
                       </div>
                     </div>
                     <div className="flex gap-2 text-sm shrink-0">
                       <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }}
                         className="text-blue-600 hover:text-blue-700">Bewerken</button>
+                      {isAdmin && (
+                        <button onClick={() => resetPassword(user)}
+                          className="text-purple-600 hover:text-purple-700">
+                          {user.has_password ? "Wachtwoord resetten" : "Wachtwoord instellen"}
+                        </button>
+                      )}
                       {isAdmin && (
                         <button onClick={() => deleteUser(user.ha_user_id)}
                           className="text-red-600 hover:text-red-700">Verwijderen</button>

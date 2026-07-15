@@ -143,6 +143,8 @@ export interface UserRole {
   ha_notify_service: string | null;
   ha_device_tracker: string | null;
   notify_new_ticket: boolean;
+  // true = lokaal app-account (wachtwoord in de addon zelf, geen HA nodig)
+  has_password: boolean;
 }
 
 export type SubtaskMode = "none" | "subtasks" | "rooms";
@@ -291,9 +293,12 @@ export const notificationApi = {
 export const userApi = {
   me: () => api.get<UserRole>("/users/me"),
   list: () => api.get<UserRole[]>("/users/"),
-  create: (data: Partial<UserRole>) => api.post<UserRole>("/users/", data),
+  create: (data: Partial<UserRole> & { password?: string }) => api.post<UserRole>("/users/", data),
   update: (id: string, data: Partial<UserRole>) => api.patch<UserRole>(`/users/${id}`, data),
   remove: (id: string) => api.delete(`/users/${id}`),
+  // Admin: wachtwoord van een lokaal app-account instellen/resetten (null = uitschakelen)
+  setPassword: (id: string, password: string | null) =>
+    api.post<UserRole>(`/users/${id}/password`, { password }),
 };
 
 export const locationApi = {
