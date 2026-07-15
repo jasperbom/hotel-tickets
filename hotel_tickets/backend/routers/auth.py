@@ -21,6 +21,7 @@ from pydantic import BaseModel
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from ..auth import RequireUser
 from ..database import get_db
 from ..models import UserRole
 from ..session import SESSION_HOURS, create_session_token
@@ -54,6 +55,15 @@ def _check_rate_limit(ip: str) -> None:
 class LoginIn(BaseModel):
     username: str
     password: str
+
+
+class ChangePasswordIn(BaseModel):
+    current_password: str
+    new_password: str
+
+
+# HA dwingt zelf nauwelijks een wachtwoordbeleid af; hanteer een minimum.
+MIN_PASSWORD_LENGTH = 8
 
 
 class LoginOut(BaseModel):
@@ -112,6 +122,111 @@ async def _verify_ha_credentials(username: str, password: str) -> bool:
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Kan inloggegevens nu niet verifiëren — probeer het later opnieuw",
         )
+
+
+async def _supervisor_reset_password(username: str, new_password: str) -> None:
+    """Zet een nieuw wachtwoord voor een HA-gebruiker via de Supervisor.
+
+    Gebruikt `POST /auth/reset` (hetzelfde als `ha authentication reset` in de
+    HA CLI). Vereist `hassio_role: admin` in config.yaml.
+    """
+    try:
+        async with aiohttp.ClientSession() as session:
+            async with session.post(
+                "http://supervisor/auth/reset",
+                headers={"X-Supervisor-Token": SUPERVISOR_TOKEN},
+                json={"username": username, "password": new_password},
+                timeout=aiohttp.ClientTimeout(total=10),
+            ) as resp:
+                if resp.status == 200:
+                    return
+                body = (await resp.text())[:300]
+                logger.error(
+                    "[auth] Supervisor wachtwoord-reset voor %r mislukt: HTTP %s — %s",
+                    username, resp.status, body,
+                )
+                if resp.status in (401, 403):
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=(
+                            "De addon heeft geen rechten om wachtwoorden te wijzigen. "
+                            "Werk de addon bij naar de nieuwste versie en herstart hem."
+                        ),
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Wachtwoord wijzigen mislukt (HTTP {resp.status}) — zie het addon-log",
+                )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.warning("[auth] Supervisor auth-reset-API onbereikbaar: %s", exc)
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Kan het wachtwoord nu niet wijzigen — probeer het later opnieuw",
+        )
+
+
+@router.post("/change-password")
+async def change_password(
+    body: ChangePasswordIn,
+    request: Request,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Zelfservice: de ingelogde medewerker wijzigt het eigen HA-wachtwoord.
+
+    Het huidige wachtwoord wordt eerst geverifieerd via de Supervisor auth-API,
+    daarna wordt het nieuwe wachtwoord gezet via /auth/reset. Er worden nergens
+    wachtwoorden opgeslagen. Deelt de rate-limiting met de loginpagina.
+    """
+    client_ip = request.client.host if request.client else "?"
+    _check_rate_limit(client_ip)
+
+    if len(body.new_password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Het nieuwe wachtwoord moet minimaal {MIN_PASSWORD_LENGTH} tekens lang zijn",
+        )
+    if body.new_password == body.current_password:
+        raise HTTPException(status_code=422, detail="Het nieuwe wachtwoord is gelijk aan het huidige")
+
+    profile = await db.get(UserRole, user.ha_user_id)
+    if not profile or not profile.ha_username:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Je HA-gebruikersnaam is nog niet gekoppeld aan je profiel. "
+                "Log één keer in via Home Assistant zelf, of vraag een beheerder "
+                "je gebruikersnaam in te stellen bij Instellingen → Medewerkers."
+            ),
+        )
+    username = profile.ha_username
+
+    if DEV_MODE:
+        # Dev: huidig wachtwoord "dev" is geldig; er wordt niets echt gewijzigd
+        valid = body.current_password == "dev"
+    else:
+        if not SUPERVISOR_TOKEN:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Supervisor niet beschikbaar — wachtwoord wijzigen kan alleen binnen Home Assistant",
+            )
+        valid = await _verify_ha_credentials(username, body.current_password)
+
+    if not valid:
+        logger.info(
+            "[auth] Wachtwoordwijziging geweigerd voor %r: huidig wachtwoord onjuist (vanaf %s)",
+            username, client_ip,
+        )
+        raise HTTPException(status_code=401, detail="Het huidige wachtwoord is onjuist")
+
+    if not DEV_MODE:
+        await _supervisor_reset_password(username, body.new_password)
+
+    _attempts.pop(client_ip, None)
+    logger.info("[auth] Wachtwoord gewijzigd voor %r (user %s)", username, user.ha_user_id)
+    return {"ok": True}
 
 
 @router.post("/login", response_model=LoginOut)

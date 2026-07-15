@@ -23,6 +23,7 @@ import Instellingen from "./pages/Instellingen";
 import KennisBot from "./pages/KennisBot";
 import KennisbankBeheer from "./pages/KennisbankBeheer";
 import Berichten from "./pages/Berichten";
+import WachtwoordWijzigen from "./pages/WachtwoordWijzigen";
 import Login from "./pages/Login";
 import { InboxEnvelope } from "./components/InboxEnvelope";
 import { userApi, bikesModuleApi, brandingApi, hasSessionToken, clearSessionToken, type UserRole, type BikesModuleRoles } from "./api/client";
@@ -207,8 +208,8 @@ export default function App() {
       setActiveModuleId("fietsen");
     } else if (p.startsWith("/kennis")) {
       setActiveModuleId("kennis");
-    } else if (p.startsWith("/instellingen")) {
-      setActiveModuleId(null); // Instellingen heeft geen module-context
+    } else if (p.startsWith("/instellingen") || p.startsWith("/wachtwoord")) {
+      setActiveModuleId(null); // Instellingen/wachtwoord hebben geen module-context
     } else {
       setActiveModuleId("taken");
     }
@@ -339,6 +340,7 @@ export default function App() {
   });
 
   const isOnInstellingen = location.pathname === "/instellingen";
+  const isOnWachtwoord = location.pathname === "/wachtwoord";
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
   // Zwevende actieknoppen (nieuw ticket + kennisbot-vraag) onderin.
@@ -347,6 +349,9 @@ export default function App() {
   const showFabs =
     (activeModule || isOnInstellingen) &&
     !["/tickets/new", "/kennis"].includes(location.pathname);
+
+  // Pagina's buiten module-context die wél in de app-shell renderen
+  const isShellPage = isOnInstellingen || isOnWachtwoord;
 
   function handleModuleClick(mod: ModuleConfig) {
     setActiveModuleId(mod.id);
@@ -396,6 +401,20 @@ export default function App() {
           </button>
         ))}
         </div>
+        <div className="mb-3">
+          <button
+            onClick={() => navigate("/wachtwoord")}
+            title="Wachtwoord wijzigen"
+            className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+              isOnWachtwoord
+                ? "bg-white/20 text-white"
+                : "text-white/60 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <span className="text-xl">🔑</span>
+            <span className="leading-tight text-center truncate w-full px-0.5">Wachtwoord</span>
+          </button>
+        </div>
         {canSeeInstellingen && (
           <div className="mb-3">
             <button
@@ -429,7 +448,7 @@ export default function App() {
       {/* Rechter kolom: topnav + inhoud */}
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top navigatie */}
-        {(activeModule || isOnInstellingen) && (
+        {(activeModule || isShellPage) && (
           <nav className="text-white shadow-lg sticky top-0 z-50" style={{ backgroundColor: brandColor ?? "#1e3a5f" }}>
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 min-w-0">
@@ -467,6 +486,19 @@ export default function App() {
                           {activeModuleId === mod.id && <span className="ml-auto text-white/40 text-xs">✓</span>}
                         </button>
                       ))}
+                      <div className="mx-3 my-1 border-t border-white/10" />
+                      <button
+                        onClick={() => navigate("/wachtwoord")}
+                        className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
+                          isOnWachtwoord
+                            ? "bg-white/20 text-white"
+                            : "text-white/70 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        <span className="text-lg">🔑</span>
+                        <span>Wachtwoord wijzigen</span>
+                        {isOnWachtwoord && <span className="ml-auto text-white/40 text-xs">✓</span>}
+                      </button>
                       {canSeeInstellingen && (
                         <>
                           <div className="mx-3 my-1 border-t border-white/10" />
@@ -501,7 +533,7 @@ export default function App() {
                 </div>
 
                 <span className="font-bold text-base md:text-lg mr-1 md:mr-3 text-white shrink-0 flex items-center gap-1.5">
-                  {activeModule?.navTitle ?? "Instellingen"}
+                  {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : "Instellingen")}
                   {activeModule?.id === "kennis" && (
                     <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none">
                       Beta
@@ -540,7 +572,7 @@ export default function App() {
         )}
 
         {/* Inhoud */}
-        {activeModule || isOnInstellingen ? (
+        {activeModule || isShellPage ? (
           <main
             className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/kennis" ? "" : "touch-keyboard-pb"} ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"} ${showFabs ? "pb-28" : ""}`}
           >
@@ -587,6 +619,8 @@ export default function App() {
               />
               {/* Instellingen (globaal) */}
               <Route path="/instellingen" element={<Instellingen />} />
+              {/* Wachtwoord wijzigen (voor iedereen) */}
+              <Route path="/wachtwoord" element={<WachtwoordWijzigen />} />
             </Routes>
           </main>
         ) : (

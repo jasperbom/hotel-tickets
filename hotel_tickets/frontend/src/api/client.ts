@@ -45,6 +45,8 @@ export const authApi = {
       username,
       password,
     }),
+  changePassword: (current_password: string, new_password: string) =>
+    api.post<{ ok: boolean }>("/auth/change-password", { current_password, new_password }),
 };
 
 /** True wanneer de app draait op een sessietoken van de loginpagina. */
