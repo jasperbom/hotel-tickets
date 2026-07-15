@@ -24,7 +24,11 @@
      apparaten — op desktop zou dit onnodig springgedrag geven. */
   @media (hover: none) and (pointer: coarse) {
     html {
-      scroll-padding-bottom: 50vh;
+      /* --kb-inset = gemeten toetsenbordhoogte (App.tsx via visualViewport).
+         Voorheen stond hier een vaste 50vh, waardoor een gefocust veld onderin
+         de pagina veel te ver omhoog sprong (met een grote lege ruimte eronder).
+         Zonder meting valt het terug op een royale default. */
+      scroll-padding-bottom: var(--kb-inset, 40vh);
     }
 
     /* iOS Safari zoomt automatisch in op invoervelden met een lettergrootte
@@ -77,7 +81,7 @@
    is onder het laatste invoerveld wanneer het toetsenbord opent. */
 @media (hover: none) and (pointer: coarse) {
   .touch-keyboard-pb {
-    padding-bottom: calc(50vh + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(var(--kb-inset, 40vh) + env(safe-area-inset-bottom, 0px));
   }
 
   /* Vaste-hoogte pagina's (bijv. de kennisbot-chat) zetten de body in `kb-fit`-

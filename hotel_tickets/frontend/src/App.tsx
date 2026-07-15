@@ -257,6 +257,37 @@ export default function App() {
     };
   }, []);
 
+  // Meet de werkelijke hoogte van het virtuele toetsenbord via de
+  // visualViewport en zet die als CSS-variabele --kb-inset. scroll-padding-bottom
+  // en de onderkant-padding (index.css) gebruiken deze waarde in plaats van een
+  // vaste 50vh. Daardoor scrolt een gefocust veld nog maar nét tot boven het
+  // toetsenbord, in plaats van een halve scherm omhoog te springen met een grote
+  // lege ruimte eronder. Bij een gesloten toetsenbord is de inset 0 (geen gat).
+  useEffect(() => {
+    const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+    const vv = window.visualViewport;
+    if (!isTouch || !vv) return;
+    const root = document.documentElement;
+    let raf = 0;
+    const update = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        // Verschil tussen layout-viewport en zichtbare viewport = toetsenbord.
+        // Kleine verschillen (bijv. de adresbalk) tellen niet als toetsenbord.
+        const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+        root.style.setProperty("--kb-inset", kb < 120 ? "0px" : `${Math.round(kb)}px`);
+      });
+    };
+    vv.addEventListener("resize", update);
+    vv.addEventListener("scroll", update);
+    return () => {
+      vv.removeEventListener("resize", update);
+      vv.removeEventListener("scroll", update);
+      cancelAnimationFrame(raf);
+      root.style.removeProperty("--kb-inset");
+    };
+  }, []);
+
   // Sluit mobile menu bij navigatie
   useEffect(() => {
     setMobileMenuOpen(false);
