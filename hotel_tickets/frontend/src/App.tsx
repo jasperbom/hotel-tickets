@@ -22,6 +22,8 @@ import BikeInstellingen from "./pages/BikeInstellingen";
 import Instellingen from "./pages/Instellingen";
 import KennisBot from "./pages/KennisBot";
 import KennisbankBeheer from "./pages/KennisbankBeheer";
+import Berichten from "./pages/Berichten";
+import { InboxEnvelope } from "./components/InboxEnvelope";
 import { userApi, bikesModuleApi, brandingApi, type UserRole, type BikesModuleRoles } from "./api/client";
 import { saveLastRoute } from "./lastRoute";
 
@@ -465,7 +467,7 @@ export default function App() {
                 </span>
 
                 {/* Navigatie links — altijd zichtbaar, horizontaal scrollbaar op mobiel */}
-                <div className="flex items-center gap-0.5 md:gap-1 overflow-x-auto scrollbar-none min-w-0">
+                <div className="flex items-center gap-0.5 md:gap-1 overflow-x-auto scrollbar-none min-w-0 flex-1">
                   {visibleNavItems.map((item) => (
                     <NavLink
                       key={item.to}
@@ -484,6 +486,11 @@ export default function App() {
                     </NavLink>
                   ))}
                 </div>
+
+                {/* Envelopje: ongelezen berichten (@-mentions + commentaar op eigen tickets) */}
+                <div className="ml-auto shrink-0">
+                  <InboxEnvelope />
+                </div>
               </div>
             </div>
           </nav>
@@ -501,6 +508,7 @@ export default function App() {
               <Route path="/tickets" element={<TicketList />} />
               <Route path="/tickets/new" element={<NewTicket />} />
               <Route path="/tickets/:id" element={<TicketDetail />} />
+              <Route path="/berichten" element={<Berichten />} />
               <Route path="/recurring/:id" element={<RecurringTaskDetail />} />
               <Route path="/recurring" element={<RecurringTasks />} />
               <Route path="/reports" element={<Reports />} />

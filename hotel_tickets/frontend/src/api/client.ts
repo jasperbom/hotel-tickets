@@ -223,6 +223,29 @@ export const ticketApi = {
   photoUrl: (id: string, filename: string) => `${API_BASE}/tickets/${id}/photos/${filename}`,
 };
 
+export type NotificationType = "mention" | "comment";
+
+export interface TicketNotification {
+  id: string;
+  type: NotificationType;
+  ticket_id: string;
+  ticket_title: string | null;
+  comment_id: string | null;
+  comment_body: string | null;
+  actor_id: string;
+  actor_name: string | null;
+  read: boolean;
+  created_at: string;
+}
+
+export const notificationApi = {
+  list: () => api.get<TicketNotification[]>("/notifications/"),
+  unreadCount: () => api.get<{ count: number }>("/notifications/unread-count"),
+  markRead: (id: string) => api.post(`/notifications/${id}/read`),
+  markAllRead: () => api.post("/notifications/read-all"),
+  markReadByTicket: (ticketId: string) => api.post(`/notifications/read-by-ticket/${ticketId}`),
+};
+
 export const userApi = {
   me: () => api.get<UserRole>("/users/me"),
   list: () => api.get<UserRole[]>("/users/"),

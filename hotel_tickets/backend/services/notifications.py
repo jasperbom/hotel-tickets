@@ -74,6 +74,24 @@ async def notify_ticket_assigned(
         )
 
 
+async def notify_mention(
+    author_name: str,
+    ticket_title: str,
+    recipient_service: str,
+    ticket_url: str | None = None,
+) -> None:
+    """Push naar een medewerker die met @ genoemd wordt in een commentaar."""
+    data: dict = {"tag": "ticket_mention"}
+    if ticket_url:
+        data["url"] = ticket_url
+    await notify_push(
+        recipient_service,
+        title=f"💬 {author_name} noemde je",
+        message=f"In ticket: {ticket_title}",
+        data=data,
+    )
+
+
 async def notify_room_free(ticket_title: str, location_name: str, assignee_service: str, ticket_url: str | None = None) -> None:
     """Push-notificatie naar de toegewezen medewerker als de kamer vrij is."""
     data: dict = {"tag": f"room_free_{assignee_service}"}

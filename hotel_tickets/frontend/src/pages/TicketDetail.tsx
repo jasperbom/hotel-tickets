@@ -2,8 +2,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, knowledgeApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role, type Category } from "../api/client";
+import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUTC, type Ticket, type Comment, type UserRole, type Status, type Priority, type KeycardStatus, type Role, type Category } from "../api/client";
 import { StatusBadge, PriorityBadge, CategoryBadge } from "../components/StatusBadge";
+import { MentionTextarea, renderWithMentions } from "../components/MentionTextarea";
 
 const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: "urgent", label: "Urgent" },
@@ -67,6 +68,9 @@ export default function TicketDetail() {
       setCurrentUserRole(r.data.role);
       setCurrentUserDept(r.data.department);
     }).catch(() => {});
+
+    // Berichten over dit ticket als gelezen markeren (envelopje)
+    notificationApi.markReadByTicket(id).catch(() => {});
 
     // Keycard sensor ophalen als er een locatie is
     if (t.data.location_id) {
@@ -618,9 +622,10 @@ export default function TicketDetail() {
               </div>
               {editingCommentId === c.id ? (
                 <div className="space-y-2">
-                  <textarea
+                  <MentionTextarea
                     value={editingBody}
-                    onChange={(e) => setEditingBody(e.target.value)}
+                    onChange={setEditingBody}
+                    users={users}
                     rows={3}
                     className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
                   />
@@ -647,7 +652,9 @@ export default function TicketDetail() {
                   </div>
                 </div>
               ) : (
-                <p className="text-sm text-gray-800 whitespace-pre-wrap">{c.body}</p>
+                <p className="text-sm text-gray-800 whitespace-pre-wrap">
+                  {renderWithMentions(c.body, users.map((u) => u.display_name))}
+                </p>
               )}
             </div>
           ))}
@@ -656,12 +663,13 @@ export default function TicketDetail() {
           )}
         </div>
         <form onSubmit={submitComment} className="flex gap-2">
-          <textarea
+          <MentionTextarea
             value={commentBody}
-            onChange={(e) => setCommentBody(e.target.value)}
-            placeholder="Voeg commentaar toe..."
+            onChange={setCommentBody}
+            users={users}
+            placeholder="Voeg commentaar toe... (@naam om een collega te noemen)"
             rows={2}
-            className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
           />
           <button type="submit" disabled={saving || !commentBody.trim()} className="btn-primary self-end">
             Verstuur
