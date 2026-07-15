@@ -754,12 +754,12 @@ export default function BikeBeheer() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto scrollbar-none">
         {(["fietsen", "types", "balans", "onderhoud"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors shrink-0 whitespace-nowrap ${
               tab === t ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
             }`}
           >

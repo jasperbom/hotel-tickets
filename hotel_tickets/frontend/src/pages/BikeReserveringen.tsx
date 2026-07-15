@@ -471,10 +471,10 @@ export default function BikeReserveringen() {
   return (
     <div className="max-w-full">
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold">Reserveringen</h1>
           {/* View toggle */}
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl">
+          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl shrink-0">
             <button
               onClick={() => setView("tijdlijn")}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${

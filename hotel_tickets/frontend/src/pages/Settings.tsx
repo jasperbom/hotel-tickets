@@ -268,18 +268,18 @@ export default function Settings() {
                     </div>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1">
+                  <div className="flex flex-wrap items-center gap-3">
+                    <div className="flex-1 min-w-0">
                       <p className="font-medium text-sm">{user.display_name}</p>
-                      <p className="text-xs text-gray-500">{user.ha_user_id}</p>
-                      <div className="flex gap-1.5 mt-1">
+                      <p className="text-xs text-gray-500 break-all">{user.ha_user_id}</p>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
                         <span className="badge bg-blue-100 text-blue-700">{ROLE_LABELS[user.role]}</span>
                         {user.department && (
                           <span className="badge bg-gray-100 text-gray-600">{DEPT_LABELS[user.department]}</span>
                         )}
                       </div>
                     </div>
-                    <div className="flex gap-2 text-sm">
+                    <div className="flex gap-2 text-sm shrink-0">
                       <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }}
                         className="text-blue-600 hover:text-blue-700">Bewerken</button>
                       {isAdmin && (
