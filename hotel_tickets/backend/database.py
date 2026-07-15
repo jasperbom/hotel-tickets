@@ -117,6 +117,12 @@ async def _run_migrations(conn):
         "WHERE role IN ('technician', 'housekeeping', 'reception')"
     )
 
+    # Opruimen: profielen met een leeg ha_user_id. Die konden vroeger ontstaan
+    # wanneer het veld leeg werd gelaten bij het aanmaken (de API accepteerde
+    # ""), en zijn via de UI niet te verwijderen (DELETE /users/ matcht de
+    # route niet). De API weigert lege id's inmiddels.
+    await conn.exec_driver_sql("DELETE FROM user_roles WHERE ha_user_id = ''")
+
     # Reset custom emoji's van recurring templates naar NULL (altijd 🔁 gebruiken)
     await conn.exec_driver_sql("UPDATE recurring_templates SET emoji = NULL WHERE emoji IS NOT NULL")
 

@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi,
+  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi, authApi,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
-  type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding,
+  type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding, type LoginBan,
 } from "../api/client";
 
 type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot";
@@ -133,41 +133,133 @@ const DEPT_FULL_LABELS: Record<Category, string> = {
   service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin",
 };
 
+// Haal de leesbare foutmelding uit een API-fout (FastAPI zet die in detail)
+function apiErrorText(err: unknown, fallback: string): string {
+  const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
+  return typeof detail === "string" ? detail : fallback;
+}
+
+function BeveiligingPanel() {
+  const [bans, setBans] = useState<LoginBan[] | null>(null);
+
+  useEffect(() => {
+    authApi.listBans().then((r) => setBans(r.data)).catch(() => {});
+  }, []);
+
+  async function removeBan(ip: string) {
+    await authApi.removeBan(ip);
+    setBans((prev) => (prev ?? []).filter((b) => b.ip !== ip));
+  }
+
+  if (!bans) return null;
+
+  return (
+    <Section title="Beveiliging — loginpagina">
+      <p className="text-xs text-gray-500">
+        Een IP-adres wordt na 25 mislukte inlogpogingen permanent geblokkeerd (je krijgt
+        daarvan een pushmelding). Hier hef je blokkades op en zie je lopende tellers.
+      </p>
+      {bans.length === 0 ? (
+        <p className="text-sm text-gray-500">Geen mislukte inlogpogingen geregistreerd.</p>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {bans.map((b) => (
+            <div key={b.ip} className="py-2 flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="font-mono text-sm">{b.ip}</p>
+                <p className="text-xs text-gray-500">
+                  {b.failed_count} mislukte poging{b.failed_count === 1 ? "" : "en"}
+                  {b.last_username && <> · laatste gebruikersnaam: <span className="font-mono">{b.last_username}</span></>}
+                  {" · "}{new Date(b.last_attempt_at).toLocaleString("nl-NL")}
+                </p>
+              </div>
+              {b.banned && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Geblokkeerd</span>}
+              <button onClick={() => removeBan(b.ip)} className="text-sm text-blue-600 hover:underline shrink-0">
+                {b.banned ? "Blokkade opheffen" : "Teller wissen"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
 function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   const [users, setUsers] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserRole>>({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", ha_username: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+  // Foutmeldingen nooit stil inslikken — toon ze in de betreffende sectie
+  const [newError, setNewError] = useState<string | null>(null);
+  const [listError, setListError] = useState<string | null>(null);
 
   useEffect(() => {
     userApi.list().then((r) => setUsers(r.data)).finally(() => setLoading(false));
   }, []);
 
   async function saveEdit(userId: string) {
-    const r = await userApi.update(userId, editForm);
-    setUsers((prev) => prev.map((u) => u.ha_user_id === userId ? r.data : u));
-    setEditing(null);
+    setListError(null);
+    try {
+      const r = await userApi.update(userId, editForm);
+      setUsers((prev) => prev.map((u) => u.ha_user_id === userId ? r.data : u));
+      setEditing(null);
+    } catch (err) {
+      setListError(apiErrorText(err, "Opslaan mislukt — probeer het opnieuw"));
+    }
   }
 
   async function deleteUser(userId: string) {
     if (!confirm("Gebruiker verwijderen?")) return;
-    await userApi.remove(userId);
-    setUsers((prev) => prev.filter((u) => u.ha_user_id !== userId));
+    setListError(null);
+    try {
+      await userApi.remove(userId);
+      setUsers((prev) => prev.filter((u) => u.ha_user_id !== userId));
+    } catch (err) {
+      setListError(apiErrorText(err, "Verwijderen mislukt — probeer het opnieuw"));
+    }
+  }
+
+  async function resetPassword(u: UserRole) {
+    const pw = prompt(`Nieuw wachtwoord voor ${u.display_name} (minimaal 8 tekens):`);
+    if (!pw) return;
+    setListError(null);
+    try {
+      const r = await userApi.setPassword(u.ha_user_id, pw);
+      setUsers((prev) => prev.map((x) => x.ha_user_id === u.ha_user_id ? r.data : x));
+      alert(`Wachtwoord ingesteld. ${u.display_name} kan nu op de loginpagina inloggen met gebruikersnaam "${r.data.ha_username}".`);
+    } catch (err) {
+      setListError(apiErrorText(err, "Wachtwoord instellen mislukt"));
+    }
   }
 
   async function createUser() {
-    const payload = {
-      ...newForm,
-      department: newForm.department === "" ? null : newForm.department,
-      notify_push: true,
-      notify_email: !!newForm.email,
-    };
-    const r = await userApi.create(payload);
-    setUsers((prev) => [...prev, r.data]);
-    setNewForm({ ha_user_id: "", display_name: "", ha_username: "", role: "employee", department: "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
-    setShowNew(false);
+    setNewError(null);
+    try {
+      const r = await userApi.create({
+        display_name: newForm.display_name,
+        role: newForm.role,
+        department: newForm.department === "" ? null : newForm.department,
+        // Lege velden weglaten: zonder ha_user_id + mét wachtwoord maakt de
+        // backend een lokaal app-account aan (inloggen zonder HA-account)
+        ha_user_id: newForm.ha_user_id.trim() || undefined,
+        ha_username: newForm.ha_username.trim() || undefined,
+        password: newForm.password || undefined,
+        email: newForm.email || undefined,
+        ha_notify_service: newForm.ha_notify_service || undefined,
+        ha_device_tracker: newForm.ha_device_tracker || undefined,
+        notify_new_ticket: newForm.notify_new_ticket,
+        notify_push: true,
+        notify_email: !!newForm.email,
+      });
+      setUsers((prev) => [...prev, r.data]);
+      setNewForm({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee", department: "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+      setShowNew(false);
+    } catch (err) {
+      setNewError(apiErrorText(err, "Aanmaken mislukt — controleer de invoer"));
+    }
   }
 
   return (
@@ -180,15 +272,20 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
         <div className="bg-blue-50 rounded-lg p-4 space-y-3">
           <h3 className="text-sm font-semibold">Nieuwe medewerker</h3>
           <div className="grid grid-cols-2 gap-2">
-            <input placeholder="HA user_id" value={newForm.ha_user_id}
-              onChange={(e) => setNewForm({ ...newForm, ha_user_id: e.target.value })}
-              className="border rounded px-2 py-1 text-sm" />
             <input placeholder="Naam" value={newForm.display_name}
               onChange={(e) => setNewForm({ ...newForm, display_name: e.target.value })}
               className="border rounded px-2 py-1 text-sm" />
-            <input placeholder="HA gebruikersnaam (voor loginpagina)" value={newForm.ha_username}
+            <input placeholder="Inlognaam (gebruikersnaam)" value={newForm.ha_username}
               onChange={(e) => setNewForm({ ...newForm, ha_username: e.target.value })}
-              className="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+              autoCapitalize="none" autoCorrect="off"
+              className="border rounded px-2 py-1 text-sm font-mono" />
+            <input placeholder="Wachtwoord (min. 8 tekens)" type="password" value={newForm.password}
+              onChange={(e) => setNewForm({ ...newForm, password: e.target.value })}
+              autoComplete="new-password"
+              className="border rounded px-2 py-1 text-sm" />
+            <input placeholder="HA user_id (alleen bij HA-account)" value={newForm.ha_user_id}
+              onChange={(e) => setNewForm({ ...newForm, ha_user_id: e.target.value })}
+              className="border rounded px-2 py-1 text-sm font-mono" />
             <select value={newForm.role} onChange={(e) => setNewForm({ ...newForm, role: e.target.value as Role })}
               className="border rounded px-2 py-1 text-sm bg-white">
               {(Object.keys(ROLE_LABELS) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
@@ -213,12 +310,20 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
               <span>Push bij elk nieuw ticket in mijn afdeling{newForm.ha_device_tracker ? " (alleen op wifi)" : ""}</span>
             </label>
           </div>
+          <p className="text-xs text-gray-500">
+            Met een inlognaam + wachtwoord maak je een <strong>app-account</strong> aan: de medewerker
+            logt in op de loginpagina zonder Home Assistant-account. Laat het wachtwoord leeg en vul
+            een HA user_id in om een bestaande HA-gebruiker te koppelen.
+          </p>
+          {newError && <p className="text-sm text-red-600 bg-red-50 rounded px-2 py-1">{newError}</p>}
           <div className="flex gap-2">
             <button onClick={createUser} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
-            <button onClick={() => setShowNew(false)} className="border px-3 py-1.5 rounded-lg text-sm text-gray-600">Annuleren</button>
+            <button onClick={() => { setShowNew(false); setNewError(null); }} className="border px-3 py-1.5 rounded-lg text-sm text-gray-600">Annuleren</button>
           </div>
         </div>
       )}
+
+      {listError && <p className="text-sm text-red-600 bg-red-50 rounded px-2 py-1">{listError}</p>}
 
       {loading ? <p className="text-gray-400 text-sm">Laden...</p> : (
         <div className="divide-y divide-gray-100">
@@ -280,10 +385,16 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{ROLE_LABELS[user.role]}</span>
                       {user.department && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{DEPT_LABELS[user.department]}</span>}
+                      {user.has_password && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">App-account</span>}
                     </div>
                   </div>
                   <div className="flex gap-3 text-sm shrink-0">
                     <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }} className="text-blue-600 hover:underline">Bewerken</button>
+                    {isAdmin && (
+                      <button onClick={() => resetPassword(user)} className="text-purple-600 hover:underline">
+                        {user.has_password ? "Wachtwoord resetten" : "Wachtwoord instellen"}
+                      </button>
+                    )}
                     {isAdmin && <button onClick={() => deleteUser(user.ha_user_id)} className="text-red-600 hover:underline">Verwijderen</button>}
                   </div>
                 </div>
@@ -1394,6 +1505,7 @@ export default function Instellingen() {
           <IntegratieWidget />
           <NotificatieInstellingen />
           <MedewerkersBeheer isAdmin={isAdmin} />
+          {isAdmin && <BeveiligingPanel />}
         </div>
       )}
 
