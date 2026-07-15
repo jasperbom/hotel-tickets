@@ -7,9 +7,17 @@
     <!-- Naam op het beginscherm bij "Zet op beginscherm" (iOS) -->
     <meta name="apple-mobile-web-app-title" content="Sterrenberg" />
     <meta name="application-name" content="Sterrenberg App" />
-    <link rel="icon" type="image/svg+xml" href="/ticket.svg" />
-    <script type="module" crossorigin src="./assets/index-DCHjRuw7.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-GO2j7VJj.css">
+    <!-- Web-app modus op iOS: fullscreen met doorschijnende statusbalk; de app
+         reserveert zelf ruimte via env(safe-area-inset-top) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#1e3a5f" />
+    <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+    <script type="module" crossorigin src="./assets/index-kZHWGNo8.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DxZsYqcL.css">
   </head>
   <body>
     <div id="root"></div>

@@ -52,7 +52,15 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center px-4">
+    <div
+      className="min-h-[100dvh] flex items-center justify-center px-4"
+      // Safe-area's: in web-app-modus op iOS loopt de pagina onder de
+      // statusbalk en home-indicator door — houd de kaart daar vandaan.
+      style={{
+        paddingTop: "calc(env(safe-area-inset-top, 0px) + 1rem)",
+        paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 1rem)",
+      }}
+    >
       <div className="w-full max-w-sm">
         <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg p-8 space-y-6">
           <div className="text-center space-y-2">

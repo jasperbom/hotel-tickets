@@ -449,7 +449,13 @@ export default function App() {
       <div className="flex flex-col flex-1 min-w-0">
         {/* Top navigatie */}
         {(activeModule || isShellPage) && (
-          <nav className="text-white shadow-lg sticky top-0 z-50" style={{ backgroundColor: brandColor ?? "#1e3a5f" }}>
+          // paddingTop: in web-app-modus op iOS (statusbalk over de pagina heen)
+          // schuift de balkinhoud onder de statusbalk uit; de brandkleur vult
+          // de safe-area zodat het er native uitziet.
+          <nav
+            className="text-white shadow-lg sticky top-0 z-50"
+            style={{ backgroundColor: brandColor ?? "#1e3a5f", paddingTop: "env(safe-area-inset-top, 0px)" }}
+          >
             <div className="px-4">
               <div className="flex items-center gap-1 h-14 min-w-0">
                 {/* Modulewisselaar knop (mobiel: toont dropdown, desktop: verborgen want zijbalk) */}

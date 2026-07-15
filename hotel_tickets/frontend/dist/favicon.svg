@@ -1,0 +1,59 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="lucht" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#152a47"/>
+      <stop offset="0.65" stop-color="#24466e"/>
+      <stop offset="1" stop-color="#2e5382"/>
+    </linearGradient>
+    <radialGradient id="gloed" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#fbbf24" stop-opacity="0.4"/>
+      <stop offset="0.6" stop-color="#fbbf24" stop-opacity="0.12"/>
+      <stop offset="1" stop-color="#fbbf24" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="goud" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#fde68a"/>
+      <stop offset="0.5" stop-color="#fbbf24"/>
+      <stop offset="1" stop-color="#f59e0b"/>
+    </linearGradient>
+    <linearGradient id="bergAchter" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3c6396"/>
+      <stop offset="1" stop-color="#2c4a72"/>
+    </linearGradient>
+    <linearGradient id="bergVoor" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#1d3556"/>
+      <stop offset="1" stop-color="#122439"/>
+    </linearGradient>
+    <clipPath id="rond"><rect x="0" y="0" width="1024" height="1024" rx="200" ry="200"/></clipPath>
+  </defs>
+  <g clip-path="url(#rond)">
+    <rect width="1024" height="1024" fill="url(#lucht)"/>
+
+    <!-- Gloed achter de ster -->
+    <circle cx="512" cy="385" r="330" fill="url(#gloed)"/>
+
+    <!-- Fonkelsterren -->
+    <path d="M 176 182 Q 176 208 202 208 Q 176 208 176 234 Q 176 208 150 208 Q 176 208 176 182 Z" fill="#fef3c7" opacity="0.85"/>
+    <path d="M 846 124 Q 846 156 878 156 Q 846 156 846 188 Q 846 156 814 156 Q 846 156 846 124 Z" fill="#fef3c7" opacity="0.9"/>
+    <path d="M 770 338 Q 770 356 788 356 Q 770 356 770 374 Q 770 356 752 356 Q 770 356 770 338 Z" fill="#fef3c7" opacity="0.7"/>
+    <path d="M 226 405 Q 226 420 241 420 Q 226 420 226 435 Q 226 420 211 420 Q 226 420 226 405 Z" fill="#fef3c7" opacity="0.6"/>
+    <circle cx="330" cy="130" r="7" fill="#fef3c7" opacity="0.55"/>
+    <circle cx="662" cy="98" r="6" fill="#fef3c7" opacity="0.5"/>
+    <circle cx="920" cy="330" r="6" fill="#fef3c7" opacity="0.45"/>
+    <circle cx="96" cy="330" r="6" fill="#fef3c7" opacity="0.45"/>
+
+    <!-- Grote gouden ster -->
+    <polygon points="512.0,180.0 557.8,311.9 697.5,314.7 586.2,399.1 626.6,532.8 512.0,453.0 397.4,532.8 437.8,399.1 326.5,314.7 466.2,311.9" fill="url(#goud)"/>
+
+    <!-- Bergen: achterste rij -->
+    <path d="M -20 1044 L -20 780 L 268 528 L 476 738 L 664 592 L 900 812 L 1044 726 L 1044 1044 Z"
+          fill="url(#bergAchter)"/>
+    <!-- Sneeuwtop achterste berg -->
+    <path d="M 268 528 L 344 604 L 306 596 L 268 630 L 232 592 L 196 590 Z" fill="#e8eef7" opacity="0.92"/>
+
+    <!-- Bergen: voorste rij -->
+    <path d="M -20 1044 L -20 884 L 208 682 L 434 890 L 652 668 L 902 900 L 1044 812 L 1044 1044 Z"
+          fill="url(#bergVoor)"/>
+    <!-- Sneeuwtop voorste berg -->
+    <path d="M 652 668 L 722 732 L 686 724 L 652 758 L 618 720 L 584 730 Z" fill="#dbe5f2" opacity="0.85"/>
+  </g>
+</svg>
