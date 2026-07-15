@@ -430,17 +430,14 @@ export default function MijnOverzicht() {
         </section>
       )}
 
-      {/* Snelle actie */}
-      <div className="flex gap-3">
-        <Link to="/tickets/new" className="btn-primary flex-1 text-center">
-          + Nieuw ticket aanmaken
-        </Link>
-        {isManager && (
+      {/* Snelle actie — nieuw ticket aanmaken gaat via de zwevende knop onderin */}
+      {isManager && (
+        <div className="flex gap-3">
           <Link to="/dashboard" className="btn-secondary flex-1 text-center">
             Beheeroverzicht
           </Link>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }
