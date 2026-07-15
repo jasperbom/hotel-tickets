@@ -1,5 +1,6 @@
 import json
 import os
+import re
 import uuid as uuid_mod
 from datetime import datetime, timezone
 from pathlib import Path
@@ -7,13 +8,13 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, case
+from sqlalchemy import select, and_, case, delete
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
-from ..models import Ticket, TicketComment, TicketPin, Category, Status, Priority, Role, UserRole, BikeReservation, RecurringTemplate
+from ..models import Ticket, TicketComment, TicketPin, TicketNotification, NotificationType, Category, Status, Priority, Role, UserRole, BikeReservation, RecurringTemplate
 from ..auth import RequireUser, CurrentUser
-from ..services.notifications import notify_ticket_assigned, notify_urgent_ticket, notify_new_department_ticket
+from ..services.notifications import notify_ticket_assigned, notify_urgent_ticket, notify_new_department_ticket, notify_mention
 from ..services.ha_entities import sync_ticket_sensors
 from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
@@ -139,6 +140,82 @@ def _require_edit_access(user: CurrentUser, ticket: Ticket) -> None:
         status_code=403,
         detail="Tickets van een andere afdeling kun je niet wijzigen — commentaar toevoegen kan wel",
     )
+
+
+def _extract_mentions(body: str, users: list[UserRole]) -> set[str]:
+    """Vind @-mentions in een commentaar. Namen worden op lengte gematcht
+    (langste eerst) zodat '@Jan Willem' niet ook als '@Jan' telt, en een
+    mention telt alleen als de naam niet doorloopt in ander tekst."""
+    mentioned: set[str] = set()
+    taken_spans: list[tuple[int, int]] = []
+    for u in sorted(users, key=lambda u: -len(u.display_name or "")):
+        name = (u.display_name or "").strip()
+        if not name:
+            continue
+        for m in re.finditer(r"@" + re.escape(name), body, re.IGNORECASE):
+            span = (m.start(), m.end())
+            if any(s < span[1] and span[0] < e for s, e in taken_spans):
+                continue
+            if span[1] < len(body) and body[span[1]].isalnum():
+                continue
+            taken_spans.append(span)
+            mentioned.add(u.ha_user_id)
+    return mentioned
+
+
+async def _notify_comment(
+    db: AsyncSession,
+    ticket: Ticket,
+    comment: TicketComment,
+    author: CurrentUser,
+    skip_recipients: set[str] | None = None,
+    notify_assignee: bool = True,
+) -> None:
+    """Maak in-app berichten (envelopje) voor een nieuw of bewerkt commentaar:
+    - iedereen die met @ genoemd wordt (+ push indien ingesteld)
+    - de toegewezene van het ticket (alleen bij nieuw commentaar)
+    """
+    users_result = await db.execute(select(UserRole))
+    all_users = users_result.scalars().all()
+    mentioned_ids = _extract_mentions(comment.body, all_users)
+    mentioned_ids.discard(comment.author_id)
+    skip = skip_recipients or set()
+
+    users_by_id = {u.ha_user_id: u for u in all_users}
+    base_url = await get_ticket_base_url(db)
+    ticket_url = f"{base_url}/#/tickets/{ticket.id}"
+
+    for uid in mentioned_ids:
+        if uid in skip:
+            continue
+        db.add(TicketNotification(
+            recipient_id=uid,
+            actor_id=comment.author_id,
+            ticket_id=ticket.id,
+            comment_id=comment.id,
+            type=NotificationType.mention,
+        ))
+        recipient = users_by_id.get(uid)
+        if recipient and recipient.notify_push and recipient.ha_notify_service:
+            await notify_mention(author.display_name, ticket.title, recipient.ha_notify_service, ticket_url)
+
+    # Toegewezene krijgt een bericht bij elk nieuw commentaar op zijn ticket
+    # (tenzij hij zelf schrijft of al via een mention genoemd is).
+    assignee = ticket.assigned_to
+    if (
+        notify_assignee
+        and assignee
+        and assignee != comment.author_id
+        and assignee not in mentioned_ids
+        and assignee not in skip
+    ):
+        db.add(TicketNotification(
+            recipient_id=assignee,
+            actor_id=comment.author_id,
+            ticket_id=ticket.id,
+            comment_id=comment.id,
+            type=NotificationType.comment,
+        ))
 
 
 # --- Endpoints ---
@@ -478,6 +555,7 @@ async def delete_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = De
     ticket = await db.get(Ticket, ticket_id)
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
+    await db.execute(delete(TicketNotification).where(TicketNotification.ticket_id == ticket_id))
     await db.delete(ticket)
     await sync_ticket_sensors(db)
 
@@ -573,6 +651,7 @@ async def add_comment(
     comment = TicketComment(ticket_id=ticket_id, author_id=user.ha_user_id, body=body.body)
     db.add(comment)
     await db.flush()
+    await _notify_comment(db, ticket, comment, user)
     return comment
 
 
@@ -592,6 +671,15 @@ async def update_comment(
     comment.body = body.body
     comment.updated_at = datetime.now(timezone.utc)
     await db.flush()
+    # Nieuw toegevoegde @-mentions alsnog melden, zonder dubbele berichten
+    # voor wie al een bericht over dit commentaar kreeg.
+    ticket = await db.get(Ticket, ticket_id)
+    if ticket:
+        existing_result = await db.execute(
+            select(TicketNotification.recipient_id).where(TicketNotification.comment_id == comment_id)
+        )
+        already_notified = {row[0] for row in existing_result.all()}
+        await _notify_comment(db, ticket, comment, user, skip_recipients=already_notified, notify_assignee=False)
     return comment
 
 
@@ -607,6 +695,7 @@ async def delete_comment(
         raise HTTPException(status_code=404, detail="Commentaar niet gevonden")
     if comment.author_id != user.ha_user_id and not user.is_admin:
         raise HTTPException(status_code=403, detail="Je kunt alleen je eigen commentaar verwijderen")
+    await db.execute(delete(TicketNotification).where(TicketNotification.comment_id == comment_id))
     await db.delete(comment)
 
 

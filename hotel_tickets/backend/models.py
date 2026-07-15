@@ -87,6 +87,26 @@ class TicketComment(Base):
     ticket: Mapped[Ticket] = relationship("Ticket", back_populates="comments")
 
 
+class NotificationType(str, PyEnum):
+    mention = "mention"    # @genoemd in een commentaar
+    comment = "comment"    # nieuw commentaar op een ticket dat aan jou is toegewezen
+
+
+class TicketNotification(Base):
+    """In-app bericht (envelopje): iemand noemt je met @ in een commentaar,
+    of er komt commentaar op een ticket dat aan jou is toegewezen."""
+    __tablename__ = "ticket_notifications"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    recipient_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)  # HA user_id
+    actor_id: Mapped[str] = mapped_column(String(255), nullable=False)  # wie het commentaar schreef
+    ticket_id: Mapped[str] = mapped_column(String(36), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False)
+    comment_id: Mapped[str | None] = mapped_column(String(36))
+    type: Mapped[NotificationType] = mapped_column(Enum(NotificationType), nullable=False)
+    read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class RecurringTemplate(Base):
     __tablename__ = "recurring_templates"
 
