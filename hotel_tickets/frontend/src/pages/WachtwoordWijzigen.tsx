@@ -1,11 +1,17 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { authApi } from "../api/client";
+import { authApi, userApi } from "../api/client";
 
 const MIN_LENGTH = 8;
 
 export default function WachtwoordWijzigen() {
   const navigate = useNavigate();
+  // App-accounts hebben een eigen wachtwoord in de addon; voor HA-gekoppelde
+  // accounts wijzigt deze pagina het echte Home Assistant-wachtwoord.
+  const [isLocalAccount, setIsLocalAccount] = useState(false);
+  useEffect(() => {
+    userApi.me().then((r) => setIsLocalAccount(r.data.has_password)).catch(() => {});
+  }, []);
   const [current, setCurrent] = useState("");
   const [nieuw, setNieuw] = useState("");
   const [herhaal, setHerhaal] = useState("");
@@ -43,7 +49,9 @@ export default function WachtwoordWijzigen() {
           <p className="text-4xl mb-3">✅</p>
           <h1 className="text-lg font-bold text-gray-900">Wachtwoord gewijzigd</h1>
           <p className="text-sm text-gray-600 mt-2">
-            Gebruik voortaan je nieuwe wachtwoord — ook wanneer je in Home Assistant zelf inlogt.
+            {isLocalAccount
+              ? "Gebruik voortaan je nieuwe wachtwoord om in de app in te loggen."
+              : "Gebruik voortaan je nieuwe wachtwoord — ook wanneer je in Home Assistant zelf inlogt."}
           </p>
           <button onClick={() => navigate("/")} className="btn-primary mt-6">
             Terug naar overzicht
@@ -62,8 +70,9 @@ export default function WachtwoordWijzigen() {
 
       <form onSubmit={submit} className="card space-y-4">
         <p className="text-sm text-gray-600">
-          Dit wijzigt het wachtwoord van je Home Assistant-account, dus ook voor
-          het inloggen in Home Assistant zelf.
+          {isLocalAccount
+            ? "Dit wijzigt het wachtwoord waarmee je in deze app inlogt."
+            : "Dit wijzigt het wachtwoord van je Home Assistant-account, dus ook voor het inloggen in Home Assistant zelf."}
         </p>
 
         <div>

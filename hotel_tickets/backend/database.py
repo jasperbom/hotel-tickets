@@ -63,6 +63,7 @@ async def _run_migrations(conn):
         ("tickets", "sort_order", "INTEGER NOT NULL DEFAULT 0"),
         ("user_roles", "ha_device_tracker", "VARCHAR(255)"),
         ("user_roles", "ha_username", "VARCHAR(255)"),
+        ("user_roles", "password_hash", "VARCHAR(255)"),
         ("user_roles", "notify_new_ticket", "BOOLEAN NOT NULL DEFAULT 0"),
         ("knowledge_entries", "images", "TEXT"),
         ("knowledge_entries", "folder", "VARCHAR(100)"),

@@ -39,6 +39,14 @@ export default api;
 
 // --- Standalone login (sessietokens) ---
 
+export interface LoginBan {
+  ip: string;
+  failed_count: number;
+  last_username: string | null;
+  last_attempt_at: string;
+  banned: boolean;
+}
+
 export const authApi = {
   login: (username: string, password: string) =>
     api.post<{ token: string; expires_at: number; display_name: string }>("/auth/login", {
@@ -47,6 +55,9 @@ export const authApi = {
     }),
   changePassword: (current_password: string, new_password: string) =>
     api.post<{ ok: boolean }>("/auth/change-password", { current_password, new_password }),
+  // Admin: IP's met mislukte inlogpogingen / blokkades
+  listBans: () => api.get<LoginBan[]>("/auth/bans"),
+  removeBan: (ip: string) => api.delete(`/auth/bans/${encodeURIComponent(ip)}`),
 };
 
 /** True wanneer de app draait op een sessietoken van de loginpagina. */
@@ -143,6 +154,8 @@ export interface UserRole {
   ha_notify_service: string | null;
   ha_device_tracker: string | null;
   notify_new_ticket: boolean;
+  // true = lokaal app-account (wachtwoord in de addon zelf, geen HA nodig)
+  has_password: boolean;
 }
 
 export type SubtaskMode = "none" | "subtasks" | "rooms";
@@ -291,9 +304,12 @@ export const notificationApi = {
 export const userApi = {
   me: () => api.get<UserRole>("/users/me"),
   list: () => api.get<UserRole[]>("/users/"),
-  create: (data: Partial<UserRole>) => api.post<UserRole>("/users/", data),
+  create: (data: Partial<UserRole> & { password?: string }) => api.post<UserRole>("/users/", data),
   update: (id: string, data: Partial<UserRole>) => api.patch<UserRole>(`/users/${id}`, data),
   remove: (id: string) => api.delete(`/users/${id}`),
+  // Admin: wachtwoord van een lokaal app-account instellen/resetten (null = uitschakelen)
+  setPassword: (id: string, password: string | null) =>
+    api.post<UserRole>(`/users/${id}/password`, { password }),
 };
 
 export const locationApi = {

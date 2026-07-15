@@ -218,8 +218,13 @@ class UserRole(Base):
     display_name: Mapped[str] = mapped_column(String(255), nullable=False)
     # HA-inlognaam; nodig om de standalone loginpagina (Supervisor auth-API
     # geeft alleen geldig/ongeldig terug) aan dit profiel te koppelen.
-    # Wordt automatisch gevuld bij inloggen via ingress.
+    # Wordt automatisch gevuld bij inloggen via ingress. Voor lokale
+    # app-accounts (zie password_hash) is dit simpelweg de inlognaam.
     ha_username: Mapped[str | None] = mapped_column(String(255))
+    # Lokaal app-account: PBKDF2-hash (backend/passwords.py). Indien gevuld
+    # logt deze medewerker in met ha_username + dit wachtwoord op de
+    # standalone loginpagina — er is dan géén HA-account nodig.
+    password_hash: Mapped[str | None] = mapped_column(String(255))
     role: Mapped[Role] = mapped_column(Enum(Role), nullable=False)
     department: Mapped[Category | None] = mapped_column(Enum(Category))
     email: Mapped[str | None] = mapped_column(String(255))
@@ -234,6 +239,26 @@ class UserRole(Base):
     # Opt-in: push krijgen bij elk nieuw ticket in de eigen afdeling.
     notify_new_ticket: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def has_password(self) -> bool:
+        """Lokaal app-account (wachtwoord in eigen database, geen HA nodig)."""
+        return self.password_hash is not None
+
+
+class LoginBan(Base):
+    """Mislukte inlogpogingen per IP-adres, persistent (overleeft herstarts).
+
+    Naast de vluchtige rate-limiter (5 pogingen/minuut) wordt een IP na
+    LOGIN_BAN_THRESHOLD echt mislukte pogingen permanent geblokkeerd, tot een
+    admin de blokkade opheft — vergelijkbaar met HA's ip_bans.yaml."""
+    __tablename__ = "login_bans"
+
+    ip: Mapped[str] = mapped_column(String(64), primary_key=True)
+    failed_count: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
+    last_username: Mapped[str | None] = mapped_column(String(255))
+    last_attempt_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    banned_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
 # ── Kennisbank / bot module ──────────────────────────────────────────────────────

@@ -101,6 +101,18 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
   vereist `auth_api: true`). De backend geeft een eigen HMAC-sessietoken uit
   (`backend/session.py`, prefix `hts.`, geheim in `/config/hotel_tickets/session_secret`).
   Koppeling gebeurt via `user_roles.ha_username` (auto-gevuld bij ingress-login).
+- Lokale app-accounts: een admin kan bij Instellingen → Medewerkers een account
+  aanmaken met inlognaam + wachtwoord (of een wachtwoord instellen op een bestaand
+  profiel). Het wachtwoord staat als PBKDF2-hash in `user_roles.password_hash`
+  (`backend/passwords.py`) en wordt volledig binnen de addon geverifieerd — de
+  medewerker heeft dan géén Home Assistant-account nodig. Bij het inloggen op de
+  loginpagina gaat lokale verificatie vóór de Supervisor auth-API.
+- Brute-force-bescherming loginpagina: naast de rate-limiter (5 pogingen/minuut
+  per IP, in-memory) wordt een IP na 25 echt mislukte pogingen permanent
+  geblokkeerd (tabel `login_bans`, overleeft herstarts). Admins krijgen daarvan
+  een pushmelding en kunnen blokkades opheffen bij Instellingen → Beveiliging
+  (`GET/DELETE /api/auth/bans`). Verzoeken vanaf de ingress-proxy worden nooit
+  geblokkeerd.
   Poort 8080 (HTTP) of 8443 (HTTPS) moet hiervoor opengezet worden in de
   addon-netwerkconfiguratie; optioneel beperkt `allowed_networks` (CIDR's) de
   toegang tot het bedrijfsnetwerk.
@@ -153,4 +165,5 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 | `LOG_LEVEL` | `debug` / `info` / `warning` / `error` |
 | `ALLOWED_NETWORKS` | Komma-gescheiden CIDR's; indien gezet worden andere client-IP's geweigerd (interne HA-bronnen altijd toegestaan) |
 | `SESSION_HOURS` | Geldigheidsduur van standalone sessietokens (standaard 12) |
+| `LOGIN_BAN_THRESHOLD` | Aantal mislukte inlogpogingen waarna een IP permanent geblokkeerd wordt (standaard 25) |
 | `INGRESS_PROXY_IPS` | IP('s) waarvandaan ingress-headers vertrouwd worden (standaard 172.30.32.2) |

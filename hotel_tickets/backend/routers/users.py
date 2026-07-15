@@ -8,16 +8,22 @@ from pydantic import BaseModel
 from croniter import croniter
 
 from ..database import get_db
-from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate, TicketComment, TicketPin
+from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate, TicketComment, TicketPin, new_uuid
 from ..auth import RequireUser
+from ..passwords import MIN_PASSWORD_LENGTH, hash_password
 
 router = APIRouter(prefix="/users", tags=["users"])
 
 
 class UserRoleCreate(BaseModel):
-    ha_user_id: str
+    # Leeg laten kan alleen bij een lokaal app-account (met wachtwoord);
+    # er wordt dan een eigen id gegenereerd (prefix "local-").
+    ha_user_id: str | None = None
     display_name: str
     ha_username: str | None = None
+    # Indien gezet: lokaal app-account — de medewerker logt in met
+    # ha_username + dit wachtwoord, zonder Home Assistant-account.
+    password: str | None = None
     role: Role
     department: Category | None = None
     email: str | None = None
@@ -53,6 +59,8 @@ class UserRoleOut(BaseModel):
     ha_notify_service: str | None
     ha_device_tracker: str | None
     notify_new_ticket: bool
+    # True = lokaal app-account (wachtwoord in eigen database, geen HA nodig)
+    has_password: bool = False
 
     model_config = {"from_attributes": True}
 
@@ -370,13 +378,85 @@ async def list_users(user: RequireUser, db: AsyncSession = Depends(get_db)):
 async def create_user(body: UserRoleCreate, user: RequireUser, db: AsyncSession = Depends(get_db)):
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Alleen admins kunnen gebruikers aanmaken")
-    existing = await db.get(UserRole, body.ha_user_id)
+
+    ha_user_id = (body.ha_user_id or "").strip()
+    ha_username = (body.ha_username or "").strip() or None
+
+    if body.password is not None:
+        # Lokaal app-account: inloggen met ha_username + wachtwoord, zonder HA
+        if not ha_username:
+            raise HTTPException(
+                status_code=422,
+                detail="Een lokaal account heeft een gebruikersnaam (inlognaam) nodig",
+            )
+        if len(body.password) < MIN_PASSWORD_LENGTH:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Het wachtwoord moet minimaal {MIN_PASSWORD_LENGTH} tekens lang zijn",
+            )
+        if not ha_user_id:
+            ha_user_id = f"local-{new_uuid()}"
+    elif not ha_user_id:
+        raise HTTPException(
+            status_code=422,
+            detail="Vul een HA user_id in, of geef een wachtwoord op voor een lokaal account",
+        )
+
+    existing = await db.get(UserRole, ha_user_id)
     if existing:
         raise HTTPException(status_code=409, detail="Gebruiker bestaat al")
-    new_user = UserRole(**body.model_dump())
+    if ha_username:
+        # De loginpagina zoekt op gebruikersnaam — die moet dus uniek zijn
+        result = await db.execute(
+            select(UserRole).where(func.lower(UserRole.ha_username) == ha_username.lower())
+        )
+        if result.scalars().first():
+            raise HTTPException(status_code=409, detail="Deze gebruikersnaam is al in gebruik")
+
+    new_user = UserRole(
+        **body.model_dump(exclude={"ha_user_id", "ha_username", "password"}),
+        ha_user_id=ha_user_id,
+        ha_username=ha_username,
+        password_hash=hash_password(body.password) if body.password is not None else None,
+    )
     db.add(new_user)
     await db.flush()
     return new_user
+
+
+class SetPasswordIn(BaseModel):
+    # None = lokale login uitschakelen (terug naar HA-verificatie)
+    password: str | None
+
+
+@router.post("/{ha_user_id}/password", response_model=UserRoleOut)
+async def set_password(
+    ha_user_id: str,
+    body: SetPasswordIn,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Admin: zet of reset het wachtwoord van een lokaal app-account."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen wachtwoorden instellen")
+    target = await db.get(UserRole, ha_user_id)
+    if not target:
+        raise HTTPException(status_code=404, detail="Gebruiker niet gevonden")
+    if body.password is None:
+        target.password_hash = None
+        return target
+    if len(body.password) < MIN_PASSWORD_LENGTH:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Het wachtwoord moet minimaal {MIN_PASSWORD_LENGTH} tekens lang zijn",
+        )
+    if not target.ha_username:
+        raise HTTPException(
+            status_code=422,
+            detail="Stel eerst een gebruikersnaam (inlognaam) in voor deze medewerker",
+        )
+    target.password_hash = hash_password(body.password)
+    return target
 
 
 @router.patch("/{ha_user_id}", response_model=UserRoleOut)
@@ -400,6 +480,18 @@ async def update_user(
     target = await db.get(UserRole, ha_user_id)
     if not target:
         raise HTTPException(status_code=404, detail="Gebruiker niet gevonden")
+    if body.ha_username:
+        # De loginpagina zoekt op gebruikersnaam — die moet dus uniek blijven
+        result = await db.execute(
+            select(UserRole).where(
+                and_(
+                    func.lower(UserRole.ha_username) == body.ha_username.strip().lower(),
+                    UserRole.ha_user_id != ha_user_id,
+                )
+            )
+        )
+        if result.scalars().first():
+            raise HTTPException(status_code=409, detail="Deze gebruikersnaam is al in gebruik")
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(target, field, value)
     return target
