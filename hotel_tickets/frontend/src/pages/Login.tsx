@@ -5,7 +5,8 @@ import { authApi, brandingApi, setSessionToken } from "../api/client";
  * Standalone loginpagina voor toegang buiten HA ingress om (LAN).
  * Personeel logt in met hun Home Assistant gebruikersnaam en wachtwoord;
  * de backend verifieert dit via de Supervisor auth-API en geeft een
- * sessietoken terug.
+ * sessietoken terug. De pagina volgt de ingestelde huisstijl
+ * (logo, achtergrond en knopkleur uit Instellingen → Huisstijl).
  */
 export default function Login() {
   const [username, setUsername] = useState("");
@@ -13,10 +14,20 @@ export default function Login() {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [logo, setLogo] = useState<string | null>(null);
+  const [btnColor, setBtnColor] = useState<string | null>(null);
 
   useEffect(() => {
     brandingApi.get().then((r) => {
-      if (r.data.brand_logo) setLogo(r.data.brand_logo);
+      const b = r.data;
+      if (b.brand_logo) setLogo(b.brand_logo);
+      if (b.btn_color || b.brand_color) setBtnColor(b.btn_color || b.brand_color);
+      // Achtergrond via dezelfde CSS-variabelen als de app zelf (body::before)
+      const root = document.documentElement;
+      if (b.bg_image) {
+        root.style.setProperty("--app-bg-image", `url("${b.bg_image}")`);
+      } else if (b.bg_color) {
+        root.style.setProperty("--app-bg", b.bg_color);
+      }
     }).catch(() => {});
   }, []);
 
@@ -39,16 +50,16 @@ export default function Login() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-100 px-4">
+    <div className="min-h-screen flex items-center justify-center px-4">
       <div className="w-full max-w-sm">
-        <div className="bg-white rounded-2xl shadow-lg p-8 space-y-6">
+        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg p-8 space-y-6">
           <div className="text-center space-y-2">
             {logo ? (
               <img src={logo} alt="Logo" className="h-16 mx-auto object-contain" />
             ) : (
-              <div className="text-4xl">🎫</div>
+              <div className="text-4xl">⭐</div>
             )}
-            <h1 className="text-xl font-bold text-gray-800">Hotel Tickets</h1>
+            <h1 className="text-xl font-bold text-gray-800">Sterrenberg App</h1>
             <p className="text-sm text-gray-500">Log in met je Home Assistant account</p>
           </div>
 
@@ -91,7 +102,8 @@ export default function Login() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:bg-blue-700 disabled:opacity-50"
+              style={btnColor ? { backgroundColor: btnColor } : undefined}
+              className="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {loading ? "Inloggen..." : "Inloggen"}
             </button>
