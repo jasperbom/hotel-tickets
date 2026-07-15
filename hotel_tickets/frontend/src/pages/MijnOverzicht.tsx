@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef, type CSSProperties } from "react";
+import { useEffect, useState, useRef, type CSSProperties, type ReactNode } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
@@ -89,6 +89,10 @@ export default function MijnOverzicht() {
   const [showUpcoming, setShowUpcoming] = useState(() => localStorage.getItem("ht_show_upcoming") === "1");
   // Standaard open; alleen expliciet ingeklapt onthouden
   const [showAvailable, setShowAvailable] = useState(() => localStorage.getItem("ht_show_available") !== "0");
+  const [showTodayTasks, setShowTodayTasks] = useState(() => localStorage.getItem("ht_show_today") !== "0");
+  const [showMyTickets, setShowMyTickets] = useState(() => localStorage.getItem("ht_show_mine") !== "0");
+  // Stil verversen (filterwissel/achtergrond): inhoud dimmen i.p.v. fullscreen spinner
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     localStorage.setItem("ht_show_upcoming", showUpcoming ? "1" : "0");
@@ -97,6 +101,14 @@ export default function MijnOverzicht() {
   useEffect(() => {
     localStorage.setItem("ht_show_available", showAvailable ? "1" : "0");
   }, [showAvailable]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_today", showTodayTasks ? "1" : "0");
+  }, [showTodayTasks]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_mine", showMyTickets ? "1" : "0");
+  }, [showMyTickets]);
 
   useEffect(() => {
     localStorage.setItem("ht_show_all_today", showAllToday ? "1" : "0");
@@ -144,11 +156,26 @@ export default function MijnOverzicht() {
     loadData(deptFilter).finally(() => setLoading(false));
   }, []);
 
+  // Stil verversen: wanneer de app weer zichtbaar wordt en elke minuut,
+  // zodat een pagina die de hele dienst openstaat actueel blijft.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      loadData(deptFilter).catch(() => {});
+    };
+    const id = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [deptFilter]);
+
   function changeDeptFilter(value: Category | "") {
     setDeptFilter(value);
     localStorage.setItem("ht_dept_filter", value);
-    setLoading(true);
-    loadData(value).finally(() => setLoading(false));
+    setRefreshing(true);
+    loadData(value).finally(() => setRefreshing(false));
   }
 
   async function claimTicket(ticketId: string) {
@@ -224,25 +251,62 @@ export default function MijnOverzicht() {
   const visibleAvailable = assignedMe ? [] : available_tickets;
 
   return (
-    <div className="space-y-6">
+    <div className={`space-y-6 transition-opacity ${refreshing ? "opacity-60" : ""}`}>
 
-      {/* Begroeting */}
-      <div className="bg-gradient-to-r from-blue-700 to-blue-500 rounded-2xl px-6 py-5 text-white shadow">
-        <p className="text-blue-100 text-sm font-medium">{greeting()},</p>
-        <h1 className="text-2xl font-bold mt-0.5">{user.display_name}</h1>
-        <p className="text-blue-200 text-sm mt-1">
-          {ROLE_LABELS[user.role]}
-          {user.department ? ` · ${DEPT_LABELS[user.department]}` : ""}
-        </p>
+      {/* Kop: begroeting + persoonlijke statistieken in één blok */}
+      <div className="bg-gradient-to-r from-blue-700 to-blue-500 rounded-2xl px-5 py-4 text-white shadow">
+        <div className="flex items-baseline justify-between gap-x-3 gap-y-0.5 flex-wrap">
+          <h1 className="text-lg font-bold">
+            {greeting()}, {user.display_name}
+          </h1>
+          <p className="text-blue-200 text-xs">
+            {format(new Date(), "EEEE d MMMM", { locale: nl })}
+            {" · "}
+            {ROLE_LABELS[user.role]}
+            {user.department ? ` · ${DEPT_LABELS[user.department]}` : ""}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          <HeaderStat
+            value={stats.my_open}
+            label="Mijn openstaand"
+            emptyLabel="Niets te doen"
+            onClick={() => navigate("/tickets?status=open,in_progress&assigned=me")}
+          />
+          <HeaderStat
+            value={stats.urgent}
+            label="Urgent"
+            urgent={stats.urgent > 0}
+            onClick={() => navigate("/tickets?priority=urgent&status=open,in_progress")}
+          />
+          <HeaderStat
+            value={today_recurring.length}
+            label="Herhalend vandaag"
+            emptyLabel="Geen taken"
+            onClick={() => todaySectionRef.current?.scrollIntoView({ behavior: "smooth" })}
+          />
+        </div>
       </div>
 
-      {/* Afdelingsfilter — voor iedereen zichtbaar */}
-      <div className="flex gap-2 flex-wrap">
+      {/* Afdelingsfilter — één horizontaal scrollbare regel */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4">
+        <button
+          onClick={() => setAssignedMe(!assignedMe)}
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+            assignedMe
+              ? "bg-purple-600 text-white border-purple-600"
+              : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
+          }`}
+          title="Toon alleen tickets die aan jou zijn toegewezen"
+        >
+          {assignedMe && <span className="text-xs mr-1">✓</span>}
+          👤 Aan mij
+        </button>
         {([["", "Alle afdelingen"], ...ALL_CATEGORIES.map((c) => [c, DEPT_LABELS[c]] as [Category, string])] as Array<[Category | "", string]>).map(([val, label]) => (
           <button
             key={val}
             onClick={() => changeDeptFilter(val as Category | "")}
-            className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+            className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
               deptFilter === val
                 ? "bg-blue-600 text-white border-blue-600"
                 : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
@@ -251,53 +315,18 @@ export default function MijnOverzicht() {
             {label}
           </button>
         ))}
-        <button
-          onClick={() => setAssignedMe(!assignedMe)}
-          className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
-            assignedMe
-              ? "bg-purple-600 text-white border-purple-600"
-              : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
-          }`}
-          title="Toon alleen tickets die aan jou zijn toegewezen"
-        >
-          {assignedMe && <span className="text-xs mr-1">✓</span>}
-          👤 Toegewezen aan mij
-        </button>
       </div>
 
-      {/* Statistieken — persoonlijk; teamcijfers staan op het Dashboard */}
-      <div className="grid grid-cols-3 gap-3">
-        <StatCard
-          value={stats.my_open}
-          label="Mijn openstaand"
-          color="blue"
-          empty="Niets te doen"
-          onClick={() => navigate("/tickets?status=open,in_progress&assigned=me")}
-        />
-        <StatCard
-          value={stats.urgent}
-          label="Urgent"
-          color={stats.urgent > 0 ? "red" : "gray"}
-          pulse={stats.urgent > 0}
-          onClick={() => navigate("/tickets?priority=urgent&status=open,in_progress")}
-        />
-        <StatCard
-          value={today_recurring.length}
-          label="Herhalend vandaag"
-          color="purple"
-          empty="Geen taken"
-          onClick={() => todaySectionRef.current?.scrollIntoView({ behavior: "smooth" })}
-        />
-      </div>
-
-      {/* Urgente tickets */}
+      {/* Urgente tickets — bewust niet inklapbaar */}
       {visibleUrgent.length > 0 && (
         <section>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-red-600 text-lg">🚨</span>
-            <h2 className="font-semibold text-red-700">Urgente tickets</h2>
-            <span className="text-xs font-bold bg-red-600 text-white px-1.5 py-0.5 rounded-full">{visibleUrgent.length}</span>
-          </div>
+          <SectionHeader
+            icon="🚨"
+            title="Urgente tickets"
+            titleClass="text-red-700"
+            count={visibleUrgent.length}
+            badgeClass="bg-red-600 text-white"
+          />
           <div className="space-y-2">
             {visibleUrgent.map((t) => (
               <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} assigneeName={t.assigned_to ? users[t.assigned_to] || t.assigned_to : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
@@ -309,91 +338,100 @@ export default function MijnOverzicht() {
       {/* Herhalende taken vandaag */}
       {today_recurring.length > 0 && (
         <section ref={todaySectionRef}>
-          <div className="flex items-center gap-2 mb-3">
-            <span className="text-purple-600 text-lg">🔁</span>
-            <h2 className="font-semibold text-gray-900">Herhalende taken vandaag</h2>
-            <span className="text-xs font-bold bg-purple-600 text-white px-1.5 py-0.5 rounded-full">{today_recurring.length}</span>
-          </div>
-          <div className="space-y-2">
-            {visibleToday.map((t) => (
-              <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
-            ))}
-          </div>
-          {!showAllToday && today_recurring.length > 3 && (
-            <button
-              onClick={() => setShowAllToday(true)}
-              className="mt-2 text-sm text-blue-600 hover:underline w-full text-center py-1"
-            >
-              +{today_recurring.length - 3} meer tonen
-            </button>
-          )}
-          {showAllToday && today_recurring.length > 3 && (
-            <button
-              onClick={() => setShowAllToday(false)}
-              className="mt-2 text-sm text-gray-500 hover:text-gray-700 hover:underline w-full text-center py-1"
-            >
-              ▲ Inklappen
-            </button>
+          <SectionHeader
+            icon="🔁"
+            title="Herhalende taken vandaag"
+            count={today_recurring.length}
+            badgeClass="bg-purple-600 text-white"
+            collapsed={!showTodayTasks}
+            onToggle={() => setShowTodayTasks(!showTodayTasks)}
+          />
+          {showTodayTasks && (
+            <>
+              <div className="space-y-2">
+                {visibleToday.map((t) => (
+                  <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
+                ))}
+              </div>
+              {!showAllToday && today_recurring.length > 3 && (
+                <button
+                  onClick={() => setShowAllToday(true)}
+                  className="mt-2 text-sm text-blue-600 hover:underline w-full text-center py-1"
+                >
+                  +{today_recurring.length - 3} meer tonen
+                </button>
+              )}
+              {showAllToday && today_recurring.length > 3 && (
+                <button
+                  onClick={() => setShowAllToday(false)}
+                  className="mt-2 text-sm text-gray-500 hover:text-gray-700 hover:underline w-full text-center py-1"
+                >
+                  ▲ Minder tonen
+                </button>
+              )}
+            </>
           )}
         </section>
       )}
 
       {/* Mijn tickets */}
       <section>
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
-            <span className="text-blue-600 text-lg">🎫</span>
-            <h2 className="font-semibold text-gray-900">Mijn openstaande tickets</h2>
-          </div>
-          <Link to="/tickets?assigned=me" className="text-sm text-blue-600 hover:underline">
-            Alle →
-          </Link>
-        </div>
-
-        {my_tickets.length === 0 ? (
-          <div className="card py-8 text-center text-gray-400">
-            <p className="text-2xl mb-1">✓</p>
-            <p className="text-sm">Geen openstaande tickets. Goed werk!</p>
-          </div>
-        ) : (
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMyTicketsDragEnd}>
-            <SortableContext items={my_tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-              <div className="space-y-2">
-                {my_tickets.map((t) => (
-                  <SortableMyTicketRow
-                    key={t.id}
-                    ticket={t}
-                    locationName={t.location_id ? locations[t.location_id] : undefined}
-                    occupied={t.location_id ? keycards[t.location_id] : undefined}
-                    onClose={() => closeTicket(t.id, t.title)}
-                    onTogglePin={() => togglePin(t)}
-                  />
-                ))}
-              </div>
-            </SortableContext>
-          </DndContext>
+        <SectionHeader
+          icon="🎫"
+          title="Mijn openstaande tickets"
+          count={my_tickets.length}
+          badgeClass="bg-blue-100 text-blue-700"
+          collapsed={!showMyTickets}
+          onToggle={() => setShowMyTickets(!showMyTickets)}
+          action={
+            <Link to="/tickets?assigned=me" className="text-sm text-blue-600 hover:underline">
+              Alle →
+            </Link>
+          }
+        />
+        {showMyTickets && (
+          my_tickets.length === 0 ? (
+            <div className="card py-8 text-center text-gray-400">
+              <p className="text-2xl mb-1">✓</p>
+              <p className="text-sm">Geen openstaande tickets. Goed werk!</p>
+            </div>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMyTicketsDragEnd}>
+              <SortableContext items={my_tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {my_tickets.map((t) => (
+                    <SortableMyTicketRow
+                      key={t.id}
+                      ticket={t}
+                      locationName={t.location_id ? locations[t.location_id] : undefined}
+                      occupied={t.location_id ? keycards[t.location_id] : undefined}
+                      onClose={() => closeTicket(t.id, t.title)}
+                      onTogglePin={() => togglePin(t)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )
         )}
       </section>
 
-      {/* Beschikbaar om op te pakken — inklapbaar, voorkeur wordt onthouden */}
+      {/* Beschikbaar om op te pakken */}
       {visibleAvailable.length > 0 && (
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={() => setShowAvailable(!showAvailable)}
-              className="flex items-center gap-2"
-              aria-expanded={showAvailable}
-              title={showAvailable ? "Inklappen" : "Uitklappen"}
-            >
-              <span className="text-blue-600 text-lg">🎫</span>
-              <h2 className="font-semibold text-gray-900">Beschikbaar om op te pakken</h2>
-              <span className="text-xs font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{visibleAvailable.length}</span>
-              <span className="text-gray-400 text-sm">{showAvailable ? "▲ Inklappen" : "▼ Uitklappen"}</span>
-            </button>
-            <Link to="/tickets?status=open" className="text-sm text-blue-600 hover:underline">
-              Alle open →
-            </Link>
-          </div>
+          <SectionHeader
+            icon="🎫"
+            title="Beschikbaar om op te pakken"
+            count={visibleAvailable.length}
+            badgeClass="bg-blue-100 text-blue-700"
+            collapsed={!showAvailable}
+            onToggle={() => setShowAvailable(!showAvailable)}
+            action={
+              <Link to="/tickets?status=open" className="text-sm text-blue-600 hover:underline">
+                Alle open →
+              </Link>
+            }
+          />
           {showAvailable && (
             <div className="space-y-2">
               {visibleAvailable.map((t) => (
@@ -407,78 +445,93 @@ export default function MijnOverzicht() {
       {/* Aankomende herhalende taken */}
       {upcoming_recurring.length > 0 && (
         <section>
-          <div className="flex items-center justify-between mb-3">
-            <button
-              onClick={() => setShowUpcoming(!showUpcoming)}
-              className="flex items-center gap-2"
-              aria-expanded={showUpcoming}
-              title={showUpcoming ? "Inklappen" : "Uitklappen"}
-            >
-              <span className="text-purple-600 text-lg">🔁</span>
-              <h2 className="font-semibold text-gray-900">Aankomende taken</h2>
-              <span className="text-xs font-bold bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full">{upcoming_recurring.length}</span>
-              <span className="text-gray-400 text-sm">{showUpcoming ? "▲ Inklappen" : "▼ Uitklappen"}</span>
-            </button>
-            <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
-          </div>
+          <SectionHeader
+            icon="🔁"
+            title="Aankomende taken"
+            count={upcoming_recurring.length}
+            badgeClass="bg-purple-100 text-purple-700"
+            collapsed={!showUpcoming}
+            onToggle={() => setShowUpcoming(!showUpcoming)}
+            action={
+              <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
+            }
+          />
           {showUpcoming && (
-            <>
-              <div className="space-y-2">
-                {upcoming_recurring.map((t) => (
-                  <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
-                ))}
-              </div>
-              <button
-                onClick={() => setShowUpcoming(false)}
-                className="mt-2 text-sm text-gray-500 hover:text-gray-700 hover:underline w-full text-center py-1"
-              >
-                ▲ Inklappen
-              </button>
-            </>
+            <div className="space-y-2">
+              {upcoming_recurring.map((t) => (
+                <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
+              ))}
+            </div>
           )}
         </section>
-      )}
-
-      {/* Snelle actie — nieuw ticket aanmaken gaat via de zwevende knop onderin */}
-      {isManager && (
-        <div className="flex gap-3">
-          <Link to="/dashboard" className="btn-secondary flex-1 text-center">
-            Beheeroverzicht
-          </Link>
-        </div>
       )}
     </div>
   );
 }
 
-function StatCard({
-  value, label, color, empty, pulse = false, onClick,
+function HeaderStat({
+  value, label, emptyLabel, urgent = false, onClick,
 }: {
   value: number;
   label: string;
-  color: "blue" | "red" | "gray" | "purple";
-  empty?: string;
-  pulse?: boolean;
+  emptyLabel?: string;
+  urgent?: boolean;
   onClick?: () => void;
 }) {
-  const colors = {
-    blue: "bg-blue-50 text-blue-700",
-    red: "bg-red-50 text-red-700",
-    gray: "bg-gray-100 text-gray-600",
-    purple: "bg-purple-50 text-purple-700",
-  };
   return (
     <button
       onClick={onClick}
-      className={`rounded-xl p-3 text-center ${colors[color]} cursor-pointer hover:shadow-md transition-shadow w-full`}
+      className={`rounded-xl py-2 px-1 text-center transition-colors ${
+        urgent ? "bg-red-500/90 hover:bg-red-500" : "bg-white/15 hover:bg-white/25"
+      }`}
     >
-      <div className="relative inline-block">
-        <p className={`text-3xl font-bold ${pulse ? "animate-pulse" : ""}`}>{value}</p>
-      </div>
-      <p className="text-xs font-medium mt-1 opacity-80 leading-tight">
-        {value === 0 && empty ? empty : label}
+      <p className={`text-2xl font-bold leading-tight ${urgent ? "animate-pulse" : ""}`}>{value}</p>
+      <p className={`text-[11px] font-medium leading-tight mt-0.5 ${urgent ? "text-red-100" : "text-blue-100"}`}>
+        {value === 0 && emptyLabel ? emptyLabel : label}
       </p>
     </button>
+  );
+}
+
+/** Uniforme sectiekop: icoon + titel + teller, optioneel inklapbaar en met actielink rechts. */
+function SectionHeader({
+  icon, title, titleClass = "text-gray-900", count, badgeClass = "bg-gray-100 text-gray-600", collapsed, onToggle, action,
+}: {
+  icon: string;
+  title: string;
+  titleClass?: string;
+  count?: number;
+  badgeClass?: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  action?: ReactNode;
+}) {
+  const inner = (
+    <>
+      <span className="text-lg">{icon}</span>
+      <h2 className={`font-semibold ${titleClass}`}>{title}</h2>
+      {count !== undefined && (
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${badgeClass}`}>{count}</span>
+      )}
+      {onToggle && <span className="text-gray-400 text-sm">{collapsed ? "▼" : "▲"}</span>}
+    </>
+  );
+  return (
+    <div className="flex items-center justify-between mb-3">
+      {onToggle ? (
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-2"
+          aria-expanded={!collapsed}
+          title={collapsed ? "Uitklappen" : "Inklappen"}
+        >
+          {inner}
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">{inner}</div>
+      )}
+      {action}
+    </div>
   );
 }
 
