@@ -75,7 +75,11 @@ async def _verify_ha_credentials(username: str, password: str) -> bool:
         async with aiohttp.ClientSession() as session:
             async with session.post(
                 "http://supervisor/auth",
-                headers={"Authorization": f"Bearer {SUPERVISOR_TOKEN}"},
+                # Let op: X-Supervisor-Token, níet "Authorization: Bearer".
+                # Het /auth-endpoint interpreteert een Authorization-header als
+                # BasicAuth-inloggegevens en geeft dan altijd 401
+                # (home-assistant/supervisor#6313).
+                headers={"X-Supervisor-Token": SUPERVISOR_TOKEN},
                 json={"username": username, "password": password},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
