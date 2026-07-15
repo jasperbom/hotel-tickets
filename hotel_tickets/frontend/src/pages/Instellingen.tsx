@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, recurringApi, knowledgeApi,
+  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
-  type RecurringTemplate, type KnowledgeAiSettings,
+  type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding,
 } from "../api/client";
 
 type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot";
@@ -963,6 +963,205 @@ function HuisstijlPanel() {
   );
 }
 
+// ── Loginpagina huisstijl ──────────────────────────────────────────────────────
+// Eigen teksten, kleuren, logo en achtergrond voor de standalone loginpagina.
+// Alles wat hier niet expliciet wordt ingesteld erft van de algemene huisstijl.
+
+function LoginPaginaPanel() {
+  const [loaded, setLoaded] = useState<LoginBranding | null>(null);
+  const [title, setTitle] = useState("");
+  const [subtitle, setSubtitle] = useState("");
+  const [footer, setFooter] = useState("");
+  const [btnColor, setBtnColor] = useState("#2563eb");
+  const [bgColor, setBgColor] = useState("#f9fafb");
+
+  const [saving, setSaving] = useState(false);
+  const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
+  const [uploading, setUploading] = useState(false);
+
+  const logoInputRef = useRef<HTMLInputElement>(null);
+  const bgInputRef = useRef<HTMLInputElement>(null);
+
+  function applyBranding(b: LoginBranding) {
+    setLoaded(b);
+    setTitle(b.title);
+    setSubtitle(b.subtitle);
+    setFooter(b.footer);
+    if (b.btn_color) setBtnColor(b.btn_color);
+    if (b.bg_color) setBgColor(b.bg_color);
+  }
+
+  useEffect(() => {
+    loginBrandingApi.get().then((r) => applyBranding(r.data)).catch(() => {});
+  }, []);
+
+  function flash(type: "ok" | "err", text: string) {
+    setMsg({ type, text });
+    setTimeout(() => setMsg(null), 2500);
+  }
+
+  async function save() {
+    if (!loaded) return;
+    setSaving(true);
+    try {
+      // Alleen gewijzigde velden meesturen, zodat geërfde waarden niet
+      // onbedoeld als eigen loginpagina-waarde worden vastgezet
+      const changes: Record<string, string> = {};
+      if (title !== loaded.title) changes.title = title;
+      if (subtitle !== loaded.subtitle) changes.subtitle = subtitle;
+      if (footer !== loaded.footer) changes.footer = footer;
+      if (btnColor !== (loaded.btn_color || "#2563eb")) changes.btn_color = btnColor;
+      if (bgColor !== (loaded.bg_color || "#f9fafb")) changes.bg_color = bgColor;
+      if (Object.keys(changes).length === 0) {
+        flash("ok", "Geen wijzigingen.");
+        return;
+      }
+      const r = await loginBrandingApi.update(changes);
+      applyBranding(r.data);
+      flash("ok", "Opgeslagen.");
+    } catch {
+      flash("err", "Opslaan mislukt.");
+    } finally { setSaving(false); }
+  }
+
+  async function resetAll() {
+    if (!confirm("Alle eigen loginpagina-instellingen wissen en de algemene huisstijl volgen?")) return;
+    setSaving(true);
+    try {
+      await loginBrandingApi.update({ title: null, subtitle: null, footer: null, btn_color: null, bg_color: null });
+      await loginBrandingApi.deleteLogo();
+      const r = await loginBrandingApi.deleteBackground();
+      applyBranding(r.data);
+      flash("ok", "Loginpagina volgt weer de algemene huisstijl.");
+    } catch {
+      flash("err", "Herstellen mislukt.");
+    } finally { setSaving(false); }
+  }
+
+  async function handleUpload(e: React.ChangeEvent<HTMLInputElement>, kind: "logo" | "background") {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setUploading(true);
+    try {
+      const r = kind === "logo"
+        ? await loginBrandingApi.uploadLogo(file)
+        : await loginBrandingApi.uploadBackground(file);
+      applyBranding(r.data);
+      flash("ok", kind === "logo" ? "Logo opgeslagen." : "Achtergrond opgeslagen.");
+    } catch {
+      flash("err", "Upload mislukt. PNG/JPEG/WebP, logo max 500 KB, achtergrond max 2 MB.");
+    } finally {
+      setUploading(false);
+      if (logoInputRef.current) logoInputRef.current.value = "";
+      if (bgInputRef.current) bgInputRef.current.value = "";
+    }
+  }
+
+  async function handleDelete(kind: "logo" | "background") {
+    setUploading(true);
+    try {
+      const r = kind === "logo"
+        ? await loginBrandingApi.deleteLogo()
+        : await loginBrandingApi.deleteBackground();
+      applyBranding(r.data);
+      flash("ok", "Verwijderd — volgt weer de algemene huisstijl.");
+    } catch {
+      flash("err", "Verwijderen mislukt.");
+    } finally { setUploading(false); }
+  }
+
+  const inherited = (key: string) => loaded && !loaded.custom[key];
+
+  return (
+    <Section title="Loginpagina">
+      <p className="text-sm text-gray-500">
+        Teksten, kleuren, logo en achtergrond van de standalone loginpagina. Velden die je hier
+        niet aanpast volgen automatisch de algemene huisstijl hierboven.{" "}
+        <a href="#/login" className="text-blue-600 hover:underline">Bekijk de loginpagina →</a>
+      </p>
+
+      {/* Teksten */}
+      <div className="space-y-2">
+        <label className="block text-sm text-gray-600">
+          Titel {inherited("title") && <span className="text-xs text-gray-400">(standaard)</span>}
+          <input value={title} onChange={(e) => setTitle(e.target.value)}
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
+        </label>
+        <label className="block text-sm text-gray-600">
+          Ondertitel {inherited("subtitle") && <span className="text-xs text-gray-400">(standaard)</span>}
+          <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)}
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
+        </label>
+        <label className="block text-sm text-gray-600">
+          Voettekst {inherited("footer") && <span className="text-xs text-gray-400">(standaard)</span>}
+          <input value={footer} onChange={(e) => setFooter(e.target.value)}
+            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
+        </label>
+      </div>
+
+      {/* Kleuren */}
+      <div className="space-y-3 pt-1">
+        <ColorRow label={`Knopkleur${inherited("btn_color") ? " (huisstijl)" : ""}`} value={btnColor} onChange={setBtnColor} />
+        <ColorRow label={`Achtergrond${inherited("bg_color") ? " (huisstijl)" : ""}`} value={bgColor} onChange={setBgColor} />
+      </div>
+
+      {/* Logo */}
+      <div className="flex flex-wrap items-center gap-3 pt-1">
+        {loaded?.logo && (
+          <img src={loaded.logo} alt="Login logo" className="w-12 h-12 object-contain rounded-lg border border-gray-200 bg-gray-50 p-1" />
+        )}
+        <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => handleUpload(e, "logo")} className="hidden" id="login-logo-upload" />
+        <label htmlFor="login-logo-upload"
+          className={`cursor-pointer border border-gray-300 px-3 py-1.5 rounded-lg text-sm hover:border-gray-400 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+          📂 Eigen login-logo
+        </label>
+        {loaded?.custom.logo && (
+          <button onClick={() => handleDelete("logo")} disabled={uploading}
+            className="text-sm text-red-600 hover:underline disabled:opacity-50">
+            Logo verwijderen
+          </button>
+        )}
+      </div>
+
+      {/* Achtergrondafbeelding */}
+      <div className="flex flex-wrap items-center gap-3">
+        {loaded?.bg_image && loaded?.custom.bg_image && (
+          <img src={loaded.bg_image} alt="Login achtergrond" className="w-20 h-12 object-cover rounded-lg border border-gray-200" />
+        )}
+        <input ref={bgInputRef} type="file" accept="image/png,image/jpeg,image/webp"
+          onChange={(e) => handleUpload(e, "background")} className="hidden" id="login-bg-upload" />
+        <label htmlFor="login-bg-upload"
+          className={`cursor-pointer border border-gray-300 px-3 py-1.5 rounded-lg text-sm hover:border-gray-400 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+          📂 Eigen achtergrondafbeelding
+        </label>
+        {loaded?.custom.bg_image && (
+          <button onClick={() => handleDelete("background")} disabled={uploading}
+            className="text-sm text-red-600 hover:underline disabled:opacity-50">
+            Achtergrond verwijderen
+          </button>
+        )}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3 pt-2">
+        <button onClick={save} disabled={saving}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          {saving ? "Opslaan..." : "Opslaan"}
+        </button>
+        <button onClick={resetAll} disabled={saving}
+          className="border px-4 py-2 rounded-lg text-sm text-gray-600 hover:border-gray-400 disabled:opacity-50">
+          Herstel algemene huisstijl
+        </button>
+        {msg && (
+          <span className={`text-sm ${msg.type === "ok" ? "text-green-700" : "text-red-600"}`}>
+            {msg.type === "ok" ? "✓ " : "✗ "}{msg.text}
+          </span>
+        )}
+      </div>
+    </Section>
+  );
+}
+
 // ══════════════════════════════════════════════════════════════════════════════
 // HOOFD COMPONENT
 // ══════════════════════════════════════════════════════════════════════════════
@@ -1172,7 +1371,12 @@ export default function Instellingen() {
         <p className="text-sm text-gray-500">Alleen admins kunnen de kennisbot-instellingen aanpassen.</p>
       )}
 
-      {tab === "huisstijl" && isAdmin && <HuisstijlPanel />}
+      {tab === "huisstijl" && isAdmin && (
+        <>
+          <HuisstijlPanel />
+          <LoginPaginaPanel />
+        </>
+      )}
       {tab === "huisstijl" && !isAdmin && (
         <p className="text-sm text-gray-500">Alleen admins kunnen de huisstijl aanpassen.</p>
       )}

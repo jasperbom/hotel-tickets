@@ -362,6 +362,47 @@ export const brandingApi = {
   deleteBackground: () => api.delete<BrandingSettings>("/settings/branding/background"),
 };
 
+// --- Loginpagina huisstijl ---
+
+export interface LoginBranding {
+  title: string;
+  subtitle: string;
+  footer: string;
+  logo: string | null;
+  btn_color: string | null;
+  bg_color: string | null;
+  bg_image: string | null;
+  /** Per veld: true = eigen loginpagina-waarde, false = geërfd van de huisstijl */
+  custom: Record<string, boolean>;
+}
+
+export const loginBrandingApi = {
+  get: () => api.get<LoginBranding>("/settings/login-branding"),
+  update: (data: {
+    title?: string | null;
+    subtitle?: string | null;
+    footer?: string | null;
+    btn_color?: string | null;
+    bg_color?: string | null;
+  }) => api.patch<LoginBranding>("/settings/login-branding", data),
+  uploadLogo: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post<LoginBranding>("/settings/login-branding/logo", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteLogo: () => api.delete<LoginBranding>("/settings/login-branding/logo"),
+  uploadBackground: (file: File) => {
+    const fd = new FormData();
+    fd.append("file", file);
+    return api.post<LoginBranding>("/settings/login-branding/background", fd, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+  },
+  deleteBackground: () => api.delete<LoginBranding>("/settings/login-branding/background"),
+};
+
 // --- Zwembaden types ---
 
 export type PoolId = "wellness" | "zwembad";

@@ -1,26 +1,25 @@
 import { useEffect, useState } from "react";
-import { authApi, brandingApi, setSessionToken } from "../api/client";
+import { authApi, loginBrandingApi, setSessionToken, type LoginBranding } from "../api/client";
 
 /**
  * Standalone loginpagina voor toegang buiten HA ingress om (LAN).
  * Personeel logt in met hun Home Assistant gebruikersnaam en wachtwoord;
  * de backend verifieert dit via de Supervisor auth-API en geeft een
- * sessietoken terug. De pagina volgt de ingestelde huisstijl
- * (logo, achtergrond en knopkleur uit Instellingen → Huisstijl).
+ * sessietoken terug. Teksten, logo, kleuren en achtergrond zijn instelbaar
+ * via Instellingen → Huisstijl → Loginpagina (met terugval op de algemene
+ * huisstijl).
  */
 export default function Login() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const [logo, setLogo] = useState<string | null>(null);
-  const [btnColor, setBtnColor] = useState<string | null>(null);
+  const [branding, setBranding] = useState<LoginBranding | null>(null);
 
   useEffect(() => {
-    brandingApi.get().then((r) => {
+    loginBrandingApi.get().then((r) => {
       const b = r.data;
-      if (b.brand_logo) setLogo(b.brand_logo);
-      if (b.btn_color || b.brand_color) setBtnColor(b.btn_color || b.brand_color);
+      setBranding(b);
       // Achtergrond via dezelfde CSS-variabelen als de app zelf (body::before)
       const root = document.documentElement;
       if (b.bg_image) {
@@ -30,6 +29,9 @@ export default function Login() {
       }
     }).catch(() => {});
   }, []);
+
+  const logo = branding?.logo ?? null;
+  const btnColor = branding?.btn_color ?? null;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -59,8 +61,8 @@ export default function Login() {
             ) : (
               <div className="text-4xl">⭐</div>
             )}
-            <h1 className="text-xl font-bold text-gray-800">Sterrenberg App</h1>
-            <p className="text-sm text-gray-500">Log in met je Home Assistant account</p>
+            <h1 className="text-xl font-bold text-gray-800">{branding?.title ?? "Sterrenberg App"}</h1>
+            <p className="text-sm text-gray-500">{branding?.subtitle ?? "Log in met je Home Assistant account"}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -110,7 +112,7 @@ export default function Login() {
           </form>
 
           <p className="text-xs text-gray-400 text-center">
-            Alleen bereikbaar op het bedrijfsnetwerk
+            {branding?.footer ?? "Alleen bereikbaar op het bedrijfsnetwerk"}
           </p>
         </div>
       </div>

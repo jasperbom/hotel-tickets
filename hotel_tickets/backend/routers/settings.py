@@ -170,6 +170,146 @@ async def delete_branding_background(
     return await _get_branding(db)
 
 
+# ── Loginpagina huisstijl ──────────────────────────────────────────────────────
+# Eigen instellingen voor de standalone loginpagina. Elk veld valt terug op de
+# algemene huisstijl (of een vaste standaardtekst) wanneer het niet gezet is,
+# zodat de loginpagina zonder configuratie gewoon meekleurt met de app.
+
+LOGIN_TEXT_DEFAULTS = {
+    "login_title": "Sterrenberg App",
+    "login_subtitle": "Log in met je Home Assistant account",
+    "login_footer": "Alleen bereikbaar op het bedrijfsnetwerk",
+}
+LOGIN_KEYS = [
+    "login_title", "login_subtitle", "login_footer",
+    "login_btn_color", "login_bg_color", "login_logo", "login_bg_image",
+]
+
+
+class LoginBrandingOut(BaseModel):
+    title: str
+    subtitle: str
+    footer: str
+    logo: str | None
+    btn_color: str | None
+    bg_color: str | None
+    bg_image: str | None
+    # Per veld: True wanneer er een eigen loginpagina-waarde is ingesteld
+    # (False = geërfd van de algemene huisstijl / standaardtekst)
+    custom: dict[str, bool]
+
+
+class LoginBrandingUpdate(BaseModel):
+    # None of lege string = eigen waarde wissen → terugvallen op de huisstijl
+    title: str | None = None
+    subtitle: str | None = None
+    footer: str | None = None
+    btn_color: str | None = None
+    bg_color: str | None = None
+
+
+async def _set_setting(db: AsyncSession, key: str, value: str | None) -> None:
+    row = await db.get(SystemSetting, key)
+    if value:
+        if row:
+            row.value = value
+        else:
+            db.add(SystemSetting(key=key, value=value))
+    elif row:
+        await db.delete(row)
+
+
+async def _get_login_branding(db: AsyncSession) -> LoginBrandingOut:
+    rows = {k: await db.get(SystemSetting, k) for k in LOGIN_KEYS}
+    own = {k: (rows[k].value if rows[k] else None) for k in LOGIN_KEYS}
+    branding = await _get_branding(db)
+    return LoginBrandingOut(
+        title=own["login_title"] or LOGIN_TEXT_DEFAULTS["login_title"],
+        subtitle=own["login_subtitle"] or LOGIN_TEXT_DEFAULTS["login_subtitle"],
+        footer=own["login_footer"] or LOGIN_TEXT_DEFAULTS["login_footer"],
+        logo=own["login_logo"] or branding.brand_logo,
+        btn_color=own["login_btn_color"] or branding.btn_color or branding.brand_color,
+        bg_color=own["login_bg_color"] or branding.bg_color,
+        # Eigen achtergrondkleur wint van de algemene achtergrondafbeelding
+        bg_image=own["login_bg_image"] or (None if own["login_bg_color"] else branding.bg_image),
+        custom={k.removeprefix("login_"): bool(v) for k, v in own.items()},
+    )
+
+
+@router.get("/login-branding", response_model=LoginBrandingOut)
+async def get_login_branding(db: AsyncSession = Depends(get_db)):
+    """Publiek: de loginpagina is per definitie niet ingelogd."""
+    return await _get_login_branding(db)
+
+
+@router.patch("/login-branding", response_model=LoginBrandingOut)
+async def update_login_branding(
+    body: LoginBrandingUpdate,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de loginpagina wijzigen")
+    # Alleen meegegeven velden wijzigen; lege string/None wist de eigen waarde
+    for field, value in body.model_dump(exclude_unset=True).items():
+        await _set_setting(db, f"login_{field}", (value or "").strip() or None)
+    await db.commit()
+    return await _get_login_branding(db)
+
+
+async def _upload_login_image(db: AsyncSession, key: str, file: UploadFile, max_size: int) -> None:
+    if file.content_type not in ALLOWED_LOGO_TYPES:
+        raise HTTPException(status_code=400, detail="Alleen PNG, JPEG of WebP toegestaan")
+    data = await file.read()
+    if len(data) > max_size:
+        raise HTTPException(status_code=400, detail=f"Bestand mag maximaal {max_size // 1024} KB zijn")
+    data_url = f"data:{file.content_type};base64,{base64.b64encode(data).decode()}"
+    await _set_setting(db, key, data_url)
+    await db.commit()
+
+
+@router.post("/login-branding/logo", response_model=LoginBrandingOut)
+async def upload_login_logo(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de loginpagina wijzigen")
+    await _upload_login_image(db, "login_logo", file, MAX_LOGO_SIZE)
+    return await _get_login_branding(db)
+
+
+@router.delete("/login-branding/logo", response_model=LoginBrandingOut)
+async def delete_login_logo(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de loginpagina wijzigen")
+    await _set_setting(db, "login_logo", None)
+    await db.commit()
+    return await _get_login_branding(db)
+
+
+@router.post("/login-branding/background", response_model=LoginBrandingOut)
+async def upload_login_background(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    file: UploadFile = File(...),
+):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de loginpagina wijzigen")
+    await _upload_login_image(db, "login_bg_image", file, MAX_BG_IMAGE_SIZE)
+    return await _get_login_branding(db)
+
+
+@router.delete("/login-branding/background", response_model=LoginBrandingOut)
+async def delete_login_background(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de loginpagina wijzigen")
+    await _set_setting(db, "login_bg_image", None)
+    await db.commit()
+    return await _get_login_branding(db)
+
+
 # ── Fietsen module instelling ──────────────────────────────────────────────────
 
 @router.patch("/bikes-module")
