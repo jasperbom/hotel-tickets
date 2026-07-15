@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, case, delete
+from sqlalchemy import select, and_, case, delete, func
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
@@ -304,6 +304,42 @@ async def list_tickets(
         item.pinned = t.id in pinned_ids
         out.append(item)
     return out
+
+
+@router.get("/counts")
+async def ticket_counts(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    category: Category | None = Query(None),
+    priority: Priority | None = Query(None),
+    assigned_to: str | None = Query(None),
+    location_id: str | None = Query(None),
+):
+    """Aantal tickets per status binnen de overige filters — voor de tellers
+    op de statusknoppen in de ticketlijst."""
+    filters = []
+    if category:
+        filters.append(Ticket.category == category)
+    if priority:
+        filters.append(Ticket.priority == priority)
+    if assigned_to:
+        if assigned_to == "me":
+            filters.append(Ticket.assigned_to == user.ha_user_id)
+        else:
+            filters.append(Ticket.assigned_to == assigned_to)
+    if location_id:
+        filters.append(Ticket.location_id == location_id)
+
+    stmt = select(Ticket.status, func.count()).group_by(Ticket.status)
+    if filters:
+        stmt = stmt.where(and_(*filters))
+    result = await db.execute(stmt)
+
+    counts: dict[str, int] = {s.value: 0 for s in Status}
+    for status_value, count in result.all():
+        key = status_value.value if hasattr(status_value, "value") else status_value
+        counts[key] = count
+    return counts
 
 
 @router.post("/", response_model=TicketOut, status_code=status.HTTP_201_CREATED)

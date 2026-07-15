@@ -232,6 +232,7 @@ export interface TimelinePoint {
 
 export const ticketApi = {
   list: (params?: Record<string, string>) => api.get<Ticket[]>("/tickets/", { params }),
+  counts: (params?: Record<string, string>) => api.get<Record<Status, number>>("/tickets/counts", { params }),
   create: (data: Partial<Ticket> & { subtask_labels?: string[] }) => api.post<Ticket>("/tickets/", data),
   get: (id: string) => api.get<Ticket>(`/tickets/${id}`),
   update: (id: string, data: Partial<Ticket>) => api.patch<Ticket>(`/tickets/${id}`, data),

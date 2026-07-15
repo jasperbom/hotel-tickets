@@ -87,10 +87,16 @@ export default function MijnOverzicht() {
     return "";
   });
   const [showUpcoming, setShowUpcoming] = useState(() => localStorage.getItem("ht_show_upcoming") === "1");
+  // Standaard open; alleen expliciet ingeklapt onthouden
+  const [showAvailable, setShowAvailable] = useState(() => localStorage.getItem("ht_show_available") !== "0");
 
   useEffect(() => {
     localStorage.setItem("ht_show_upcoming", showUpcoming ? "1" : "0");
   }, [showUpcoming]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_available", showAvailable ? "1" : "0");
+  }, [showAvailable]);
 
   useEffect(() => {
     localStorage.setItem("ht_show_all_today", showAllToday ? "1" : "0");
@@ -259,20 +265,14 @@ export default function MijnOverzicht() {
         </button>
       </div>
 
-      {/* Statistieken */}
-      <div className="grid grid-cols-4 gap-3">
+      {/* Statistieken — persoonlijk; teamcijfers staan op het Dashboard */}
+      <div className="grid grid-cols-3 gap-3">
         <StatCard
           value={stats.my_open}
           label="Mijn openstaand"
           color="blue"
           empty="Niets te doen"
           onClick={() => navigate("/tickets?status=open,in_progress&assigned=me")}
-        />
-        <StatCard
-          value={stats.team_open}
-          label={isManager ? "Totaal open" : "Team open"}
-          color="gray"
-          onClick={() => navigate("/tickets?status=open,in_progress")}
         />
         <StatCard
           value={stats.urgent}
@@ -375,23 +375,32 @@ export default function MijnOverzicht() {
         )}
       </section>
 
-      {/* Beschikbaar om op te pakken */}
+      {/* Beschikbaar om op te pakken — inklapbaar, voorkeur wordt onthouden */}
       {visibleAvailable.length > 0 && (
         <section>
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2">
+            <button
+              onClick={() => setShowAvailable(!showAvailable)}
+              className="flex items-center gap-2"
+              aria-expanded={showAvailable}
+              title={showAvailable ? "Inklappen" : "Uitklappen"}
+            >
               <span className="text-blue-600 text-lg">🎫</span>
               <h2 className="font-semibold text-gray-900">Beschikbaar om op te pakken</h2>
-            </div>
+              <span className="text-xs font-bold bg-blue-100 text-blue-700 px-1.5 py-0.5 rounded-full">{visibleAvailable.length}</span>
+              <span className="text-gray-400 text-sm">{showAvailable ? "▲ Inklappen" : "▼ Uitklappen"}</span>
+            </button>
             <Link to="/tickets?status=open" className="text-sm text-blue-600 hover:underline">
               Alle open →
             </Link>
           </div>
-          <div className="space-y-2">
-            {visibleAvailable.map((t) => (
-              <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={canActOn(t.category) ? () => claimTicket(t.id) : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
-            ))}
-          </div>
+          {showAvailable && (
+            <div className="space-y-2">
+              {visibleAvailable.map((t) => (
+                <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={canActOn(t.category) ? () => claimTicket(t.id) : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
+              ))}
+            </div>
+          )}
         </section>
       )}
 
@@ -430,17 +439,14 @@ export default function MijnOverzicht() {
         </section>
       )}
 
-      {/* Snelle actie */}
-      <div className="flex gap-3">
-        <Link to="/tickets/new" className="btn-primary flex-1 text-center">
-          + Nieuw ticket aanmaken
-        </Link>
-        {isManager && (
+      {/* Snelle actie — nieuw ticket aanmaken gaat via de zwevende knop onderin */}
+      {isManager && (
+        <div className="flex gap-3">
           <Link to="/dashboard" className="btn-secondary flex-1 text-center">
             Beheeroverzicht
           </Link>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   );
 }

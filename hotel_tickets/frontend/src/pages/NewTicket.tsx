@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ticketApi, type Category, type Priority } from "../api/client";
+import { ticketApi, userApi, type Category, type Priority, type UserRole } from "../api/client";
 import AreaSelector from "../components/AreaSelector";
 import MultiAreaSelector from "../components/MultiAreaSelector";
 
@@ -15,7 +15,13 @@ export default function NewTicket() {
     category: "technical" as Category,
     priority: "medium" as Priority,
     location_id: null as string | null,
+    assigned_to: null as string | null,
   });
+  const [users, setUsers] = useState<UserRole[]>([]);
+
+  useEffect(() => {
+    userApi.list().then((r) => setUsers(r.data)).catch(() => {});
+  }, []);
   const [multiRoom, setMultiRoom] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
   const [subtaskLabels, setSubtaskLabels] = useState<string[]>([]);
@@ -53,6 +59,10 @@ export default function NewTicket() {
       setSaving(false);
     }
   }
+
+  const sortedUsers = [...users].sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const departmentUsers = sortedUsers.filter((u) => u.department === form.category);
+  const otherUsers = sortedUsers.filter((u) => u.department !== form.category);
 
   const roomCount = multiRoom ? selectedRooms.length : 0;
   const submitLabel = saving
@@ -94,7 +104,7 @@ export default function NewTicket() {
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Categorie</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Afdeling</label>
             <select
               value={form.category}
               onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
@@ -123,6 +133,34 @@ export default function NewTicket() {
               <option value="urgent">Urgent</option>
             </select>
           </div>
+        </div>
+
+        {/* Toewijzen — medewerkers van de gekozen afdeling bovenaan */}
+        <div>
+          <label className="block text-sm font-medium text-gray-700 mb-1">
+            Toewijzen aan <span className="text-gray-400 font-normal">(optioneel)</span>
+          </label>
+          <select
+            value={form.assigned_to ?? ""}
+            onChange={(e) => setForm({ ...form, assigned_to: e.target.value || null })}
+            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          >
+            <option value="">Niet toegewezen</option>
+            {departmentUsers.length > 0 && (
+              <optgroup label="Gekozen afdeling">
+                {departmentUsers.map((u) => (
+                  <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
+                ))}
+              </optgroup>
+            )}
+            {otherUsers.length > 0 && (
+              <optgroup label="Overige medewerkers">
+                {otherUsers.map((u) => (
+                  <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
+                ))}
+              </optgroup>
+            )}
+          </select>
         </div>
 
         {/* Locatie */}

@@ -46,6 +46,18 @@ const CATEGORY_COLORS: Record<Category, string> = {
   garden: "bg-emerald-100 text-emerald-700",
 };
 
+/** Linkerrand-accent per afdeling — zelfde tinten als de CategoryBadge,
+ *  zodat afdelingen overal aan dezelfde kleur herkenbaar zijn. */
+export const CATEGORY_BORDER_COLORS: Record<Category, string> = {
+  technical: "border-l-purple-500",
+  housekeeping: "border-l-teal-500",
+  reception: "border-l-indigo-500",
+  service: "border-l-orange-500",
+  kitchen: "border-l-rose-500",
+  sales: "border-l-amber-500",
+  garden: "border-l-emerald-500",
+};
+
 export function StatusBadge({ status }: { status: Status }) {
   return (
     <span className={`badge ${STATUS_COLORS[status]}`}>

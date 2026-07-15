@@ -52,6 +52,11 @@ export default function TicketList() {
   const [search, setSearch] = useState("");
   const [groupByLocation, setGroupByLocation] = useState(() => localStorage.getItem("ht_tickets_group") === "1");
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
+  const [counts, setCounts] = useState<Record<Status, number> | null>(null);
+  // Extra filters standaard ingeklapt, tenzij er al één actief is
+  const [filtersOpen, setFiltersOpen] = useState(
+    () => Boolean(urlCategory || urlPriority || urlAssigned === "me" || localStorage.getItem("ht_tickets_group") === "1")
+  );
 
   useEffect(() => {
     localStorage.setItem("ht_tickets_group", groupByLocation ? "1" : "0");
@@ -84,6 +89,17 @@ export default function TicketList() {
       .then((r) => setTickets(r.data))
       .finally(() => setLoading(false));
   }, [department, selectedStatuses, priority, assignedToMe]);
+
+  // Tellers per status binnen de overige filters (statusfilter zelf uitgezonderd)
+  useEffect(() => {
+    const params: Record<string, string> = {};
+    if (department) params.category = department;
+    if (priority) params.priority = priority;
+    if (assignedToMe) params.assigned_to = "me";
+    ticketApi.counts(params)
+      .then((r) => setCounts(r.data))
+      .catch(() => setCounts(null));
+  }, [department, priority, assignedToMe]);
 
   // Tickets filteren op zoekterm (titel of beschrijving)
   const filteredTickets = useMemo(() => {
@@ -136,6 +152,9 @@ export default function TicketList() {
     setCollapsedGroups((prev) => ({ ...prev, [key]: !prev[key] }));
   }
 
+  const activeFilterCount =
+    (department ? 1 : 0) + (priority ? 1 : 0) + (assignedToMe ? 1 : 0) + (groupByLocation ? 1 : 0);
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -143,21 +162,39 @@ export default function TicketList() {
         <Link to="/tickets/new" className="btn-primary">+ Nieuw</Link>
       </div>
 
-      {/* Zoekbalk */}
-      <div className="relative">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
-        <input
-          type="search"
-          placeholder="Zoek in titel of omschrijving…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
-        />
-      </div>
+      {/* Sticky filterbalk: zoeken + status altijd zichtbaar, rest achter "Filters" */}
+      <div className="sticky top-14 z-30 -mx-4 px-4 py-3 bg-white/95 backdrop-blur border-b border-gray-200 space-y-2">
+        <div className="flex gap-2">
+          <div className="relative flex-1 min-w-0">
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
+            <input
+              type="search"
+              placeholder="Zoek in titel of omschrijving…"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"
+            />
+          </div>
+          <button
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            className={`shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-lg border text-sm font-medium transition-all ${
+              filtersOpen || activeFilterCount > 0
+                ? "border-blue-400 bg-blue-50 text-blue-700"
+                : "border-gray-300 bg-white text-gray-600 hover:border-blue-400"
+            }`}
+            title="Extra filters tonen of verbergen"
+          >
+            <span>⚙</span>
+            <span className="hidden sm:inline">Filters</span>
+            {activeFilterCount > 0 && (
+              <span className="text-xs font-bold bg-blue-600 text-white px-1.5 py-0.5 rounded-full leading-none">
+                {activeFilterCount}
+              </span>
+            )}
+          </button>
+        </div>
 
-      {/* Filters */}
-      <div className="space-y-2">
-        {/* Status toggle pills */}
+        {/* Status toggle pills met tellers */}
         <div className="flex gap-2 flex-wrap">
           {STATUS_OPTIONS.map((s) => {
             const active = selectedStatuses.includes(s.value);
@@ -174,51 +211,60 @@ export default function TicketList() {
               >
                 {active && <span className="text-xs">✓</span>}
                 {s.label}
+                {counts && (
+                  <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full leading-none ${
+                    active ? "bg-white/25" : "bg-gray-100 text-gray-500"
+                  }`}>
+                    {counts[s.value] ?? 0}
+                  </span>
+                )}
               </button>
             );
           })}
         </div>
 
-        {/* Afdeling + prioriteit + mijn tickets + groepeer */}
-        <div className="flex flex-wrap gap-2">
-          <select
-            value={department}
-            onChange={(e) => setDepartment(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
-          >
-            {DEPARTMENTS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
-          </select>
-          <select
-            value={priority}
-            onChange={(e) => setPriority(e.target.value)}
-            className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
-          >
-            {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
-          </select>
-          <button
-            onClick={() => setAssignedToMe(!assignedToMe)}
-            className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
-              assignedToMe
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
-            }`}
-          >
-            {assignedToMe && <span className="text-xs mr-1">✓</span>}
-            Mijn tickets
-          </button>
-          <button
-            onClick={() => setGroupByLocation(!groupByLocation)}
-            className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
-              groupByLocation
-                ? "bg-purple-600 text-white border-purple-600"
-                : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
-            }`}
-            title="Tickets gegroepeerd per kamer/locatie tonen"
-          >
-            {groupByLocation && <span className="text-xs mr-1">✓</span>}
-            📁 Groepeer per locatie
-          </button>
-        </div>
+        {/* Extra filters: afdeling + prioriteit + mijn tickets + groepeer */}
+        {filtersOpen && (
+          <div className="flex flex-wrap gap-2">
+            <select
+              value={department}
+              onChange={(e) => setDepartment(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+            >
+              {DEPARTMENTS.map((d) => <option key={d.value} value={d.value}>{d.label}</option>)}
+            </select>
+            <select
+              value={priority}
+              onChange={(e) => setPriority(e.target.value)}
+              className="border border-gray-300 rounded-lg px-3 py-1.5 text-sm bg-white"
+            >
+              {PRIORITIES.map((p) => <option key={p.value} value={p.value}>{p.label}</option>)}
+            </select>
+            <button
+              onClick={() => setAssignedToMe(!assignedToMe)}
+              className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+                assignedToMe
+                  ? "bg-blue-600 text-white border-blue-600"
+                  : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+              }`}
+            >
+              {assignedToMe && <span className="text-xs mr-1">✓</span>}
+              Mijn tickets
+            </button>
+            <button
+              onClick={() => setGroupByLocation(!groupByLocation)}
+              className={`px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+                groupByLocation
+                  ? "bg-purple-600 text-white border-purple-600"
+                  : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
+              }`}
+              title="Tickets gegroepeerd per kamer/locatie tonen"
+            >
+              {groupByLocation && <span className="text-xs mr-1">✓</span>}
+              📁 Groepeer per locatie
+            </button>
+          </div>
+        )}
       </div>
 
       {loading ? (
