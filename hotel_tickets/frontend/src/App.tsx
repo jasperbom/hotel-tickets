@@ -28,50 +28,11 @@ import Login from "./pages/Login";
 import { InboxEnvelope } from "./components/InboxEnvelope";
 import { userApi, bikesModuleApi, brandingApi, hasSessionToken, clearSessionToken, type UserRole, type BikesModuleRoles } from "./api/client";
 import { saveLastRoute } from "./lastRoute";
+import { applyButtonPalette, applyAppBackground, readCachedAppBranding, saveCachedAppBranding } from "./branding";
 
-// --- Kleurpalet hulpfuncties ---
-
-function hexToHsl(hex: string): [number, number, number] {
-  const r = parseInt(hex.slice(1, 3), 16) / 255;
-  const g = parseInt(hex.slice(3, 5), 16) / 255;
-  const b = parseInt(hex.slice(5, 7), 16) / 255;
-  const max = Math.max(r, g, b), min = Math.min(r, g, b);
-  const l = (max + min) / 2;
-  if (max === min) return [0, 0, l * 100];
-  const d = max - min;
-  const s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-  let h = 0;
-  switch (max) {
-    case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
-    case g: h = ((b - r) / d + 2) / 6; break;
-    case b: h = ((r - g) / d + 4) / 6; break;
-  }
-  return [h * 360, s * 100, l * 100];
-}
-
-function hslToHex(h: number, s: number, l: number): string {
-  s /= 100; l /= 100;
-  const k = (n: number) => (n + h / 30) % 12;
-  const a = s * Math.min(l, 1 - l);
-  const f = (n: number) => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, Math.min(9 - k(n), 1)))));
-  return "#" + [f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, "0")).join("");
-}
-
-function applyButtonPalette(hex: string) {
-  const [h, s] = hexToHsl(hex);
-  const sat = Math.min(s * 1.1, 95);
-  const root = document.documentElement;
-  root.style.setProperty("--blue-50",  hslToHex(h, Math.min(s * 0.25, 40), 97));
-  root.style.setProperty("--blue-100", hslToHex(h, Math.min(s * 0.4,  60), 93));
-  root.style.setProperty("--blue-200", hslToHex(h, Math.min(s * 0.6,  75), 87));
-  root.style.setProperty("--blue-300", hslToHex(h, sat, 78));
-  root.style.setProperty("--blue-400", hslToHex(h, sat, 68));
-  root.style.setProperty("--blue-500", hslToHex(h, sat, 58));
-  root.style.setProperty("--blue-600", hex);
-  root.style.setProperty("--blue-700", hslToHex(h, sat, 42));
-  root.style.setProperty("--blue-800", hslToHex(h, sat, 35));
-  root.style.setProperty("--blue-900", hslToHex(h, sat, 28));
-}
+// Laatst bekende huisstijl — direct beschikbaar zodat logo en merkkleur al in
+// de eerste render kloppen; de API-respons corrigeert eventuele wijzigingen.
+const cachedBranding = readCachedAppBranding();
 
 // --- Module configuratie ---
 
@@ -150,8 +111,8 @@ export default function App() {
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [bikesModuleRoles, setBikesModuleRoles] = useState<BikesModuleRoles>("all");
-  const [brandColor, setBrandColor] = useState<string | null>(null);
-  const [brandLogo, setBrandLogo] = useState<string | null>(null);
+  const [brandColor, setBrandColor] = useState<string | null>(cachedBranding?.brand_color ?? null);
+  const [brandLogo, setBrandLogo] = useState<string | null>(cachedBranding?.brand_logo ?? null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
@@ -175,15 +136,13 @@ export default function App() {
         setHasAdmin(listRes.data.some((u) => u.role === "admin"));
         setBikesModuleRoles(bikesRes.data.bikes_module_roles);
         const b = brandingRes.data;
-        if (b.brand_color) setBrandColor(b.brand_color);
-        if (b.brand_logo) setBrandLogo(b.brand_logo);
-        if (b.btn_color) applyButtonPalette(b.btn_color);
-        const root = document.documentElement;
-        if (b.bg_image) {
-          root.style.setProperty("--app-bg-image", `url("${b.bg_image}")`);
-        } else if (b.bg_color) {
-          root.style.setProperty("--app-bg", b.bg_color);
-        }
+        // Ook bij null expliciet zetten/wissen, zodat een in de instellingen
+        // verwijderde huisstijl niet uit de cache blijft hangen.
+        setBrandColor(b.brand_color);
+        setBrandLogo(b.brand_logo);
+        applyButtonPalette(b.btn_color);
+        applyAppBackground(b.bg_image, b.bg_color);
+        saveCachedAppBranding(b);
       })
       .catch(() => {});
   }, []);
