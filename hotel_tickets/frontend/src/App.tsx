@@ -334,11 +334,14 @@ export default function App() {
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
   // Zwevende actieknoppen (nieuw ticket + kennisbot-vraag) onderin.
-  // Niet op de pagina's waar ze dubbelop of in de weg zijn: het nieuw-ticket-
-  // formulier zelf en de kennisbot (die heeft een eigen invoerbalk onderin).
+  // Niet op de pagina's waar ze dubbelop of in de weg zijn: de invoer-
+  // formulieren (die hebben zelf actieknoppen onderin, waar de FAB's overheen
+  // vallen) en de kennisbot (die heeft een eigen invoerbalk onderin).
   const showFabs =
     (activeModule || isOnInstellingen) &&
-    !["/tickets/new", "/kennis"].includes(location.pathname);
+    !["/tickets/new", "/kennis", "/pools/nieuw", "/bikes/reserveringen/nieuw"].includes(
+      location.pathname
+    );
 
   // Pagina's buiten module-context die wél in de app-shell renderen
   const isShellPage = isOnInstellingen || isOnWachtwoord;
