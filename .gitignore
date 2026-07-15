@@ -10,6 +10,7 @@ __pycache__/
 # Node
 node_modules/
 addon/frontend/dist/
+*.tsbuildinfo
 
 # OS
 .DS_Store
