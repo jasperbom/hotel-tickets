@@ -341,9 +341,9 @@ export default function App() {
   const isOnInstellingen = location.pathname === "/instellingen";
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
-  // Zwevende actieknoppen (nieuw ticket + kennisbot-vraag) onderin.
-  // Niet op de pagina's waar ze dubbelop of in de weg zijn: het nieuw-ticket-
-  // formulier zelf en de kennisbot (die heeft een eigen invoerbalk onderin).
+  // Zwevende actieknop (kennisbot-vraag) onderin.
+  // Niet op de pagina's waar hij dubbelop of in de weg is: het nieuw-ticket-
+  // formulier en de kennisbot (die heeft een eigen invoerbalk onderin).
   const showFabs =
     (activeModule || isOnInstellingen) &&
     !["/tickets/new", "/kennis"].includes(location.pathname);
@@ -598,7 +598,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Zwevende actieknoppen */}
+        {/* Zwevende actieknop */}
         {showFabs && (
           <div
             className="fixed right-4 z-40 flex items-center gap-2"
@@ -610,13 +610,6 @@ export default function App() {
             >
               <span className="text-base leading-none">💬</span>
               <span>Stel een vraag</span>
-            </button>
-            <button
-              onClick={() => navigate("/tickets/new")}
-              className="flex items-center gap-1.5 bg-blue-600 text-white shadow-lg rounded-full pl-3 pr-4 py-2.5 text-sm font-semibold hover:bg-blue-700 active:scale-95 transition"
-            >
-              <span className="text-base leading-none font-bold">＋</span>
-              <span>Nieuw ticket</span>
             </button>
           </div>
         )}
