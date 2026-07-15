@@ -132,6 +132,29 @@ if os.path.isdir(frontend_dist):
     @app.get("/", include_in_schema=False)
     @app.get("/{full_path:path}", include_in_schema=False)
     async def serve_frontend(full_path: str = ""):
+        # Statische bestanden in de dist-root (app-iconen, favicon, manifest)
+        # direct serveren — de SPA-fallback zou er anders index.html voor
+        # teruggeven en dan toont iOS geen beginscherm-icoon. Alleen kale
+        # bestandsnamen (geen "/" of leidende ".") zodat path traversal
+        # onmogelijk is.
+        if (
+            full_path
+            and "/" not in full_path
+            and not full_path.startswith(".")
+            and full_path != "index.html"
+        ):
+            candidate = os.path.join(frontend_dist, full_path)
+            if os.path.isfile(candidate):
+                media_type = (
+                    "application/manifest+json"
+                    if full_path.endswith(".webmanifest")
+                    else None
+                )
+                return FileResponse(
+                    candidate,
+                    media_type=media_type,
+                    headers={"Cache-Control": "public, max-age=86400"},
+                )
         index = os.path.join(frontend_dist, "index.html")
         return FileResponse(
             index,
