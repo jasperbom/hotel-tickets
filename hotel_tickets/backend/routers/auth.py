@@ -63,7 +63,14 @@ class LoginOut(BaseModel):
 
 
 async def _verify_ha_credentials(username: str, password: str) -> bool:
-    """Verifieer gebruikersnaam/wachtwoord tegen de HA-accounts via de Supervisor."""
+    """Verifieer gebruikersnaam/wachtwoord tegen de HA-accounts via de Supervisor.
+
+    Statuscodes van de Supervisor:
+      200      → geldig
+      400/401  → ongeldige inloggegevens
+      403      → addon mist auth_api-rechten (herbouw/herinstalleer de addon)
+      overig   → infra-probleem
+    """
     try:
         async with aiohttp.ClientSession() as session:
             async with session.post(
@@ -72,7 +79,29 @@ async def _verify_ha_credentials(username: str, password: str) -> bool:
                 json={"username": username, "password": password},
                 timeout=aiohttp.ClientTimeout(total=10),
             ) as resp:
-                return resp.status == 200
+                if resp.status == 200:
+                    return True
+                body = (await resp.text())[:300]
+                logger.warning(
+                    "[auth] Supervisor weigerde login voor %r: HTTP %s — %s",
+                    username, resp.status, body,
+                )
+                if resp.status in (400, 401):
+                    return False
+                if resp.status == 403:
+                    raise HTTPException(
+                        status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                        detail=(
+                            "De addon heeft geen toegang tot de HA auth-API. "
+                            "Herbouw of herinstalleer de addon en probeer het opnieuw."
+                        ),
+                    )
+                raise HTTPException(
+                    status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                    detail=f"Home Assistant gaf een onverwachte fout (HTTP {resp.status}) — zie het addon-log",
+                )
+    except HTTPException:
+        raise
     except Exception as exc:
         logger.warning("[auth] Supervisor auth-API onbereikbaar: %s", exc)
         raise HTTPException(
