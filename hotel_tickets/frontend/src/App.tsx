@@ -23,8 +23,9 @@ import Instellingen from "./pages/Instellingen";
 import KennisBot from "./pages/KennisBot";
 import KennisbankBeheer from "./pages/KennisbankBeheer";
 import Berichten from "./pages/Berichten";
+import Login from "./pages/Login";
 import { InboxEnvelope } from "./components/InboxEnvelope";
-import { userApi, bikesModuleApi, brandingApi, type UserRole, type BikesModuleRoles } from "./api/client";
+import { userApi, bikesModuleApi, brandingApi, hasSessionToken, clearSessionToken, type UserRole, type BikesModuleRoles } from "./api/client";
 import { saveLastRoute } from "./lastRoute";
 
 // --- Kleurpalet hulpfuncties ---
@@ -345,6 +346,17 @@ export default function App() {
     navigate(mod.defaultPath);
   }
 
+  function handleLogout() {
+    clearSessionToken();
+    window.location.hash = "#/login";
+    window.location.reload();
+  }
+
+  // Standalone loginpagina — buiten de app-shell (geen navigatie eromheen)
+  if (location.pathname === "/login") {
+    return <Login />;
+  }
+
   return (
     <div data-app-root className="flex min-h-[100dvh]">
       {/* Desktop zijbalk — verborgen op mobile */}
@@ -390,6 +402,18 @@ export default function App() {
             >
               <span className="text-xl">⚙️</span>
               <span className="leading-tight text-center truncate w-full px-0.5">Instellingen</span>
+            </button>
+          </div>
+        )}
+        {hasSessionToken() && (
+          <div className="mb-3">
+            <button
+              onClick={handleLogout}
+              title="Uitloggen"
+              className="flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium text-white/60 hover:text-white hover:bg-white/10 transition-colors"
+            >
+              <span className="text-xl">🚪</span>
+              <span className="leading-tight text-center truncate w-full px-0.5">Uitloggen</span>
             </button>
           </div>
         )}
@@ -450,6 +474,18 @@ export default function App() {
                             <span className="text-lg">⚙️</span>
                             <span>Instellingen</span>
                             {isOnInstellingen && <span className="ml-auto text-white/40 text-xs">✓</span>}
+                          </button>
+                        </>
+                      )}
+                      {hasSessionToken() && (
+                        <>
+                          <div className="mx-3 my-1 border-t border-white/10" />
+                          <button
+                            onClick={handleLogout}
+                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+                          >
+                            <span className="text-lg">🚪</span>
+                            <span>Uitloggen</span>
                           </button>
                         </>
                       )}

@@ -1,14 +1,15 @@
+import ipaddress
 import logging
 import os
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 
 from .database import init_db
 from .scheduler import get_scheduler, load_all_templates, start_keycard_watcher, start_bike_key_watcher, start_interval_watcher
-from .routers import tickets, users, locations, recurring, reports, integration, settings, nfc, pools, bikes, bike_reservations, bike_maintenance, bike_admin, knowledge, notifications
+from .routers import auth, tickets, users, locations, recurring, reports, integration, settings, nfc, pools, bikes, bike_reservations, bike_maintenance, bike_admin, knowledge, notifications
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "info").upper(),
@@ -55,7 +56,55 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# ── Netwerkrestrictie ──────────────────────────────────────────────────────────
+# Wanneer ALLOWED_NETWORKS gezet is (komma-gescheiden CIDR's, bijv.
+# "192.168.1.0/24") worden verzoeken van andere IP's geweigerd. Interne HA
+# bronnen (ingress-proxy, Supervisor, loopback) blijven altijd toegestaan.
+# De echte afscherming is het níet port-forwarden van de addon-poort; dit is
+# verdediging in de diepte.
+_ALWAYS_ALLOWED = [
+    ipaddress.ip_network("127.0.0.0/8"),
+    ipaddress.ip_network("::1/128"),
+    ipaddress.ip_network("172.30.32.0/23"),  # HA Supervisor docker-netwerk
+]
+
+def _parse_allowed_networks() -> list:
+    networks = []
+    for raw in os.environ.get("ALLOWED_NETWORKS", "").split(","):
+        raw = raw.strip()
+        if not raw:
+            continue
+        try:
+            networks.append(ipaddress.ip_network(raw, strict=False))
+        except ValueError:
+            logger.warning("Ongeldige CIDR in ALLOWED_NETWORKS genegeerd: %r", raw)
+    return networks
+
+ALLOWED_NETWORKS = _parse_allowed_networks()
+if ALLOWED_NETWORKS:
+    logger.info("Netwerkrestrictie actief: %s", ", ".join(str(n) for n in ALLOWED_NETWORKS))
+
+
+@app.middleware("http")
+async def restrict_networks(request: Request, call_next):
+    if ALLOWED_NETWORKS:
+        client_host = request.client.host if request.client else ""
+        try:
+            client_ip = ipaddress.ip_address(client_host)
+        except ValueError:
+            return JSONResponse(status_code=403, content={"detail": "Toegang geweigerd"})
+        if not any(client_ip in net for net in _ALWAYS_ALLOWED + ALLOWED_NETWORKS):
+            logger.warning("Verzoek geweigerd van %s (buiten toegestane netwerken)", client_host)
+            return JSONResponse(
+                status_code=403,
+                content={"detail": "Toegang alleen mogelijk vanaf het bedrijfsnetwerk"},
+            )
+    return await call_next(request)
+
+
 # API routes
+app.include_router(auth.router, prefix="/api")
 app.include_router(tickets.router, prefix="/api")
 app.include_router(users.router, prefix="/api")
 app.include_router(locations.router, prefix="/api")

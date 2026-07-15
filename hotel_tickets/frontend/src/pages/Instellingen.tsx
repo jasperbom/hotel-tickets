@@ -139,7 +139,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserRole>>({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", ha_username: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
 
   useEffect(() => {
     userApi.list().then((r) => setUsers(r.data)).finally(() => setLoading(false));
@@ -166,7 +166,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
     };
     const r = await userApi.create(payload);
     setUsers((prev) => [...prev, r.data]);
-    setNewForm({ ha_user_id: "", display_name: "", role: "employee", department: "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+    setNewForm({ ha_user_id: "", display_name: "", ha_username: "", role: "employee", department: "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
     setShowNew(false);
   }
 
@@ -186,6 +186,9 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
             <input placeholder="Naam" value={newForm.display_name}
               onChange={(e) => setNewForm({ ...newForm, display_name: e.target.value })}
               className="border rounded px-2 py-1 text-sm" />
+            <input placeholder="HA gebruikersnaam (voor loginpagina)" value={newForm.ha_username}
+              onChange={(e) => setNewForm({ ...newForm, ha_username: e.target.value })}
+              className="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
             <select value={newForm.role} onChange={(e) => setNewForm({ ...newForm, role: e.target.value as Role })}
               className="border rounded px-2 py-1 text-sm bg-white">
               {(Object.keys(ROLE_LABELS) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
@@ -254,6 +257,10 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                       placeholder="Notify service" className="border rounded px-2 py-1 text-sm" />
                     <input value={editForm.ha_device_tracker || ""} onChange={(e) => setEditForm({ ...editForm, ha_device_tracker: e.target.value })}
                       placeholder="device_tracker entity (optioneel)" className="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+                    {isAdmin && (
+                      <input value={editForm.ha_username || ""} onChange={(e) => setEditForm({ ...editForm, ha_username: e.target.value })}
+                        placeholder="HA gebruikersnaam (voor loginpagina)" className="col-span-2 border rounded px-2 py-1 text-sm font-mono" />
+                    )}
                     <label className="col-span-2 flex items-center gap-2 text-sm">
                       <input type="checkbox" checked={!!editForm.notify_new_ticket}
                         onChange={(e) => setEditForm({ ...editForm, notify_new_ticket: e.target.checked })} />
@@ -269,7 +276,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                 <div className="flex items-center gap-3">
                   <div className="flex-1">
                     <p className="font-medium text-sm">{user.display_name}</p>
-                    <p className="text-xs text-gray-400">{user.ha_user_id}</p>
+                    <p className="text-xs text-gray-400">{user.ha_user_id}{user.ha_username ? ` · login: ${user.ha_username}` : ""}</p>
                     <div className="flex gap-1.5 mt-1">
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{ROLE_LABELS[user.role]}</span>
                       {user.department && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{DEPT_LABELS[user.department]}</span>}

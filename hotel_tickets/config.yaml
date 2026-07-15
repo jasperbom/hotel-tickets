@@ -1,5 +1,5 @@
 name: "Hotel Ticket System"
-version: "1.5.4"
+version: "1.5.6"
 slug: "hotel_tickets"
 description: "Ticket en taakbeheer voor hotels – technische dienst, huishouding en receptie"
 url: "https://github.com/jasperbom/hotel-tickets"
@@ -12,6 +12,12 @@ startup: application
 boot: auto
 ingress: true
 ingress_port: 8080
+ports:
+  8080/tcp: null
+  8443/tcp: null
+ports_description:
+  8080/tcp: "Directe HTTP-toegang tot de web-app op het LAN (standalone loginpagina). Leeg laten = uitgeschakeld. Gebruik bij voorkeur 8443 met SSL."
+  8443/tcp: "HTTPS-toegang tot de web-app op het LAN. Vereist ssl: true en een certificaat in /ssl."
 panel_icon: mdi:ticket-outline
 panel_title: Tickets
 homeassistant_api: true
@@ -20,6 +26,11 @@ options:
   smtp_enabled: false
   log_level: "info"
   claude_model: "claude-haiku-4-5"
+  allowed_networks: []
+  session_hours: 12
+  ssl: false
+  certfile: "fullchain.pem"
+  keyfile: "privkey.pem"
 schema:
   smtp_enabled: bool
   smtp_host: str?
@@ -30,6 +41,13 @@ schema:
   log_level: list(debug|info|warning|error)
   claude_api_key: str?
   claude_model: str?
+  allowed_networks:
+    - str
+  session_hours: int(1,168)?
+  ssl: bool
+  certfile: str?
+  keyfile: str?
 map:
   - data:rw
   - config:rw
+  - ssl:ro

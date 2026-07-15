@@ -7,7 +7,11 @@ In HA ingress zet de Supervisor automatisch:
   X-Remote-User-Display-Name → weergavenaam (HA 2023.4+)
 
 Deze headers worden door de Supervisor proxy ingesteld en
-kunnen niet worden vervalst door de client.
+kunnen niet worden vervalst door de client — zolang het verzoek daadwerkelijk
+via de ingress-proxy binnenkomt. Nu de addon-poort ook direct op het LAN kan
+staan, worden de headers alleen nog vertrouwd wanneer het verzoek van het
+ingress-proxy-IP komt. Directe LAN-clients loggen in via de loginpagina en
+krijgen een sessietoken (zie routers/auth.py en session.py).
 """
 import logging
 import os
@@ -19,11 +23,26 @@ from sqlalchemy import select, func
 
 from .database import get_db
 from .models import UserRole, Role
+from .session import verify_session_token, TOKEN_PREFIX
 
 logger = logging.getLogger(__name__)
 
 DEV_MODE = os.environ.get("DEV_MODE", "false").lower() == "true"
 SUPERVISOR_TOKEN = os.environ.get("SUPERVISOR_TOKEN", "")
+
+# HA ingress-verzoeken komen altijd van dit Supervisor-proxy-IP
+INGRESS_PROXY_IPS = {
+    ip.strip()
+    for ip in os.environ.get("INGRESS_PROXY_IPS", "172.30.32.2").split(",")
+    if ip.strip()
+}
+
+
+def _is_from_ingress_proxy(request: Request) -> bool:
+    if DEV_MODE:
+        return True
+    client_ip = request.client.host if request.client else ""
+    return client_ip in INGRESS_PROXY_IPS
 
 _SYSTEM_USER = None  # wordt aangemaakt bij eerste gebruik
 
@@ -88,20 +107,31 @@ async def get_current_user(
 
     Prioriteit:
     1. X-Remote-User-ID header (HA ingress → frontend gebruiker)
-    2. Bearer token = eigen SUPERVISOR_TOKEN (intern / dev)
-    3. Bearer token geverifieerd via Supervisor ping (HA core / andere addons)
-    4. DEV_MODE fallback
+    2. Sessietoken van de loginpagina (standalone toegang via LAN)
+    3. Bearer token = eigen SUPERVISOR_TOKEN (intern / dev)
+    4. Bearer token geverifieerd via Supervisor ping (HA core / andere addons)
+    5. DEV_MODE fallback
     """
     auth_header = request.headers.get("Authorization", "")
     bearer_token = auth_header.removeprefix("Bearer ").strip() if auth_header.startswith("Bearer ") else ""
 
-    # 1. Ingress header — standaard pad voor alle frontend-gebruikers
+    # 1. Ingress header — standaard pad voor alle frontend-gebruikers.
+    #    Alleen vertrouwen vanaf de ingress-proxy: op de directe LAN-poort kan
+    #    een client deze header zelf zetten.
     ha_user_id = request.headers.get("X-Remote-User-ID", "").strip()
+    ha_username = request.headers.get("X-Remote-User-Name", "").strip()
     display_name = (
         request.headers.get("X-Remote-User-Display-Name")
-        or request.headers.get("X-Remote-User-Name")
+        or ha_username
         or "HA Gebruiker"
     ).strip()
+
+    if ha_user_id and not _is_from_ingress_proxy(request):
+        logger.warning(
+            "[auth] X-Remote-User-ID header genegeerd van niet-ingress bron %s",
+            request.client.host if request.client else "?",
+        )
+        ha_user_id = ""
 
     if ha_user_id:
         logger.debug("[auth] Ingress gebruiker: %s", ha_user_id)
@@ -119,12 +149,18 @@ async def get_current_user(
             user_role = UserRole(
                 ha_user_id=ha_user_id,
                 display_name=display_name,
+                ha_username=ha_username or None,
                 role=initial_role,
             )
             db.add(user_role)
             await db.flush()
-        elif user_role.display_name != display_name:
-            user_role.display_name = display_name
+        else:
+            if user_role.display_name != display_name:
+                user_role.display_name = display_name
+            # Gebruikersnaam bijhouden zodat de standalone loginpagina het
+            # account kan koppelen (Supervisor auth geeft geen user-ID terug)
+            if ha_username and user_role.ha_username != ha_username:
+                user_role.ha_username = ha_username
         return CurrentUser(
             ha_user_id=user_role.ha_user_id,
             display_name=user_role.display_name,
@@ -135,12 +171,37 @@ async def get_current_user(
             is_admin=user_role.role in (Role.admin, Role.supervisor),
         )
 
-    # 2. Eigen SUPERVISOR_TOKEN (snel pad, geen netwerkoproep)
+    # 2. Sessietoken van de loginpagina (standalone toegang)
+    if bearer_token.startswith(TOKEN_PREFIX):
+        session_uid = verify_session_token(bearer_token)
+        if not session_uid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Sessie verlopen — log opnieuw in",
+            )
+        result = await db.execute(select(UserRole).where(UserRole.ha_user_id == session_uid))
+        user_role = result.scalar_one_or_none()
+        if not user_role:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Account bestaat niet meer — log opnieuw in",
+            )
+        return CurrentUser(
+            ha_user_id=user_role.ha_user_id,
+            display_name=user_role.display_name,
+            role=user_role.role,
+            department=user_role.department,
+            email=user_role.email,
+            ha_notify_service=user_role.ha_notify_service,
+            is_admin=user_role.role in (Role.admin, Role.supervisor),
+        )
+
+    # 3. Eigen SUPERVISOR_TOKEN (snel pad, geen netwerkoproep)
     if SUPERVISOR_TOKEN and bearer_token == SUPERVISOR_TOKEN:
         logger.info("[auth] Eigen SUPERVISOR_TOKEN herkend — systeem gebruiker")
         return _system_user()
 
-    # 3. Onbekend Bearer token → verifieer met Supervisor
+    # 4. Onbekend Bearer token → verifieer met Supervisor
     #    (HA core heeft een andere SUPERVISOR_TOKEN dan de addon)
     if bearer_token and bearer_token != "dev-token":
         logger.info("[auth] Onbekend token ontvangen (lengte %d) — Supervisor ping...", len(bearer_token))
@@ -149,7 +210,7 @@ async def get_current_user(
         if ok:
             return _system_user()
 
-    # 4. Dev mode fallback
+    # 5. Dev mode fallback
     if DEV_MODE:
         return CurrentUser(
             ha_user_id="dev-user",

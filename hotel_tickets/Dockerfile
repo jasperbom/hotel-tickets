@@ -9,7 +9,8 @@ RUN apk add --no-cache \
     npm \
     gcc \
     musl-dev \
-    libffi-dev
+    libffi-dev \
+    nginx
 
 WORKDIR /app
 

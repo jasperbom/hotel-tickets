@@ -94,8 +94,23 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 
 ## Authenticatie
 
-- In productie: HA ingress token, geverifieerd via de Supervisor API
-- In dev mode: elke request met `Authorization: Bearer dev-token` wordt geaccepteerd
+- In productie: HA ingress token, geverifieerd via de Supervisor API. Ingress-headers
+  worden alleen vertrouwd wanneer het verzoek van de ingress-proxy komt (172.30.32.2).
+- Standalone toegang (LAN): loginpagina op `#/login` — HA-gebruikersnaam/wachtwoord
+  wordt geverifieerd via de Supervisor auth-API (`POST http://supervisor/auth`,
+  vereist `auth_api: true`). De backend geeft een eigen HMAC-sessietoken uit
+  (`backend/session.py`, prefix `hts.`, geheim in `/config/hotel_tickets/session_secret`).
+  Koppeling gebeurt via `user_roles.ha_username` (auto-gevuld bij ingress-login).
+  Poort 8080 (HTTP) of 8443 (HTTPS) moet hiervoor opengezet worden in de
+  addon-netwerkconfiguratie; optioneel beperkt `allowed_networks` (CIDR's) de
+  toegang tot het bedrijfsnetwerk.
+- HTTPS: met `ssl: true` + `certfile`/`keyfile` (uit HA's `/ssl`-map) start run.sh
+  een nginx die TLS termineert op poort 8443 en proxiet naar uvicorn op
+  127.0.0.1:8080. uvicorn draait dan met `--proxy-headers` zodat rate-limiting
+  en de allowlist het echte client-IP zien; nginx stript de X-Remote-User-*
+  headers zodat die nooit van buitenaf binnen kunnen komen.
+- In dev mode: elke request met `Authorization: Bearer dev-token` wordt geaccepteerd;
+  op de loginpagina is wachtwoord `dev` geldig voor elke bestaande gebruikersnaam
 - Gebruikersrollen worden opgeslagen in de `user_roles` tabel (niet in HA zelf)
 - Eerste keer inloggen: medewerker krijgt automatisch rol `technician`
 
@@ -136,3 +151,6 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 | `SUPERVISOR_TOKEN` | Automatisch beschikbaar in HA addon |
 | `SMTP_*` | E-mail configuratie |
 | `LOG_LEVEL` | `debug` / `info` / `warning` / `error` |
+| `ALLOWED_NETWORKS` | Komma-gescheiden CIDR's; indien gezet worden andere client-IP's geweigerd (interne HA-bronnen altijd toegestaan) |
+| `SESSION_HOURS` | Geldigheidsduur van standalone sessietokens (standaard 12) |
+| `INGRESS_PROXY_IPS` | IP('s) waarvandaan ingress-headers vertrouwd worden (standaard 172.30.32.2) |

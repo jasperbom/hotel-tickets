@@ -20,7 +20,45 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// Standalone toegang (buiten HA ingress): bij een 401 is er geen geldige
+// sessie — stuur de gebruiker naar de loginpagina. Via ingress komt een 401
+// niet voor (de Supervisor-headers loggen automatisch in).
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    const status = error?.response?.status;
+    const url: string = error?.config?.url || "";
+    if (status === 401 && !url.includes("/auth/login") && !window.location.hash.startsWith("#/login")) {
+      window.location.hash = "#/login";
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
+
+// --- Standalone login (sessietokens) ---
+
+export const authApi = {
+  login: (username: string, password: string) =>
+    api.post<{ token: string; expires_at: number; display_name: string }>("/auth/login", {
+      username,
+      password,
+    }),
+};
+
+/** True wanneer de app draait op een sessietoken van de loginpagina. */
+export function hasSessionToken(): boolean {
+  return (localStorage.getItem("ha_token") || "").startsWith("hts.");
+}
+
+export function setSessionToken(token: string) {
+  localStorage.setItem("ha_token", token);
+}
+
+export function clearSessionToken() {
+  localStorage.removeItem("ha_token");
+}
 
 /**
  * Parseer een datetime-string van de API als UTC.
@@ -94,6 +132,7 @@ export interface Comment {
 export interface UserRole {
   ha_user_id: string;
   display_name: string;
+  ha_username: string | null;
   role: Role;
   department: Category | null;
   email: string | null;

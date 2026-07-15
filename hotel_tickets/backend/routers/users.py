@@ -17,6 +17,7 @@ router = APIRouter(prefix="/users", tags=["users"])
 class UserRoleCreate(BaseModel):
     ha_user_id: str
     display_name: str
+    ha_username: str | None = None
     role: Role
     department: Category | None = None
     email: str | None = None
@@ -29,6 +30,7 @@ class UserRoleCreate(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     display_name: str | None = None
+    ha_username: str | None = None
     role: Role | None = None
     department: Category | None = None
     email: str | None = None
@@ -42,6 +44,7 @@ class UserRoleUpdate(BaseModel):
 class UserRoleOut(BaseModel):
     ha_user_id: str
     display_name: str
+    ha_username: str | None
     role: Role
     department: Category | None
     email: str | None
@@ -386,6 +389,9 @@ async def update_user(
     # Mag eigen profiel bewerken, admins mogen iedereen bewerken
     if ha_user_id != user.ha_user_id and not user.is_admin:
         raise HTTPException(status_code=403, detail="Geen toegang")
+    if body.ha_username is not None and not user.is_admin:
+        # Bepaalt aan welk profiel de standalone login gekoppeld wordt
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de HA-gebruikersnaam wijzigen")
     if body.role is not None and not user.is_admin:
         # Uitzondering: als er helemaal geen admins zijn mag iedereen zichzelf promoveren
         admin_count = await db.scalar(select(func.count()).where(UserRole.role == Role.admin))
