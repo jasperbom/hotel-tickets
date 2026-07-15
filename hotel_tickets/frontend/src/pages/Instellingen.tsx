@@ -1176,6 +1176,7 @@ function KennisbotAiPanel() {
   const [settings, setSettings] = useState<KnowledgeAiSettings | null>(null);
   const [apiKey, setApiKey] = useState("");
   const [model, setModel] = useState("claude-haiku-4-5");
+  const [webDomains, setWebDomains] = useState("");
   const [saving, setSaving] = useState(false);
   const [msg, setMsg] = useState<{ type: "ok" | "err"; text: string } | null>(null);
 
@@ -1183,6 +1184,7 @@ function KennisbotAiPanel() {
     knowledgeApi.getAiSettings().then((r) => {
       setSettings(r.data);
       setModel(r.data.model);
+      setWebDomains(r.data.web_domains);
     }).catch(() => {});
   }
   useEffect(load, []);
@@ -1191,7 +1193,10 @@ function KennisbotAiPanel() {
     setSaving(true);
     setMsg(null);
     try {
-      const payload: { model: string; api_key?: string } = { model };
+      const payload: { model: string; api_key?: string; web_domains: string } = {
+        model,
+        web_domains: webDomains,
+      };
       if (apiKey.trim()) payload.api_key = apiKey.trim();
       const r = await knowledgeApi.updateAiSettings(payload);
       setSettings(r.data);
@@ -1216,12 +1221,18 @@ function KennisbotAiPanel() {
     setSettings(r.data);
   }
 
+  async function toggleWebSearch(enabled: boolean) {
+    const r = await knowledgeApi.updateAiSettings({ web_search_enabled: enabled });
+    setSettings(r.data);
+  }
+
   return (
     <Section title="AI / Kennisbot">
       <p className="text-sm text-gray-600">
         Koppel Claude om vragen te laten beantwoorden uit je documenten. Zonder sleutel
         valt de kennisbot terug op trefwoord-zoeken. De bot put altijd alleen uit jouw
-        eigen kennis en verzint nooit antwoorden.
+        eigen kennis en verzint nooit antwoorden. Optioneel mag de bot óók zoeken op
+        websites die jij hieronder toestaat — en nergens anders.
       </p>
 
       {settings && (
@@ -1283,6 +1294,46 @@ function KennisbotAiPanel() {
           {!AI_MODELS.some((m) => m.id === model) && <option value={model}>{model}</option>}
         </select>
       </div>
+
+      {settings && (
+        <div className="space-y-1.5">
+          <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+            <div>
+              <p className="text-sm font-medium text-gray-800">Zoeken op websites</p>
+              <p className="text-xs text-gray-500">
+                {settings.web_search_enabled
+                  ? "De bot mag uitsluitend op onderstaande websites zoeken"
+                  : "De bot zoekt alleen in je eigen kennisbank"}
+              </p>
+            </div>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={settings.web_search_enabled}
+                disabled={!settings.ai_available}
+                onChange={(e) => toggleWebSearch(e.target.checked)}
+                className="w-4 h-4"
+              />
+              <span className="text-sm">{settings.web_search_enabled ? "Aan" : "Uit"}</span>
+            </label>
+          </div>
+          <label className="text-sm font-medium text-gray-700">Toegestane websites</label>
+          <textarea
+            value={webDomains}
+            onChange={(e) => setWebDomains(e.target.value)}
+            rows={4}
+            placeholder={"Eén website per regel, met daarachter waarvoor die dient, bijv.:\nmiele.nl — handleidingen keukenapparatuur\nsupport.kassaleverancier.com — storingen kassasysteem"}
+            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+          />
+          <p className="text-xs text-gray-400">
+            Eén website per regel. Zet er (na een spatie of streepje) bij waarvoor de
+            website bedoeld is — de bot gebruikt die omschrijving om bij een vraag de
+            juiste website te kiezen. De bot zoekt alléén op deze websites, en alleen
+            wanneer je eigen kennisbank geen antwoord geeft. Zonder ingevulde websites
+            blijft zoeken op het web uit, ook met de schakelaar aan.
+          </p>
+        </div>
+      )}
 
       <div className="flex items-center gap-3">
         <button

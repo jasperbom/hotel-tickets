@@ -38,6 +38,21 @@ _SYSTEM_PROMPT = (
     "het gesprek staat; laat answer dan leeg."
 )
 
+# Aanvulling op de systeem-prompt wanneer websearch aanstaat. De harde
+# begrenzing tot specifieke websites zit in `allowed_domains` van de
+# web_search-tool zelf; deze tekst stuurt vooral wannéér de bot zoekt.
+_WEB_SEARCH_PROMPT = (
+    "\nJe beschikt daarnaast over een web_search-tool die UITSLUITEND op de door "
+    "de beheerder toegestane websites kan zoeken. Gebruik die alleen als de "
+    "CONTEXT en het gesprek geen antwoord geven. Hieronder staat per website "
+    "waarvoor die bedoeld is (als de beheerder dat aangaf) — zoek op de website "
+    "die bij het onderwerp van de vraag past. Vermeld in je antwoord kort van "
+    "welke website de informatie komt. Vind je ook op die websites geen antwoord, "
+    "zet answered dan op false. Ook je uiteindelijke antwoord blijft ALLEEN het "
+    "beschreven JSON-object.\n"
+    "Toegestane websites:\n"
+)
+
 
 _COVERAGE_PROMPT = (
     "Je beoordeelt of een door een medewerker aangedragen OPLOSSING inhoudelijk "
@@ -86,14 +101,19 @@ async def answer_from_context(
     api_key: str,
     model: str,
     history: list[dict] | None = None,
+    web_sites: list[tuple[str, str]] | None = None,
 ) -> dict | None:
     """Vraag Claude een antwoord te formuleren uit de gegeven context-stukken.
 
     `history` is de voorgaande chatbeurten ([{role, content}, ...]) zodat de bot
     vervolgvragen in context begrijpt. `api_key` en `model` worden door de router
-    bepaald (app-instelling, anders addon-optie/omgeving). Retourneert
-    {"answered": bool, "answer": str} of None bij een fout / geen sleutel."""
-    if not api_key or (not contexts and not history):
+    bepaald (app-instelling, anders addon-optie/omgeving). Met `web_sites`
+    ((domein, omschrijving)-paren) mag de bot aanvullend op het web zoeken, maar
+    uitsluitend op die websites (afgedwongen via `allowed_domains` van
+    Anthropic's web_search-tool); de omschrijving vertelt de bot waarvoor elke
+    site dient. Retourneert {"answered": bool, "answer": str} of None bij een
+    fout / geen sleutel."""
+    if not api_key or (not contexts and not history and not web_sites):
         return None
 
     try:
@@ -114,18 +134,37 @@ async def answer_from_context(
             messages.append({"role": role, "content": content})
     messages.append({"role": "user", "content": user_content})
 
+    system = _SYSTEM_PROMPT
+    extra: dict = {}
+    if web_sites:
+        listing = "\n".join(
+            f"- {domain}" + (f": {desc}" if desc else "") for domain, desc in web_sites
+        )
+        system = _SYSTEM_PROMPT + _WEB_SEARCH_PROMPT + listing
+        extra["tools"] = [
+            {
+                "type": "web_search_20250305",
+                "name": "web_search",
+                "allowed_domains": [domain for domain, _ in web_sites],
+                "max_uses": 3,
+            }
+        ]
+
     try:
         resp = await client.messages.create(
             model=model or DEFAULT_MODEL,
-            max_tokens=1024,
-            system=_SYSTEM_PROMPT,
+            max_tokens=2048 if web_sites else 1024,
+            system=system,
             messages=messages,
+            **extra,
         )
     except Exception as exc:
         logger.warning("Claude-aanroep mislukt: %s", exc)
         return None
 
-    text = next((b.text for b in resp.content if getattr(b, "type", None) == "text"), "")
+    # Bij websearch kan het antwoord over meerdere tekstblokken verdeeld zijn
+    # (citaties knippen de tekst op) — plak alle tekstblokken aan elkaar.
+    text = "".join(b.text for b in resp.content if getattr(b, "type", None) == "text")
     data = _extract_json(text)
     if data is None:
         logger.warning("Claude gaf geen geldige JSON terug")

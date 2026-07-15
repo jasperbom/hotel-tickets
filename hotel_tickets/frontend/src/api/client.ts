@@ -820,12 +820,16 @@ export interface KnowledgeAiSettings {
   model: string;
   has_key: boolean;
   key_from_addon: boolean;
+  web_search_enabled: boolean;
+  web_domains: string;
 }
 
 export interface KnowledgeAiSettingsUpdate {
   enabled?: boolean;
   api_key?: string;
   model?: string;
+  web_search_enabled?: boolean;
+  web_domains?: string;
 }
 
 export interface KnowledgeStats {
