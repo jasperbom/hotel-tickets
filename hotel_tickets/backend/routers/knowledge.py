@@ -262,24 +262,49 @@ async def _ai_enabled(db: AsyncSession) -> bool:
     return bool(await _ai_key(db))
 
 
-def _parse_web_domains(raw: str) -> list[str]:
-    """Zet de door de admin ingevoerde websites om naar een nette domeinlijst
-    (één per regel of komma-gescheiden; scheme en slashes worden weggehaald)."""
-    domains: list[str] = []
-    for part in re.split(r"[\s,;]+", raw or ""):
-        d = re.sub(r"^https?://", "", part.strip(), flags=re.IGNORECASE).strip("/")
-        if d and d not in domains:
-            domains.append(d)
-    return domains
+def _clean_domain(d: str) -> str:
+    return re.sub(r"^https?://", "", d.strip(), flags=re.IGNORECASE).strip("/")
 
 
-async def _web_domains(db: AsyncSession) -> list[str]:
-    """De websites waarop de bot mag zoeken. Leeg = websearch uit: de instelling
-    moet aanstaan én er moet minstens één website ingevuld zijn."""
+def _parse_web_sites(raw: str) -> list[tuple[str, str]]:
+    """Zet de door de admin ingevoerde websites om naar (domein, omschrijving)-
+    paren. Per regel één website; alles achter het domein (optioneel na een
+    streepje/dubbele punt) is de omschrijving waarvoor die site dient. Een regel
+    zonder omschrijving mag ook meerdere komma-gescheiden websites bevatten."""
+    sites: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        first, _, rest = line.partition(" ")
+        rest = rest.strip()
+        if first.endswith((",", ";")) or rest.startswith((",", ";")):
+            rest = ""  # komma-gescheiden websitelijst zonder omschrijving
+        else:
+            rest = re.sub(r"^[-—:|]\s*", "", rest)
+        if rest:
+            d = _clean_domain(first.rstrip(",;:"))
+            if d and d not in seen:
+                seen.add(d)
+                sites.append((d, rest))
+        else:
+            for part in re.split(r"[\s,;]+", line):
+                d = _clean_domain(part)
+                if d and d not in seen:
+                    seen.add(d)
+                    sites.append((d, ""))
+    return sites
+
+
+async def _web_sites(db: AsyncSession) -> list[tuple[str, str]]:
+    """De websites waarop de bot mag zoeken (met omschrijving). Leeg = websearch
+    uit: de instelling moet aanstaan én er moet minstens één website ingevuld
+    zijn."""
     row = await db.get(SystemSetting, "knowledge_web_search_enabled")
     if not (row and row.value == "true"):
         return []
-    return _parse_web_domains(await _setting(db, "knowledge_web_domains"))
+    return _parse_web_sites(await _setting(db, "knowledge_web_domains"))
 
 
 async def _log_pending(db: AsyncSession, data: "AskRequest", user) -> AskResponse:
@@ -374,11 +399,11 @@ async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(ge
             contexts.append(f"{e.title}\n{e.answer}")
 
         history = [{"role": t.role, "content": t.content} for t in data.history]
-        web_domains = await _web_domains(db)
-        if contexts or history or web_domains:
+        web_sites = await _web_sites(db)
+        if contexts or history or web_sites:
             result = await ai_client.answer_from_context(
                 data.question, contexts, key, model, history=history,
-                web_domains=web_domains or None,
+                web_sites=web_sites or None,
             )
             if result is not None:
                 if result["answered"] and result["answer"]:

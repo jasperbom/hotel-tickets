@@ -1322,14 +1322,15 @@ function KennisbotAiPanel() {
             value={webDomains}
             onChange={(e) => setWebDomains(e.target.value)}
             rows={4}
-            placeholder={"Eén website per regel, bijv.:\nhandleiding-fabrikant.nl\nsupport.leverancier.com"}
+            placeholder={"Eén website per regel, met daarachter waarvoor die dient, bijv.:\nmiele.nl — handleidingen keukenapparatuur\nsupport.kassaleverancier.com — storingen kassasysteem"}
             className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
           />
           <p className="text-xs text-gray-400">
-            Eén website per regel (komma's mogen ook). De bot zoekt alléén op deze
-            websites, en alleen wanneer je eigen kennisbank geen antwoord geeft.
-            Zonder ingevulde websites blijft zoeken op het web uit, ook met de
-            schakelaar aan.
+            Eén website per regel. Zet er (na een spatie of streepje) bij waarvoor de
+            website bedoeld is — de bot gebruikt die omschrijving om bij een vraag de
+            juiste website te kiezen. De bot zoekt alléén op deze websites, en alleen
+            wanneer je eigen kennisbank geen antwoord geeft. Zonder ingevulde websites
+            blijft zoeken op het web uit, ook met de schakelaar aan.
           </p>
         </div>
       )}
