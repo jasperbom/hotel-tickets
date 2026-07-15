@@ -341,6 +341,13 @@ export default function App() {
   const isOnInstellingen = location.pathname === "/instellingen";
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
+  // Zwevende actieknoppen (nieuw ticket + kennisbot-vraag) onderin.
+  // Niet op de pagina's waar ze dubbelop of in de weg zijn: het nieuw-ticket-
+  // formulier zelf en de kennisbot (die heeft een eigen invoerbalk onderin).
+  const showFabs =
+    (activeModule || isOnInstellingen) &&
+    !["/tickets/new", "/kennis"].includes(location.pathname);
+
   function handleModuleClick(mod: ModuleConfig) {
     setActiveModuleId(mod.id);
     navigate(mod.defaultPath);
@@ -535,7 +542,7 @@ export default function App() {
         {/* Inhoud */}
         {activeModule || isOnInstellingen ? (
           <main
-            className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/kennis" ? "" : "touch-keyboard-pb"} ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"}`}
+            className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/kennis" ? "" : "touch-keyboard-pb"} ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"} ${showFabs ? "pb-28" : ""}`}
           >
             <Routes>
               {/* Taken module */}
@@ -588,6 +595,29 @@ export default function App() {
               <div className="text-5xl mb-4">👈</div>
               <p>Kies een module in de zijbalk</p>
             </div>
+          </div>
+        )}
+
+        {/* Zwevende actieknoppen */}
+        {showFabs && (
+          <div
+            className="fixed right-4 z-40 flex items-center gap-2"
+            style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+          >
+            <button
+              onClick={() => navigate("/kennis")}
+              className="flex items-center gap-1.5 bg-white text-gray-700 border border-gray-200 shadow-lg rounded-full pl-3 pr-4 py-2.5 text-sm font-medium hover:bg-gray-50 active:scale-95 transition"
+            >
+              <span className="text-base leading-none">💬</span>
+              <span>Stel een vraag</span>
+            </button>
+            <button
+              onClick={() => navigate("/tickets/new")}
+              className="flex items-center gap-1.5 bg-blue-600 text-white shadow-lg rounded-full pl-3 pr-4 py-2.5 text-sm font-semibold hover:bg-blue-700 active:scale-95 transition"
+            >
+              <span className="text-base leading-none font-bold">＋</span>
+              <span>Nieuw ticket</span>
+            </button>
           </div>
         )}
       </div>
