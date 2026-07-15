@@ -53,6 +53,15 @@
   }
 }
 
+/* Horizontaal scrollbare rijen (navigatie, tab-balken) zonder zichtbare
+   scrollbar. Werd al gebruikt in de topnavigatie maar was nooit gedefinieerd. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
 /* Op touch-apparaten extra onderkant-padding zodat er altijd scrollruimte
    is onder het laatste invoerveld wanneer het toetsenbord opent. */
 @media (hover: none) and (pointer: coarse) {

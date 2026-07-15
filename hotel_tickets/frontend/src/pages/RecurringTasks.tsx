@@ -218,9 +218,9 @@ export default function RecurringTasks() {
 
   return (
     <div className="space-y-4">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="text-2xl font-bold text-gray-900">Terugkerende taken</h1>
-        <button onClick={openNewForm} className="btn-primary">+ Nieuw sjabloon</button>
+        <button onClick={openNewForm} className="btn-primary whitespace-nowrap">+ Nieuw sjabloon</button>
       </div>
 
       {/* Zoekbalk */}

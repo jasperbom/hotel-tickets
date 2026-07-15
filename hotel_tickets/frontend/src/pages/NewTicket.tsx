@@ -176,16 +176,16 @@ export default function NewTicket() {
               onChange={(e) => setNewSubtask(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSubtask())}
               placeholder="bijv. Vloer dweilen..."
-              className="flex-1 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
+              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
             />
-            <button type="button" onClick={addSubtask} className="btn-secondary text-sm">+ Toevoegen</button>
+            <button type="button" onClick={addSubtask} className="btn-secondary text-sm shrink-0 whitespace-nowrap">+ Toevoegen</button>
           </div>
         </div>
 
         {error && <p className="text-sm text-red-600">{error}</p>}
 
-        <div className="flex gap-2 pt-2">
-          <button type="submit" disabled={saving} className="btn-primary flex-1">
+        <div className="flex flex-wrap gap-2 pt-2">
+          <button type="submit" disabled={saving} className="btn-primary flex-1 whitespace-nowrap">
             {submitLabel}
           </button>
           <button type="button" onClick={() => navigate(-1)} className="btn-secondary">

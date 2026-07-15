@@ -273,16 +273,16 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                   </div>
                 </div>
               ) : (
-                <div className="flex items-center gap-3">
-                  <div className="flex-1">
+                <div className="flex flex-wrap items-center gap-3">
+                  <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{user.display_name}</p>
-                    <p className="text-xs text-gray-400">{user.ha_user_id}{user.ha_username ? ` · login: ${user.ha_username}` : ""}</p>
-                    <div className="flex gap-1.5 mt-1">
+                    <p className="text-xs text-gray-400 break-all">{user.ha_user_id}{user.ha_username ? ` · login: ${user.ha_username}` : ""}</p>
+                    <div className="flex flex-wrap gap-1.5 mt-1">
                       <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{ROLE_LABELS[user.role]}</span>
                       {user.department && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{DEPT_LABELS[user.department]}</span>}
                     </div>
                   </div>
-                  <div className="flex gap-3 text-sm">
+                  <div className="flex gap-3 text-sm shrink-0">
                     <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }} className="text-blue-600 hover:underline">Bewerken</button>
                     {isAdmin && <button onClick={() => deleteUser(user.ha_user_id)} className="text-red-600 hover:underline">Verwijderen</button>}
                   </div>
@@ -1325,10 +1325,10 @@ export default function Instellingen() {
       <h1 className="text-2xl font-bold mb-6">Instellingen</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit">
+      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto scrollbar-none">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
-            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors ${
+            className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors shrink-0 whitespace-nowrap ${
               tab === t.id ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
             }`}>
             <span>{t.icon}</span>
