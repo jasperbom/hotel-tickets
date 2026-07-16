@@ -110,10 +110,12 @@ export default function App() {
   const [hasAdmin, setHasAdmin] = useState(true);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [fabMenuOpen, setFabMenuOpen] = useState(false);
   const [bikesModuleRoles, setBikesModuleRoles] = useState<BikesModuleRoles>("all");
   const [brandColor, setBrandColor] = useState<string | null>(cachedBranding?.brand_color ?? null);
   const [brandLogo, setBrandLogo] = useState<string | null>(cachedBranding?.brand_logo ?? null);
   const menuRef = useRef<HTMLDivElement>(null);
+  const fabRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
   const navigationType = useNavigationType();
@@ -288,9 +290,10 @@ export default function App() {
     };
   }, []);
 
-  // Sluit mobile menu bij navigatie
+  // Sluit mobile menu en FAB-keuzemenu bij navigatie
   useEffect(() => {
     setMobileMenuOpen(false);
+    setFabMenuOpen(false);
   }, [location.pathname]);
 
   // Sluit mobile menu bij klik buiten het menu
@@ -305,6 +308,19 @@ export default function App() {
       return () => document.removeEventListener("mousedown", handleClick);
     }
   }, [mobileMenuOpen]);
+
+  // Sluit FAB-keuzemenu bij klik buiten de knop/het menu
+  useEffect(() => {
+    function handleClick(e: MouseEvent) {
+      if (fabRef.current && !fabRef.current.contains(e.target as Node)) {
+        setFabMenuOpen(false);
+      }
+    }
+    if (fabMenuOpen) {
+      document.addEventListener("mousedown", handleClick);
+      return () => document.removeEventListener("mousedown", handleClick);
+    }
+  }, [fabMenuOpen]);
 
   const isAdminOrSupervisor =
     currentUser?.role === "admin" || currentUser?.role === "supervisor";
@@ -655,25 +671,44 @@ export default function App() {
           </div>
         )}
 
-        {/* Zwevende actieknoppen */}
+        {/* Zwevende actieknop: één wolkje dat een keuzemenu opent */}
         {showFabs && (
           <div
-            className="fixed right-4 z-40 flex items-center gap-2"
+            ref={fabRef}
+            className="fixed right-4 z-40 flex flex-col items-end gap-2"
             style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
           >
+            {fabMenuOpen && (
+              <div className="bg-white border border-gray-200 shadow-xl rounded-2xl p-3 w-64">
+                <p className="text-sm font-medium text-gray-700 mb-2.5">
+                  Wil je een vraag stellen of een ticket maken?
+                </p>
+                <div className="flex flex-col gap-1.5">
+                  <button
+                    onClick={() => navigate("/kennis")}
+                    className="flex items-center gap-2 w-full bg-gray-50 text-gray-700 border border-gray-200 rounded-xl px-3 py-2.5 text-sm font-medium hover:bg-gray-100 active:scale-95 transition"
+                  >
+                    <span className="text-base leading-none">💬</span>
+                    <span>Vraag stellen</span>
+                  </button>
+                  <button
+                    onClick={() => navigate("/tickets/new")}
+                    className="flex items-center gap-2 w-full bg-blue-600 text-white rounded-xl px-3 py-2.5 text-sm font-semibold hover:bg-blue-700 active:scale-95 transition"
+                  >
+                    <span className="text-base leading-none font-bold">＋</span>
+                    <span>Ticket maken</span>
+                  </button>
+                </div>
+              </div>
+            )}
             <button
-              onClick={() => navigate("/kennis")}
-              className="flex items-center gap-1.5 bg-white text-gray-700 border border-gray-200 shadow-lg rounded-full pl-3 pr-4 py-2.5 text-sm font-medium hover:bg-gray-50 active:scale-95 transition"
+              onClick={() => setFabMenuOpen((open) => !open)}
+              title="Vraag stellen of ticket maken"
+              aria-label="Vraag stellen of ticket maken"
+              aria-expanded={fabMenuOpen}
+              className="flex items-center justify-center w-14 h-14 bg-white border border-gray-200 shadow-lg rounded-full text-2xl hover:bg-gray-50 active:scale-95 transition"
             >
-              <span className="text-base leading-none">💬</span>
-              <span>Stel een vraag</span>
-            </button>
-            <button
-              onClick={() => navigate("/tickets/new")}
-              className="flex items-center gap-1.5 bg-blue-600 text-white shadow-lg rounded-full pl-3 pr-4 py-2.5 text-sm font-semibold hover:bg-blue-700 active:scale-95 transition"
-            >
-              <span className="text-base leading-none font-bold">＋</span>
-              <span>Nieuw ticket</span>
+              💬
             </button>
           </div>
         )}
