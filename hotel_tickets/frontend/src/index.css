@@ -77,11 +77,25 @@
   display: none;
 }
 
+/* Ruimte onderin voor de zwevende actieknop (het vraag-wolkje), zodat de
+   inhoud onderaan de pagina er nooit onder verdwijnt als je helemaal naar
+   beneden scrolt: 1rem afstand + 3,5rem knop + marge. */
+.fab-clearance {
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+}
+
 /* Op touch-apparaten extra onderkant-padding zodat er altijd scrollruimte
    is onder het laatste invoerveld wanneer het toetsenbord opent. */
 @media (hover: none) and (pointer: coarse) {
   .touch-keyboard-pb {
     padding-bottom: calc(var(--kb-inset, 40vh) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Toetsenbord-padding en FAB-ruimte gecombineerd: de grootste van de twee
+     geldt. Bij gesloten toetsenbord (inset 0) blijft zo de FAB-ruimte over —
+     zonder deze regel zou .touch-keyboard-pb de FAB-ruimte wegdrukken. */
+  .touch-keyboard-pb.fab-clearance {
+    padding-bottom: calc(max(var(--kb-inset, 40vh), 7rem) + env(safe-area-inset-bottom, 0px));
   }
 
   /* Vaste-hoogte pagina's (bijv. de kennisbot-chat) zetten de body in `kb-fit`-

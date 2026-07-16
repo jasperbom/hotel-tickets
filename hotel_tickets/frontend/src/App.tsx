@@ -613,7 +613,7 @@ export default function App() {
         {/* Inhoud */}
         {activeModule || isShellPage ? (
           <main
-            className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/kennis" ? "" : "touch-keyboard-pb"} ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"} ${showFabs ? "pb-28" : ""}`}
+            className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/kennis" ? "" : "touch-keyboard-pb"} ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"} ${showFabs ? "fab-clearance" : ""}`}
           >
             <Routes>
               {/* Taken module */}
