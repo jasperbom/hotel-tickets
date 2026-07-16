@@ -158,7 +158,7 @@ async def get_my_overview(
     if dept:
         my_open_filters.append(Ticket.category == dept)
     my_open = await db.scalar(select(func.count()).where(and_(*my_open_filters)))
-    urgent_count_filters = [Ticket.status == Status.open, Ticket.priority == "urgent"]
+    urgent_count_filters = [Ticket.status != Status.closed, Ticket.priority == "urgent"]
     if dept:
         urgent_count_filters.append(Ticket.category == dept)
     urgent_count = await db.scalar(select(func.count()).where(and_(*urgent_count_filters)))
