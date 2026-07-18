@@ -301,6 +301,33 @@ export const notificationApi = {
   markReadByTicket: (ticketId: string) => api.post(`/notifications/read-by-ticket/${ticketId}`),
 };
 
+export interface DirectMessage {
+  id: string;
+  sender_id: string;
+  recipient_id: string;
+  body: string;
+  from_me: boolean;
+  read: boolean;
+  created_at: string;
+}
+
+export interface Conversation {
+  user_id: string;
+  display_name: string;
+  last_body: string;
+  last_from_me: boolean;
+  last_created_at: string;
+  unread: number;
+}
+
+export const messageApi = {
+  conversations: () => api.get<Conversation[]>("/messages/conversations"),
+  thread: (userId: string) => api.get<DirectMessage[]>(`/messages/with/${userId}`),
+  unreadCount: () => api.get<{ count: number }>("/messages/unread-count"),
+  send: (recipientId: string, body: string) =>
+    api.post<DirectMessage>("/messages/", { recipient_id: recipientId, body }),
+};
+
 export const userApi = {
   me: () => api.get<UserRole>("/users/me"),
   list: () => api.get<UserRole[]>("/users/"),

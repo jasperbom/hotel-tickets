@@ -107,6 +107,20 @@ class TicketNotification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class DirectMessage(Base):
+    """Direct bericht tussen twee medewerkers, los van een ticket.
+    Een gesprek is de verzameling berichten tussen dezelfde twee personen;
+    een reactie is simpelweg een nieuw bericht in de omgekeerde richting."""
+    __tablename__ = "direct_messages"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    sender_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)      # HA user_id
+    recipient_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)   # HA user_id
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    read: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
 class RecurringTemplate(Base):
     __tablename__ = "recurring_templates"
 
