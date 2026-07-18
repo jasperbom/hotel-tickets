@@ -191,7 +191,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   const [editing, setEditing] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<UserRole>>({});
   const [showNew, setShowNew] = useState(false);
-  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+  const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false, notify_direct_message: false });
   // Foutmeldingen nooit stil inslikken — toon ze in de betreffende sectie
   const [newError, setNewError] = useState<string | null>(null);
   const [listError, setListError] = useState<string | null>(null);
@@ -251,11 +251,12 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
         ha_notify_service: newForm.ha_notify_service || undefined,
         ha_device_tracker: newForm.ha_device_tracker || undefined,
         notify_new_ticket: newForm.notify_new_ticket,
+        notify_direct_message: newForm.notify_direct_message,
         notify_push: true,
         notify_email: !!newForm.email,
       });
       setUsers((prev) => [...prev, r.data]);
-      setNewForm({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee", department: "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false });
+      setNewForm({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee", department: "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false, notify_direct_message: false });
       setShowNew(false);
     } catch (err) {
       setNewError(apiErrorText(err, "Aanmaken mislukt — controleer de invoer"));
@@ -308,6 +309,11 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
               <input type="checkbox" checked={newForm.notify_new_ticket}
                 onChange={(e) => setNewForm({ ...newForm, notify_new_ticket: e.target.checked })} />
               <span>Push bij elk nieuw ticket in mijn afdeling{newForm.ha_device_tracker ? " (alleen op wifi)" : ""}</span>
+            </label>
+            <label className="col-span-2 flex items-center gap-2 text-sm">
+              <input type="checkbox" checked={newForm.notify_direct_message}
+                onChange={(e) => setNewForm({ ...newForm, notify_direct_message: e.target.checked })} />
+              <span>Push bij een nieuw direct bericht van een collega</span>
             </label>
           </div>
           <p className="text-xs text-gray-500">
@@ -370,6 +376,11 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                       <input type="checkbox" checked={!!editForm.notify_new_ticket}
                         onChange={(e) => setEditForm({ ...editForm, notify_new_ticket: e.target.checked })} />
                       <span>Push bij elk nieuw ticket in mijn afdeling{editForm.ha_device_tracker ? " (alleen op wifi)" : ""}</span>
+                    </label>
+                    <label className="col-span-2 flex items-center gap-2 text-sm">
+                      <input type="checkbox" checked={!!editForm.notify_direct_message}
+                        onChange={(e) => setEditForm({ ...editForm, notify_direct_message: e.target.checked })} />
+                      <span>Push bij een nieuw direct bericht van een collega</span>
                     </label>
                   </div>
                   <div className="flex gap-2">

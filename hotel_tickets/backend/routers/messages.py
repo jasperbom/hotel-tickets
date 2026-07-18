@@ -166,8 +166,8 @@ async def send_message(body: MessageCreate, user: RequireUser, db: AsyncSession 
     db.add(message)
     await db.flush()
 
-    # Push naar de ontvanger indien ingesteld
-    if recipient.notify_push and recipient.ha_notify_service:
+    # Push naar de ontvanger indien die dat zelf heeft aangezet
+    if recipient.notify_direct_message and recipient.notify_push and recipient.ha_notify_service:
         base_url = await get_ticket_base_url(db)
         url = f"{base_url}/#/berichten" if base_url else None
         await notify_direct_message(user.display_name, message.body, recipient.ha_notify_service, url)
