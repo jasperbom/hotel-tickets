@@ -1,11 +1,11 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { notificationApi } from "../api/client";
+import { notificationApi, messageApi } from "../api/client";
 
 /**
  * Envelopje in de navigatiebalk: toont het aantal ongelezen berichten
- * (@-mentions en commentaar op eigen tickets) en opent de berichtenpagina.
- * De teller ververst bij elke paginawissel en elke 60 seconden.
+ * (directe berichten + @-mentions en commentaar op eigen tickets) en opent
+ * de berichtenpagina. De teller ververst bij elke paginawissel en elke 60 sec.
  */
 export function InboxEnvelope() {
   const [count, setCount] = useState(0);
@@ -15,9 +15,11 @@ export function InboxEnvelope() {
   useEffect(() => {
     let active = true;
     const refresh = () =>
-      notificationApi
-        .unreadCount()
-        .then((r) => { if (active) setCount(r.data.count); })
+      Promise.all([
+        notificationApi.unreadCount().catch(() => ({ data: { count: 0 } })),
+        messageApi.unreadCount().catch(() => ({ data: { count: 0 } })),
+      ])
+        .then(([n, m]) => { if (active) setCount(n.data.count + m.data.count); })
         .catch(() => {});
     refresh();
     const timer = window.setInterval(refresh, 60_000);

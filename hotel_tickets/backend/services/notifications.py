@@ -92,6 +92,25 @@ async def notify_mention(
     )
 
 
+async def notify_direct_message(
+    sender_name: str,
+    body: str,
+    recipient_service: str,
+    url: str | None = None,
+) -> None:
+    """Push naar een medewerker die een direct bericht ontvangt."""
+    preview = body if len(body) <= 140 else body[:139] + "…"
+    data: dict = {"tag": "direct_message"}
+    if url:
+        data["url"] = url
+    await notify_push(
+        recipient_service,
+        title=f"✉️ Bericht van {sender_name}",
+        message=preview,
+        data=data,
+    )
+
+
 async def notify_room_free(ticket_title: str, location_name: str, assignee_service: str, ticket_url: str | None = None) -> None:
     """Push-notificatie naar de toegewezen medewerker als de kamer vrij is."""
     data: dict = {"tag": f"room_free_{assignee_service}"}
