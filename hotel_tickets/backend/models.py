@@ -252,6 +252,8 @@ class UserRole(Base):
     ha_device_tracker: Mapped[str | None] = mapped_column(String(255))
     # Opt-in: push krijgen bij elk nieuw ticket in de eigen afdeling.
     notify_new_ticket: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Opt-in: push krijgen bij een nieuw direct bericht van een collega.
+    notify_direct_message: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     @property
