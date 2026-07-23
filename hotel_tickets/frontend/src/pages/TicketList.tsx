@@ -101,22 +101,26 @@ export default function TicketList() {
       .catch(() => setCounts(null));
   }, [department, priority, assignedToMe]);
 
-  // Tickets filteren op zoekterm (titel of beschrijving)
+  // Tickets filteren op zoekterm (titel, beschrijving of kamer/locatie)
   const filteredTickets = useMemo(() => {
     const q = search.trim().toLowerCase();
     let list = tickets;
     if (q) {
-      list = tickets.filter((t) =>
-        t.title.toLowerCase().includes(q) ||
-        (t.description?.toLowerCase().includes(q) ?? false)
-      );
+      list = tickets.filter((t) => {
+        const locationName = t.location_id ? (locations[t.location_id] ?? t.location_id) : "";
+        return (
+          t.title.toLowerCase().includes(q) ||
+          (t.description?.toLowerCase().includes(q) ?? false) ||
+          locationName.toLowerCase().includes(q)
+        );
+      });
     }
     // Pinned tickets bovenaan, behalve wanneer alleen op gesloten gefilterd wordt
     // (dan moet sortering puur op sluitingsdatum blijven).
     const onlyClosed = selectedStatuses.length === 1 && selectedStatuses[0] === "closed";
     if (onlyClosed) return list;
     return [...list].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
-  }, [tickets, search, selectedStatuses]);
+  }, [tickets, search, selectedStatuses, locations]);
 
   // Aantal tickets per locatie (voor "+N hier"-badge)
   const locationCounts = useMemo(() => {
@@ -169,7 +173,7 @@ export default function TicketList() {
             <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
             <input
               type="search"
-              placeholder="Zoek in titel of omschrijving…"
+              placeholder="Zoek op titel, omschrijving of kamer…"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="w-full border border-gray-300 rounded-lg pl-9 pr-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400"

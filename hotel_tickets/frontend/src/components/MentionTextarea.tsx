@@ -18,6 +18,7 @@ export function MentionTextarea({
   rows = 2,
   className = "",
   autoFocus,
+  resizable = false,
 }: {
   value: string;
   onChange: (value: string) => void;
@@ -26,11 +27,35 @@ export function MentionTextarea({
   rows?: number;
   className?: string;
   autoFocus?: boolean;
+  /** Toon een sleep-greep waarmee de hoogte handmatig aangepast kan worden
+   *  (werkt ook met touch, handig op mobiel waar het vak vaak te klein is). */
+  resizable?: boolean;
 }) {
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [query, setQuery] = useState<string | null>(null);
   const [queryStart, setQueryStart] = useState(0); // positie van de "@"
   const [highlighted, setHighlighted] = useState(0);
+  const [height, setHeight] = useState<number | null>(null);
+  const dragStart = useRef<{ y: number; h: number } | null>(null);
+
+  function startResize(e: React.PointerEvent<HTMLDivElement>) {
+    const el = textareaRef.current;
+    if (!el) return;
+    e.preventDefault();
+    dragStart.current = { y: e.clientY, h: el.offsetHeight };
+    e.currentTarget.setPointerCapture(e.pointerId);
+  }
+  function moveResize(e: React.PointerEvent<HTMLDivElement>) {
+    if (!dragStart.current) return;
+    const next = dragStart.current.h + (e.clientY - dragStart.current.y);
+    setHeight(Math.max(56, Math.min(600, next)));
+  }
+  function endResize(e: React.PointerEvent<HTMLDivElement>) {
+    dragStart.current = null;
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+  }
 
   const suggestions =
     query === null
@@ -108,7 +133,23 @@ export function MentionTextarea({
         rows={rows}
         autoFocus={autoFocus}
         className={className}
+        style={height !== null ? { height } : undefined}
       />
+      {resizable && (
+        <div
+          onPointerDown={startResize}
+          onPointerMove={moveResize}
+          onPointerUp={endResize}
+          onPointerCancel={endResize}
+          role="separator"
+          aria-orientation="horizontal"
+          aria-label="Sleep om het vak groter of kleiner te maken"
+          title="Sleep om het vak groter of kleiner te maken"
+          className="mt-0.5 h-5 flex items-center justify-center cursor-ns-resize touch-none select-none"
+        >
+          <span className="h-1 w-10 rounded-full bg-gray-300 hover:bg-gray-400 transition-colors" />
+        </div>
+      )}
       {query !== null && suggestions.length > 0 && (
         <div className="absolute bottom-full left-0 mb-1 w-full max-w-xs bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
           {suggestions.map((u, i) => (
