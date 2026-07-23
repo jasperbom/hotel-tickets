@@ -23,7 +23,7 @@ from sqlalchemy import select, func
 
 from .database import get_db
 from .models import UserRole, Role
-from .session import verify_session_token, TOKEN_PREFIX
+from .session import verify_session, TOKEN_PREFIX
 
 logger = logging.getLogger(__name__)
 
@@ -171,9 +171,11 @@ async def get_current_user(
             is_admin=user_role.role in (Role.admin, Role.supervisor),
         )
 
-    # 2. Sessietoken van de loginpagina (standalone toegang)
+    # 2. Sessietoken van de loginpagina (standalone toegang). De server-side
+    #    sessie is intrekbaar en schuift bij gebruik mee (zie session.py).
     if bearer_token.startswith(TOKEN_PREFIX):
-        session_uid = verify_session_token(bearer_token)
+        client_ip = request.client.host if request.client else None
+        session_uid = await verify_session(db, bearer_token, client_ip)
         if not session_uid:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,

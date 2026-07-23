@@ -60,6 +60,32 @@ export const authApi = {
   removeBan: (ip: string) => api.delete(`/auth/bans/${encodeURIComponent(ip)}`),
 };
 
+// Actieve sessies / apparaatbeheer (standalone loginpagina)
+export interface Session {
+  id: string;
+  device: string;
+  user_agent: string | null;
+  ip: string | null;
+  created_at: string;
+  last_seen_at: string;
+  expires_at: string;
+  current: boolean;
+  // Alleen gevuld in het admin-overzicht:
+  display_name?: string | null;
+  ha_user_id?: string | null;
+}
+
+export const sessionsApi = {
+  /** De eigen actieve apparaten van de ingelogde medewerker. */
+  list: () => api.get<Session[]>("/auth/sessions"),
+  /** Admin: alle actieve sessies over alle medewerkers. */
+  listAll: () => api.get<Session[]>("/auth/sessions/all"),
+  /** Log een apparaat uit (eigen sessie, of elke sessie als admin). */
+  revoke: (id: string) => api.delete(`/auth/sessions/${id}`),
+  /** Log de huidige sessie server-side uit. */
+  logout: () => api.post("/auth/logout"),
+};
+
 /** True wanneer de app draait op een sessietoken van de loginpagina. */
 export function hasSessionToken(): boolean {
   return (localStorage.getItem("ha_token") || "").startsWith("hts.");

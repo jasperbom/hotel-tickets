@@ -24,9 +24,10 @@ import KennisBot from "./pages/KennisBot";
 import KennisbankBeheer from "./pages/KennisbankBeheer";
 import Berichten from "./pages/Berichten";
 import WachtwoordWijzigen from "./pages/WachtwoordWijzigen";
+import Apparaten from "./pages/Apparaten";
 import Login from "./pages/Login";
 import { InboxEnvelope } from "./components/InboxEnvelope";
-import { userApi, bikesModuleApi, brandingApi, hasSessionToken, clearSessionToken, type UserRole, type BikesModuleRoles } from "./api/client";
+import { userApi, bikesModuleApi, brandingApi, hasSessionToken, clearSessionToken, sessionsApi, type UserRole, type BikesModuleRoles } from "./api/client";
 import { saveLastRoute } from "./lastRoute";
 import { applyButtonPalette, applyAppBackground, readCachedAppBranding, saveCachedAppBranding } from "./branding";
 
@@ -169,8 +170,8 @@ export default function App() {
       setActiveModuleId("fietsen");
     } else if (p.startsWith("/kennis")) {
       setActiveModuleId("kennis");
-    } else if (p.startsWith("/instellingen") || p.startsWith("/wachtwoord")) {
-      setActiveModuleId(null); // Instellingen/wachtwoord hebben geen module-context
+    } else if (p.startsWith("/instellingen") || p.startsWith("/wachtwoord") || p.startsWith("/apparaten")) {
+      setActiveModuleId(null); // Instellingen/wachtwoord/apparaten hebben geen module-context
     } else {
       setActiveModuleId("taken");
     }
@@ -347,6 +348,7 @@ export default function App() {
 
   const isOnInstellingen = location.pathname === "/instellingen";
   const isOnWachtwoord = location.pathname === "/wachtwoord";
+  const isOnApparaten = location.pathname === "/apparaten";
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
   // Zwevende actieknoppen (nieuw ticket + kennisbot-vraag) onderin.
@@ -360,14 +362,21 @@ export default function App() {
     );
 
   // Pagina's buiten module-context die wél in de app-shell renderen
-  const isShellPage = isOnInstellingen || isOnWachtwoord;
+  const isShellPage = isOnInstellingen || isOnWachtwoord || isOnApparaten;
 
   function handleModuleClick(mod: ModuleConfig) {
     setActiveModuleId(mod.id);
     navigate(mod.defaultPath);
   }
 
-  function handleLogout() {
+  async function handleLogout() {
+    // Trek de server-side sessie in zodat dit token nergens meer geldig is.
+    // Best effort: ook bij een netwerkfout loggen we lokaal uit.
+    try {
+      await sessionsApi.logout();
+    } catch {
+      /* negeren — lokaal token wordt hoe dan ook gewist */
+    }
     clearSessionToken();
     window.location.hash = "#/login";
     window.location.reload();
@@ -424,6 +433,22 @@ export default function App() {
             <span className="leading-tight text-center truncate w-full px-0.5">Wachtwoord</span>
           </button>
         </div>
+        {hasSessionToken() && (
+          <div className="mb-3">
+            <button
+              onClick={() => navigate("/apparaten")}
+              title="Actieve apparaten"
+              className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+                isOnApparaten
+                  ? "bg-white/20 text-white"
+                  : "text-white/60 hover:text-white hover:bg-white/10"
+              }`}
+            >
+              <span className="text-xl">📱</span>
+              <span className="leading-tight text-center truncate w-full px-0.5">Apparaten</span>
+            </button>
+          </div>
+        )}
         {canSeeInstellingen && (
           <div className="mb-3">
             <button
@@ -486,7 +511,7 @@ export default function App() {
                       <span className="text-xl font-bold text-white select-none shrink-0">S</span>
                     )}
                     <span className="font-bold text-base text-white truncate">
-                      {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : "Instellingen")}
+                      {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : "Instellingen")}
                     </span>
                     {activeModule?.id === "kennis" && (
                       <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none shrink-0">
@@ -537,6 +562,20 @@ export default function App() {
                         <span>Wachtwoord wijzigen</span>
                         {isOnWachtwoord && <span className="ml-auto text-white/40 text-xs">✓</span>}
                       </button>
+                      {hasSessionToken() && (
+                        <button
+                          onClick={() => navigate("/apparaten")}
+                          className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
+                            isOnApparaten
+                              ? "bg-white/20 text-white"
+                              : "text-white/70 hover:text-white hover:bg-white/10"
+                          }`}
+                        >
+                          <span className="text-lg">📱</span>
+                          <span>Actieve apparaten</span>
+                          {isOnApparaten && <span className="ml-auto text-white/40 text-xs">✓</span>}
+                        </button>
+                      )}
                       {canSeeInstellingen && (
                         <>
                           <div className="mx-3 my-1 border-t border-white/10" />
@@ -572,7 +611,7 @@ export default function App() {
 
                 {/* Op mobiel staat de titel al in de modulewisselaar-knop hierboven */}
                 <span className="hidden md:flex font-bold text-lg mr-3 text-white shrink-0 items-center gap-1.5">
-                  {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : "Instellingen")}
+                  {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : "Instellingen")}
                   {activeModule?.id === "kennis" && (
                     <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none">
                       Beta
@@ -660,6 +699,8 @@ export default function App() {
               <Route path="/instellingen" element={<Instellingen />} />
               {/* Wachtwoord wijzigen (voor iedereen) */}
               <Route path="/wachtwoord" element={<WachtwoordWijzigen />} />
+              {/* Actieve apparaten / sessies (voor iedereen) */}
+              <Route path="/apparaten" element={<Apparaten />} />
             </Routes>
           </main>
         ) : (

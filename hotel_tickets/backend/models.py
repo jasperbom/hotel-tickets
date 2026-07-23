@@ -277,6 +277,33 @@ class LoginBan(Base):
     banned_at: Mapped[datetime | None] = mapped_column(DateTime)
 
 
+class Session(Base):
+    """Server-side sessie voor de standalone loginpagina.
+
+    Maakt de sessietokens van de loginpagina intrekbaar (uitloggen op afstand,
+    per apparaat) én meeschuivend: zolang de sessie gebruikt wordt schuift
+    ``expires_at`` vooruit, bij inactiviteit verloopt hij vanzelf. Zo blijf je in
+    de praktijk oneindig ingelogd zolang je de app af en toe opent, terwijl een
+    vergeten of gestolen token na de inactiviteitsperiode ongeldig wordt.
+
+    Beveiliging: er wordt uitsluitend een SHA-256-hash van het token bewaard
+    (``token_hash``), nooit het token zelf. Een datalek van de database levert
+    daardoor geen bruikbare tokens op. ``id`` is een los, veilig te tonen
+    sessie-ID voor het apparaatbeheer (níet het token)."""
+    __tablename__ = "sessions"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    token_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    ha_user_id: Mapped[str] = mapped_column(String(255), index=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    last_seen_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    # Vrije tekst van de browser/app bij het inloggen — voor herkenning in de
+    # apparatenlijst ("iPhone · Safari"). Wordt niet vertrouwd voor beveiliging.
+    user_agent: Mapped[str | None] = mapped_column(String(400))
+    ip: Mapped[str | None] = mapped_column(String(64))
+
+
 # ── Kennisbank / bot module ──────────────────────────────────────────────────────
 
 class KnowledgeQuestionStatus(str, PyEnum):

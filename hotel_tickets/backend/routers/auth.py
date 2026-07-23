@@ -31,10 +31,17 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..auth import INGRESS_PROXY_IPS, RequireUser
 from ..database import get_db
-from ..models import LoginBan, Role, UserRole
+from ..models import LoginBan, Role, Session, UserRole
 from ..passwords import MIN_PASSWORD_LENGTH, hash_password, verify_password
 from ..services.notifications import notify_login_ban
-from ..session import SESSION_HOURS, create_session_token
+from ..session import (
+    SESSION_HOURS,
+    create_session,
+    list_all_sessions,
+    list_user_sessions,
+    revoke_token,
+    token_hash_if_valid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -368,9 +375,17 @@ async def login(body: LoginIn, request: Request, db: AsyncSession = Depends(get_
 
     _attempts.pop(client_ip, None)
     await _clear_failed_attempts(client_ip, db)
-    token, expires_at = create_session_token(user.ha_user_id)
-    logger.info("[auth] %s ingelogd via loginpagina (sessie %d uur)", username, SESSION_HOURS)
-    return LoginOut(token=token, expires_at=expires_at, display_name=user.display_name)
+    user_agent = request.headers.get("User-Agent")
+    token, expires_at = await create_session(
+        db, user.ha_user_id, user_agent, client_ip if client_ip != "?" else None
+    )
+    logger.info(
+        "[auth] %s ingelogd via loginpagina (sessie schuift mee, inactiviteitsvenster %d uur)",
+        username, SESSION_HOURS,
+    )
+    return LoginOut(
+        token=token, expires_at=int(expires_at.timestamp()), display_name=user.display_name
+    )
 
 
 # ── Beheer van IP-blokkades (admin) ──────────────────────────────────────────
@@ -415,3 +430,121 @@ async def delete_ban(ip: str, user: RequireUser, db: AsyncSession = Depends(get_
     await db.delete(ban)
     _attempts.pop(ip, None)
     logger.info("[auth] Blokkade/teller voor IP %s opgeheven door %s", ip, user.ha_user_id)
+
+
+# ── Actieve sessies / apparaatbeheer ─────────────────────────────────────────
+
+
+def _describe_user_agent(ua: str | None) -> str:
+    """Korte, leesbare omschrijving van een apparaat op basis van de User-Agent."""
+    if not ua:
+        return "Onbekend apparaat"
+    s = ua.lower()
+    if "iphone" in s:
+        device = "iPhone"
+    elif "ipad" in s:
+        device = "iPad"
+    elif "android" in s:
+        device = "Android-toestel"
+    elif "windows" in s:
+        device = "Windows-pc"
+    elif "macintosh" in s or "mac os" in s:
+        device = "Mac"
+    elif "linux" in s:
+        device = "Linux"
+    else:
+        device = "Onbekend apparaat"
+    if "edg/" in s:
+        browser = "Edge"
+    elif "chrome" in s and "chromium" not in s:
+        browser = "Chrome"
+    elif "firefox" in s:
+        browser = "Firefox"
+    elif "safari" in s:
+        browser = "Safari"
+    else:
+        browser = None
+    return f"{device} · {browser}" if browser else device
+
+
+class SessionOut(BaseModel):
+    id: str
+    device: str
+    user_agent: str | None
+    ip: str | None
+    created_at: datetime
+    last_seen_at: datetime
+    expires_at: datetime
+    current: bool
+    # Alleen gevuld in het admin-overzicht (GET /sessions/all):
+    display_name: str | None = None
+    ha_user_id: str | None = None
+
+
+def _request_token_hash(request: Request) -> str | None:
+    """token_hash van het token waarmee dit verzoek binnenkomt (voor 'dit apparaat')."""
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    return token_hash_if_valid(auth_header.removeprefix("Bearer ").strip())
+
+
+def _session_out(s: Session, current_hash: str | None, *, display_name: str | None = None) -> SessionOut:
+    return SessionOut(
+        id=s.id,
+        device=_describe_user_agent(s.user_agent),
+        user_agent=s.user_agent,
+        ip=s.ip,
+        created_at=s.created_at,
+        last_seen_at=s.last_seen_at,
+        expires_at=s.expires_at,
+        current=current_hash is not None and s.token_hash == current_hash,
+        display_name=display_name,
+        ha_user_id=s.ha_user_id if display_name is not None else None,
+    )
+
+
+@router.get("/sessions", response_model=list[SessionOut])
+async def my_sessions(request: Request, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """De eigen actieve sessies (apparaten) van de ingelogde medewerker."""
+    current_hash = _request_token_hash(request)
+    sessions = await list_user_sessions(db, user.ha_user_id)
+    return [_session_out(s, current_hash) for s in sessions]
+
+
+@router.get("/sessions/all", response_model=list[SessionOut])
+async def all_sessions(request: Request, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Admin: alle actieve sessies over alle medewerkers."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen alle sessies inzien")
+    current_hash = _request_token_hash(request)
+    sessions = await list_all_sessions(db)
+    names = {
+        u.ha_user_id: u.display_name
+        for u in (await db.execute(select(UserRole))).scalars().all()
+    }
+    return [
+        _session_out(s, current_hash, display_name=names.get(s.ha_user_id) or "Onbekend")
+        for s in sessions
+    ]
+
+
+@router.delete("/sessions/{session_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def revoke_a_session(session_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Log een apparaat uit. Iedereen mag de eigen sessies intrekken; admins
+    mogen elke sessie intrekken."""
+    session = await db.get(Session, session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Sessie niet gevonden")
+    if session.ha_user_id != user.ha_user_id and not user.is_admin:
+        raise HTTPException(status_code=403, detail="Je kunt alleen je eigen sessies uitloggen")
+    await db.delete(session)
+    logger.info("[auth] Sessie %s ingetrokken door %s", session_id, user.ha_user_id)
+
+
+@router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def logout(request: Request, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Log de huidige sessie uit door het bijbehorende server-side token te wissen."""
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        await revoke_token(db, auth_header.removeprefix("Bearer ").strip())
