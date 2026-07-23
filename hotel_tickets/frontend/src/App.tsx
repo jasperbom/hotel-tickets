@@ -25,6 +25,7 @@ import KennisbankBeheer from "./pages/KennisbankBeheer";
 import Berichten from "./pages/Berichten";
 import WachtwoordWijzigen from "./pages/WachtwoordWijzigen";
 import Apparaten from "./pages/Apparaten";
+import Meldingen from "./pages/Meldingen";
 import Login from "./pages/Login";
 import { InboxEnvelope } from "./components/InboxEnvelope";
 import { userApi, bikesModuleApi, brandingApi, hasSessionToken, clearSessionToken, sessionsApi, type UserRole, type BikesModuleRoles } from "./api/client";
@@ -168,8 +169,8 @@ export default function App() {
       setActiveModuleId("fietsen");
     } else if (p.startsWith("/kennis")) {
       setActiveModuleId("kennis");
-    } else if (p.startsWith("/instellingen") || p.startsWith("/wachtwoord") || p.startsWith("/apparaten")) {
-      setActiveModuleId(null); // Instellingen/wachtwoord/apparaten hebben geen module-context
+    } else if (p.startsWith("/instellingen") || p.startsWith("/wachtwoord") || p.startsWith("/apparaten") || p.startsWith("/meldingen")) {
+      setActiveModuleId(null); // Instellingen/wachtwoord/apparaten/meldingen hebben geen module-context
     } else {
       setActiveModuleId("taken");
     }
@@ -333,6 +334,7 @@ export default function App() {
   const isOnInstellingen = location.pathname === "/instellingen";
   const isOnWachtwoord = location.pathname === "/wachtwoord";
   const isOnApparaten = location.pathname === "/apparaten";
+  const isOnMeldingen = location.pathname === "/meldingen";
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
   // Zwevende actieknoppen (nieuw ticket + kennisbot-vraag) onderin.
@@ -346,7 +348,7 @@ export default function App() {
     );
 
   // Pagina's buiten module-context die wél in de app-shell renderen
-  const isShellPage = isOnInstellingen || isOnWachtwoord || isOnApparaten;
+  const isShellPage = isOnInstellingen || isOnWachtwoord || isOnApparaten || isOnMeldingen;
 
   function handleModuleClick(mod: ModuleConfig) {
     setActiveModuleId(mod.id);
@@ -415,6 +417,20 @@ export default function App() {
           >
             <span className="text-xl">🔑</span>
             <span className="leading-tight text-center truncate w-full px-0.5">Wachtwoord</span>
+          </button>
+        </div>
+        <div className="mb-3">
+          <button
+            onClick={() => navigate("/meldingen")}
+            title="Meldingen"
+            className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+              isOnMeldingen
+                ? "bg-white/20 text-white"
+                : "text-white/60 hover:text-white hover:bg-white/10"
+            }`}
+          >
+            <span className="text-xl">🔔</span>
+            <span className="leading-tight text-center truncate w-full px-0.5">Meldingen</span>
           </button>
         </div>
         {hasSessionToken() && (
@@ -495,7 +511,7 @@ export default function App() {
                       <span className="text-xl font-bold text-white select-none shrink-0">S</span>
                     )}
                     <span className="font-bold text-base text-white truncate">
-                      {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : "Instellingen")}
+                      {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : isOnMeldingen ? "Meldingen" : "Instellingen")}
                     </span>
                     {activeModule?.id === "kennis" && (
                       <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none shrink-0">
@@ -546,6 +562,18 @@ export default function App() {
                         <span>Wachtwoord wijzigen</span>
                         {isOnWachtwoord && <span className="ml-auto text-white/40 text-xs">✓</span>}
                       </button>
+                      <button
+                        onClick={() => navigate("/meldingen")}
+                        className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
+                          isOnMeldingen
+                            ? "bg-white/20 text-white"
+                            : "text-white/70 hover:text-white hover:bg-white/10"
+                        }`}
+                      >
+                        <span className="text-lg">🔔</span>
+                        <span>Meldingen</span>
+                        {isOnMeldingen && <span className="ml-auto text-white/40 text-xs">✓</span>}
+                      </button>
                       {hasSessionToken() && (
                         <button
                           onClick={() => navigate("/apparaten")}
@@ -595,7 +623,7 @@ export default function App() {
 
                 {/* Op mobiel staat de titel al in de modulewisselaar-knop hierboven */}
                 <span className="hidden md:flex font-bold text-lg mr-3 text-white shrink-0 items-center gap-1.5">
-                  {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : "Instellingen")}
+                  {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : isOnMeldingen ? "Meldingen" : "Instellingen")}
                   {activeModule?.id === "kennis" && (
                     <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none">
                       Beta
@@ -685,6 +713,8 @@ export default function App() {
               <Route path="/wachtwoord" element={<WachtwoordWijzigen />} />
               {/* Actieve apparaten / sessies (voor iedereen) */}
               <Route path="/apparaten" element={<Apparaten />} />
+              {/* Persoonlijke meldingsvoorkeuren (voor iedereen) */}
+              <Route path="/meldingen" element={<Meldingen />} />
             </Routes>
           </main>
         ) : (
