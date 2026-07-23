@@ -33,6 +33,7 @@ class UserRoleCreate(BaseModel):
     ha_device_tracker: str | None = None
     notify_new_ticket: bool = False
     notify_direct_message: bool = False
+    notify_mention: bool = True
 
 
 class UserRoleUpdate(BaseModel):
@@ -47,6 +48,7 @@ class UserRoleUpdate(BaseModel):
     ha_device_tracker: str | None = None
     notify_new_ticket: bool | None = None
     notify_direct_message: bool | None = None
+    notify_mention: bool | None = None
 
 
 class UserRoleOut(BaseModel):
@@ -62,6 +64,7 @@ class UserRoleOut(BaseModel):
     ha_device_tracker: str | None
     notify_new_ticket: bool
     notify_direct_message: bool
+    notify_mention: bool
     # True = lokaal app-account (wachtwoord in eigen database, geen HA nodig)
     has_password: bool = False
 

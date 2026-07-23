@@ -181,6 +181,7 @@ export interface UserRole {
   ha_device_tracker: string | null;
   notify_new_ticket: boolean;
   notify_direct_message: boolean;
+  notify_mention: boolean;
   // true = lokaal app-account (wachtwoord in de addon zelf, geen HA nodig)
   has_password: boolean;
 }

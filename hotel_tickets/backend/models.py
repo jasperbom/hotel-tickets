@@ -254,6 +254,10 @@ class UserRole(Base):
     notify_new_ticket: Mapped[bool] = mapped_column(Boolean, default=False)
     # Opt-in: push krijgen bij een nieuw direct bericht van een collega.
     notify_direct_message: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Opt-out: push krijgen wanneer je met @ genoemd wordt in een commentaar
+    # (standaard aan). Het in-app envelopje (Berichten) blijft altijd bestaan;
+    # dit schakelt alleen de pushmelding uit.
+    notify_mention: Mapped[bool] = mapped_column(Boolean, default=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     @property

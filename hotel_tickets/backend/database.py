@@ -66,6 +66,7 @@ async def _run_migrations(conn):
         ("user_roles", "password_hash", "VARCHAR(255)"),
         ("user_roles", "notify_new_ticket", "BOOLEAN NOT NULL DEFAULT 0"),
         ("user_roles", "notify_direct_message", "BOOLEAN NOT NULL DEFAULT 0"),
+        ("user_roles", "notify_mention", "BOOLEAN NOT NULL DEFAULT 1"),
         ("knowledge_entries", "images", "TEXT"),
         ("knowledge_entries", "folder", "VARCHAR(100)"),
         ("knowledge_documents", "folder", "VARCHAR(100)"),

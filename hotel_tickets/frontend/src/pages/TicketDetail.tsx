@@ -9,7 +9,7 @@ import { MentionTextarea, renderWithMentions } from "../components/MentionTextar
 const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: "urgent", label: "Urgent" },
   { value: "high", label: "Hoog" },
-  { value: "medium", label: "Middel" },
+  { value: "medium", label: "Normaal" },
   { value: "low", label: "Laag" },
 ];
 
@@ -446,12 +446,12 @@ export default function TicketDetail() {
                 value={newSubtaskLabel}
                 onChange={(e) => setNewSubtaskLabel(e.target.value)}
                 placeholder="Subtaak toevoegen..."
-                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="flex-1 min-w-0 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
               />
               <button
                 type="submit"
                 disabled={addingSubtask || !newSubtaskLabel.trim()}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                className="shrink-0 bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
               >
                 Toevoegen
               </button>
@@ -669,6 +669,7 @@ export default function TicketDetail() {
             users={users}
             placeholder="Voeg commentaar toe... (@naam om een collega te noemen)"
             rows={2}
+            resizable
             className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
           />
           <button type="submit" disabled={saving || !commentBody.trim()} className="btn-primary self-end">

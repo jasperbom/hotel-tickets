@@ -196,7 +196,9 @@ async def _notify_comment(
             type=NotificationType.mention,
         ))
         recipient = users_by_id.get(uid)
-        if recipient and recipient.notify_push and recipient.ha_notify_service:
+        # Het in-app envelopje (hierboven) blijft altijd bestaan; alleen de
+        # pushmelding is uit te zetten via notify_mention (standaard aan).
+        if recipient and recipient.notify_mention and recipient.notify_push and recipient.ha_notify_service:
             await notify_mention(author.display_name, ticket.title, recipient.ha_notify_service, ticket_url)
 
     # Toegewezene krijgt een bericht bij elk nieuw commentaar op zijn ticket
