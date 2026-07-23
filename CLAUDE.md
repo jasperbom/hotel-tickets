@@ -98,8 +98,19 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
   worden alleen vertrouwd wanneer het verzoek van de ingress-proxy komt (172.30.32.2).
 - Standalone toegang (LAN): loginpagina op `#/login` — HA-gebruikersnaam/wachtwoord
   wordt geverifieerd via de Supervisor auth-API (`POST http://supervisor/auth`,
-  vereist `auth_api: true`). De backend geeft een eigen HMAC-sessietoken uit
-  (`backend/session.py`, prefix `hts.`, geheim in `/config/hotel_tickets/session_secret`).
+  vereist `auth_api: true`). De backend geeft een eigen sessietoken uit
+  (`backend/session.py`, vorm `hts.<geheim>.<HMAC>`, HMAC-geheim in
+  `/config/hotel_tickets/session_secret`). De sessie zelf staat server-side in de
+  tabel `sessions`, waarin alleen een SHA-256-hash van het token wordt bewaard
+  (een datalek levert dus geen bruikbare tokens op). Sessies zijn **intrekbaar**
+  (uitloggen op afstand, per apparaat) en **meeschuivend**: `expires_at` schuift
+  bij gebruik vooruit (throttled op 5 min), zodat een actieve gebruiker ingelogd
+  blijft en een vergeten/gestolen token na het inactiviteitsvenster (`SESSION_HOURS`)
+  vanzelf verloopt. Verlopen sessies worden dagelijks opgeruimd (scheduler). Elke
+  medewerker beheert de eigen apparaten via `#/apparaten`
+  (`GET /api/auth/sessions`, `DELETE /api/auth/sessions/{id}`, `POST /api/auth/logout`);
+  admins zien alle sessies bij Instellingen → Beveiliging (`GET /api/auth/sessions/all`).
+  Het roteren van het HMAC-geheim maakt in één klap alle sessies ongeldig.
   Koppeling gebeurt via `user_roles.ha_username` (auto-gevuld bij ingress-login).
 - Lokale app-accounts: een admin kan bij Instellingen → Medewerkers een account
   aanmaken met inlognaam + wachtwoord (of een wachtwoord instellen op een bestaand
@@ -146,6 +157,8 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 - **ticket_comments** — commentaar per ticket
 - **recurring_templates** — cron-gebaseerde taaksjablonen
 - **user_roles** — medewerker profiel + HA user_id koppeling
+- **sessions** — server-side loginsessies (intrekbaar + meeschuivend); alleen een SHA-256-hash van het token
+- **login_bans** — mislukte inlogpogingen / IP-blokkades loginpagina
 
 ## HA integratie
 
@@ -164,6 +177,6 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 | `SMTP_*` | E-mail configuratie |
 | `LOG_LEVEL` | `debug` / `info` / `warning` / `error` |
 | `ALLOWED_NETWORKS` | Komma-gescheiden CIDR's; indien gezet worden andere client-IP's geweigerd (interne HA-bronnen altijd toegestaan) |
-| `SESSION_HOURS` | Geldigheidsduur van standalone sessietokens (standaard 12) |
+| `SESSION_HOURS` | Inactiviteitsvenster van standalone loginsessies in uren; de sessie schuift mee bij gebruik en verloopt vanzelf bij inactiviteit (standaard 720 = 30 dagen) |
 | `LOGIN_BAN_THRESHOLD` | Aantal mislukte inlogpogingen waarna een IP permanent geblokkeerd wordt (standaard 25) |
 | `INGRESS_PROXY_IPS` | IP('s) waarvandaan ingress-headers vertrouwd worden (standaard 172.30.32.2) |

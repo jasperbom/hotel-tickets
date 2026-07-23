@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi, authApi,
+  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi, authApi, sessionsApi, parseUTC,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
-  type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding, type LoginBan,
+  type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding, type LoginBan, type Session,
 } from "../api/client";
 
 type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot";
@@ -137,6 +137,69 @@ const DEPT_FULL_LABELS: Record<Category, string> = {
 function apiErrorText(err: unknown, fallback: string): string {
   const detail = (err as { response?: { data?: { detail?: unknown } } })?.response?.data?.detail;
   return typeof detail === "string" ? detail : fallback;
+}
+
+function sessieGeleden(iso: string): string {
+  const secs = Math.max(0, Math.floor((Date.now() - parseUTC(iso).getTime()) / 1000));
+  if (secs < 60) return "zojuist";
+  if (secs < 3600) return `${Math.floor(secs / 60)} min geleden`;
+  if (secs < 86400) return `${Math.floor(secs / 3600)} uur geleden`;
+  return `${Math.floor(secs / 86400)} d geleden`;
+}
+
+function ActieveSessiesPanel() {
+  const [sessions, setSessions] = useState<Session[] | null>(null);
+
+  useEffect(() => {
+    sessionsApi.listAll().then((r) => setSessions(r.data)).catch(() => setSessions([]));
+  }, []);
+
+  async function revoke(id: string) {
+    await sessionsApi.revoke(id);
+    setSessions((prev) => (prev ?? []).filter((s) => s.id !== id));
+  }
+
+  if (!sessions) return null;
+
+  return (
+    <Section title="Actieve sessies — apparaten">
+      <p className="text-xs text-gray-500">
+        Alle apparaten die nu via de loginpagina zijn ingelogd. Een sessie schuift mee zolang hij
+        gebruikt wordt en verloopt vanzelf bij inactiviteit. Log een apparaat op afstand uit bij een
+        verloren of gestolen telefoon — dat toestel moet daarna opnieuw inloggen.
+      </p>
+      {sessions.length === 0 ? (
+        <p className="text-sm text-gray-500">Geen actieve sessies via de loginpagina.</p>
+      ) : (
+        <div className="divide-y divide-gray-100">
+          {sessions.map((s) => (
+            <div key={s.id} className="py-2 flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-gray-900 truncate">
+                  {s.display_name || "Onbekend"}
+                  {s.current && (
+                    <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                      Dit apparaat
+                    </span>
+                  )}
+                </p>
+                <p className="text-xs text-gray-500 truncate">
+                  {s.device}
+                  {s.ip ? ` · ${s.ip}` : ""} · actief {sessieGeleden(s.last_seen_at)}
+                </p>
+              </div>
+              <button
+                onClick={() => revoke(s.id)}
+                className="text-sm text-red-600 hover:underline shrink-0"
+              >
+                Uitloggen
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
 }
 
 function BeveiligingPanel() {
@@ -1516,6 +1579,7 @@ export default function Instellingen() {
           <IntegratieWidget />
           <NotificatieInstellingen />
           <MedewerkersBeheer isAdmin={isAdmin} />
+          {isAdmin && <ActieveSessiesPanel />}
           {isAdmin && <BeveiligingPanel />}
         </div>
       )}

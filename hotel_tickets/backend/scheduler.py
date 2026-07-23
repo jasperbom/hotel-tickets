@@ -395,6 +395,30 @@ def start_interval_watcher() -> None:
     logger.info("Interval template watcher gestart (elk kwartier)")
 
 
+async def _session_cleanup_job() -> None:
+    """Ruim verlopen standalone-loginsessies op (tabel ``sessions``)."""
+    from .database import AsyncSessionLocal
+    from .session import cleanup_expired_sessions
+
+    async with AsyncSessionLocal() as db:
+        removed = await cleanup_expired_sessions(db)
+        await db.commit()
+        if removed:
+            logger.info("Sessie-opschoning: %d verlopen sessies verwijderd", removed)
+
+
+def start_session_cleanup() -> None:
+    """Plan de dagelijkse opschoning van verlopen sessies — draait elke dag 03:30."""
+    _scheduler.add_job(
+        _session_cleanup_job,
+        trigger=CronTrigger(hour=3, minute=30),
+        id="session_cleanup",
+        replace_existing=True,
+        name="Sessie-opschoning",
+    )
+    logger.info("Sessie-opschoning gepland (dagelijks 03:30)")
+
+
 async def load_all_templates() -> None:
     """Laad alle actieve templates bij opstarten van de app."""
     from .database import AsyncSessionLocal
