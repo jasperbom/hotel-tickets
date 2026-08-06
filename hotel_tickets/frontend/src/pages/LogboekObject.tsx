@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ChevronLeft, Printer } from "lucide-react";
+import { ChevronLeft, Printer, X } from "lucide-react";
 import {
   locationApi, logbookApi, parseUTC, userApi,
   type LogEntry, type LogObject, type UserRole,
@@ -51,6 +51,7 @@ export default function LogboekObject() {
     open: zoekParams.get("registratie") === "1", body: "", value: "", corrects: null,
   });
   const [bezig, setBezig] = useState(false);
+  const [zoek, setZoek] = useState("");
   const [fout, setFout] = useState<string | null>(null);
 
   const laden = useCallback(async () => {
@@ -111,6 +112,19 @@ export default function LogboekObject() {
   }
   if (!obj) return <p className="meta">Object niet gevonden.</p>;
 
+  /**
+   * Zoeken in het boek zelf: "wanneer is dat filter vervangen". Gaat over de
+   * tekst, de meetwaarde en wie het vastlegde.
+   */
+  const zichtbareRegels = (() => {
+    const q = zoek.trim().toLowerCase();
+    if (!q) return regels;
+    return regels.filter((r) =>
+      [r.body ?? "", r.value ?? "", naam(r.actor_id), REGEL_LABELS[r.type] ?? ""]
+        .some((veld) => veld.toLowerCase().includes(q))
+    );
+  })();
+
   const metaregel = [
     obj.location_id ? (locaties[obj.location_id] ?? obj.location_id) : null,
     TYPE_LABELS[obj.type],
@@ -149,14 +163,43 @@ export default function LogboekObject() {
       <section className="mt-5 pt-5 border-t border-ink-12">
         <p className="mb-3 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
           Geschiedenis
-          <span className="ml-2 normal-case tracking-normal font-sans">{laatsteTekst(obj)}</span>
+          <span className="ml-2 normal-case tracking-normal font-sans">
+            {zoek.trim()
+              ? `${zichtbareRegels.length} van ${regels.length} regels`
+              : laatsteTekst(obj)}
+          </span>
         </p>
+
+        {regels.length > 4 && (
+          <div className="relative mb-3 print:hidden">
+            <input
+              type="search"
+              inputMode="search"
+              placeholder="Zoek in dit boek"
+              value={zoek}
+              onChange={(e) => setZoek(e.target.value)}
+              className="w-full h-tap border border-ink-12 rounded-[10px] pl-3 pr-10 text-body bg-paper-raised
+                         text-ink placeholder:text-ink-45 focus:outline-none focus:ring-2 focus:ring-brand"
+            />
+            {zoek && (
+              <button
+                onClick={() => setZoek("")}
+                aria-label="Zoekopdracht wissen"
+                className="absolute right-1 top-1/2 -translate-y-1/2 tap text-ink-45 hover:text-ink"
+              >
+                <X size={18} aria-hidden="true" />
+              </button>
+            )}
+          </div>
+        )}
 
         {regels.length === 0 ? (
           <p className="meta">Nog geen regels in dit boek.</p>
+        ) : zichtbareRegels.length === 0 ? (
+          <p className="meta">Geen regel met “{zoek.trim()}” in dit boek.</p>
         ) : (
           <ol className="space-y-3">
-            {regels.map((r) => {
+            {zichtbareRegels.map((r) => {
               const gecorrigeerd = regels.some((x) => x.corrects_id === r.id);
               return (
                 <li key={r.id} className="flex gap-3">

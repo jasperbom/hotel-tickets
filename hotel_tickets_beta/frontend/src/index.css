@@ -54,6 +54,14 @@
     overscroll-behavior-y: contain;
   }
 
+  /* Zoekvelden hebben een eigen wisknop van 44 px; die van de browser stond
+     ernaast en gaf twee kruisjes naast elkaar. */
+  input[type="search"]::-webkit-search-cancel-button,
+  input[type="search"]::-webkit-search-decoration {
+    -webkit-appearance: none;
+    appearance: none;
+  }
+
   body {
     @apply text-ink font-sans;
     background-color: var(--app-bg, #FBFAF7);

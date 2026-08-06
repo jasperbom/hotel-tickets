@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { locationApi, logbookApi, parseUTC, type LogObject } from "../api/client";
 import { herhaalKort } from "../werk";
 
@@ -51,6 +51,8 @@ export default function Logboeken() {
   const [locaties, setLocaties] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [alles, setAlles] = useState(false);
+  const [zoek, setZoek] = useState("");
+  const zoekRef = useRef<HTMLInputElement>(null);
   const [dicht, setDicht] = useState<string[]>(() => {
     try {
       return JSON.parse(localStorage.getItem(INGEKLAPT_KEY) || "[]");
@@ -80,6 +82,27 @@ export default function Logboeken() {
   }
 
   const aandacht = useMemo(() => objecten.filter((o) => o.overdue), [objecten]);
+
+  /**
+   * Zoeken gaat over naam, map, serienummer en kamer. De lijst is klein genoeg
+   * om in de browser te filteren — dat is meteen, zonder verzoek per toets.
+   * Tijdens het zoeken vervallen de mappen: je zoekt juist omdat je niet weet
+   * waar iets staat.
+   */
+  const gevonden = useMemo(() => {
+    const q = zoek.trim().toLowerCase();
+    if (!q) return null;
+    return objecten.filter((o) =>
+      [
+        o.name,
+        o.folder ?? "",
+        mapVan(o),
+        o.serial ?? "",
+        o.location_id ? (locaties[o.location_id] ?? o.location_id) : "",
+        TYPE_LABELS[o.type] ?? "",
+      ].some((veld) => veld.toLowerCase().includes(q))
+    ).sort((a, b) => a.name.localeCompare(b.name, "nl"));
+  }, [zoek, objecten, locaties]);
 
   /** Alles per map, met de mappen alfabetisch en "Overig" achteraan. */
   const mappen = useMemo(() => {
@@ -152,6 +175,46 @@ export default function Logboeken() {
     <div className="max-w-3xl space-y-6">
       <h1 className="hidden md:block text-2xl font-bold text-ink">Logboeken</h1>
 
+      <div className="relative">
+        <input
+          ref={zoekRef}
+          type="search"
+          inputMode="search"
+          placeholder="Zoek object, map of serienummer"
+          value={zoek}
+          onChange={(e) => setZoek(e.target.value)}
+          className="w-full h-tap border border-ink-12 rounded-[10px] pl-3 pr-10 text-body bg-paper-raised
+                     text-ink placeholder:text-ink-45 focus:outline-none focus:ring-2 focus:ring-brand"
+        />
+        {zoek && (
+          <button
+            onClick={() => { setZoek(""); zoekRef.current?.focus(); }}
+            aria-label="Zoekopdracht wissen"
+            className="absolute right-1 top-1/2 -translate-y-1/2 tap text-ink-45 hover:text-ink"
+          >
+            <X size={18} aria-hidden="true" />
+          </button>
+        )}
+      </div>
+
+      {gevonden ? (
+        <section>
+          <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+            {gevonden.length} {gevonden.length === 1 ? "resultaat" : "resultaten"}
+          </p>
+          {gevonden.length === 0 ? (
+            <div className="rounded-[10px] border border-dashed border-ink-12 bg-paper-raised px-5 py-6">
+              <p className="text-[1.1875rem] font-semibold text-ink">Geen object met “{zoek.trim()}”.</p>
+              <p className="mt-1.5 text-[0.9375rem] text-ink-70">
+                Gezocht in namen, mappen, serienummers en kamers van alle {objecten.length} objecten.
+              </p>
+            </div>
+          ) : (
+            <ul className="grid gap-2">{gevonden.map(regel)}</ul>
+          )}
+        </section>
+      ) : (
+      <>
       <div className="flex rounded-full border border-ink-12 bg-paper-raised overflow-hidden w-fit">
         <button
           onClick={() => setAlles(false)}
@@ -213,6 +276,8 @@ export default function Logboeken() {
             );
           })}
         </div>
+      )}
+      </>
       )}
     </div>
   );
