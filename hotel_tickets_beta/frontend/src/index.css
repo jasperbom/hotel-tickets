@@ -1,0 +1,132 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    /* Blue palette defaults — overridden at runtime via JS when btn_color is set */
+    --blue-50:  #eff6ff;
+    --blue-100: #dbeafe;
+    --blue-200: #bfdbfe;
+    --blue-300: #93c5fd;
+    --blue-400: #60a5fa;
+    --blue-500: #3b82f6;
+    --blue-600: #2563eb;
+    --blue-700: #1d4ed8;
+    --blue-800: #1e40af;
+    --blue-900: #1e3799;
+  }
+
+  /* Reserveer onderaan ruimte waar het virtuele toetsenbord opkomt: iOS
+     Safari gebruikt scroll-padding bij native focus-scroll én bij
+     scrollIntoView(), waardoor het gefocuste veld boven het toetsenbord
+     komt zonder dat wij de viewport hoeven te meten. Alleen op touch-
+     apparaten — op desktop zou dit onnodig springgedrag geven. */
+  @media (hover: none) and (pointer: coarse) {
+    html {
+      /* --kb-inset = gemeten toetsenbordhoogte (App.tsx via visualViewport).
+         Voorheen stond hier een vaste 50vh, waardoor een gefocust veld onderin
+         de pagina veel te ver omhoog sprong (met een grote lege ruimte eronder).
+         Zonder meting valt het terug op een royale default. */
+      scroll-padding-bottom: var(--kb-inset, 40vh);
+    }
+
+    /* iOS Safari zoomt automatisch in op invoervelden met een lettergrootte
+       kleiner dan 16px — de pagina "schiet omhoog" bij focus en blijft na
+       inloggen ingezoomd staan. Minimaal 16px op alle formuliervelden
+       voorkomt die auto-zoom volledig; !important is nodig om Tailwind-
+       utilities als text-sm/text-xs op de velden te overrulen. */
+    input,
+    select,
+    textarea {
+      font-size: 16px !important;
+    }
+  }
+
+  html, body {
+    overscroll-behavior-y: contain;
+  }
+
+  body {
+    @apply text-gray-900 font-sans;
+    background-color: var(--app-bg, #f9fafb);
+    position: relative;
+  }
+
+  /* Achtergrond op een fixed pseudo-laag zodat iOS' background-attachment: fixed
+     niet tegen scrollgedrag onder het on-screen toetsenbord botst. */
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    background-color: var(--app-bg, #f9fafb);
+    background-image: var(--app-bg-image, none);
+    background-size: cover;
+    background-position: center;
+    pointer-events: none;
+  }
+}
+
+/* Horizontaal scrollbare rijen (navigatie, tab-balken) zonder zichtbare
+   scrollbar. Werd al gebruikt in de topnavigatie maar was nooit gedefinieerd. */
+.scrollbar-none {
+  scrollbar-width: none;
+}
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+
+/* Ruimte onderin voor de zwevende actieknop (het vraag-wolkje), zodat de
+   inhoud onderaan de pagina er nooit onder verdwijnt als je helemaal naar
+   beneden scrolt: 1rem afstand + 3,5rem knop + marge. */
+.fab-clearance {
+  padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+}
+
+/* Op touch-apparaten extra onderkant-padding zodat er altijd scrollruimte
+   is onder het laatste invoerveld wanneer het toetsenbord opent. */
+@media (hover: none) and (pointer: coarse) {
+  .touch-keyboard-pb {
+    padding-bottom: calc(var(--kb-inset, 40vh) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Toetsenbord-padding en FAB-ruimte gecombineerd: de grootste van de twee
+     geldt. Bij gesloten toetsenbord (inset 0) blijft zo de FAB-ruimte over —
+     zonder deze regel zou .touch-keyboard-pb de FAB-ruimte wegdrukken. */
+  .touch-keyboard-pb.fab-clearance {
+    padding-bottom: calc(max(var(--kb-inset, 40vh), 7rem) + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Vaste-hoogte pagina's (bijv. de kennisbot-chat) zetten de body in `kb-fit`-
+     modus: de hele app-shell wordt op de zichtbare hoogte (--app-vh, gemeten via
+     de visualViewport) gepind en kan niet scrollen. Zo krimpt de hele pagina mee
+     wanneer het toetsenbord opent en blijft de bovenkant (navigatie) zichtbaar,
+     in plaats van dat de webview de inhoud omhoog duwt. */
+  body.kb-fit {
+    overflow: hidden;
+  }
+  body.kb-fit [data-app-root] {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: var(--app-vh, 100dvh);
+    overflow: hidden;
+  }
+}
+
+@layer components {
+  .btn-primary {
+    @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap;
+  }
+  .btn-secondary {
+    @apply bg-white text-gray-700 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium whitespace-nowrap;
+  }
+  .card {
+    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-4;
+  }
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap;
+  }
+}

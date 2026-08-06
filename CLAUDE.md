@@ -11,6 +11,17 @@ Bij elke commit die naar GitHub gepusht wordt, **moet** de versie in `hotel_tick
 
 De versie in `config.yaml` en de commit message moeten altijd overeenkomen (bijv. `v1.3.23: ...`).
 
+## Beta-addon
+
+`hotel_tickets_beta/` is **gegenereerde code**: een kopie van `hotel_tickets/`
+met een eigen slug, poorten en database (`scripts/sync-beta.sh`). Nooit
+handmatig bewerken.
+
+- Functionaliteit wijzigen → `hotel_tickets/`
+- Beta-specifieke instellingen (slug, poorten, `BETA_MODE`) → `scripts/beta-overlay/`
+- Na een wijziging in `hotel_tickets/`: `./scripts/sync-beta.sh` draaien en de
+  gewijzigde map meecommitten (een GitHub Action doet dit ook automatisch op `main`)
+
 Ticket- en taakbeheersysteem voor hotels, gebouwd als Home Assistant addon.
 Bedoeld voor drie afdelingen: technische dienst, huishouding en receptie/conciërge.
 
@@ -18,6 +29,10 @@ Bedoeld voor drie afdelingen: technische dienst, huishouding en receptie/concië
 
 ```
 hotel-tickets/
+├── hotel_tickets_beta/          # Gegenereerde beta-addon (niet bewerken)
+├── scripts/
+│   ├── sync-beta.sh             # Genereert hotel_tickets_beta/
+│   └── beta-overlay/            # Beta-specifieke config.yaml + run.sh
 ├── hotel_tickets/
 │   ├── config.yaml              # HA addon manifest
 │   ├── Dockerfile               # Multi-stage: Python backend + Node frontend
@@ -27,12 +42,14 @@ hotel-tickets/
 │   │   ├── database.py          # SQLAlchemy async setup
 │   │   ├── models.py            # Ticket, TicketComment, RecurringTemplate, UserRole
 │   │   ├── auth.py              # HA token verificatie, CurrentUser
+│   │   ├── beta.py              # Beta-modus (vlaggen + paden productiedata)
 │   │   ├── scheduler.py         # APScheduler voor recurring tasks (cron)
 │   │   ├── routers/             # FastAPI routers
 │   │   │   ├── tickets.py       # CRUD + claim + commentaar
 │   │   │   ├── users.py         # Rollen & medewerkers
 │   │   │   ├── locations.py     # HA areas sync
 │   │   │   ├── recurring.py     # Template beheer
+│   │   │   ├── beta.py          # Beta-status + productiedata kopiëren
 │   │   │   └── reports.py       # Analytics, CSV/Excel export
 │   │   └── services/
 │   │       ├── ha_client.py     # HA Supervisor API client
@@ -180,3 +197,7 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 | `SESSION_HOURS` | Inactiviteitsvenster van standalone loginsessies in uren; de sessie schuift mee bij gebruik en verloopt vanzelf bij inactiviteit (standaard 720 = 30 dagen) |
 | `LOGIN_BAN_THRESHOLD` | Aantal mislukte inlogpogingen waarna een IP permanent geblokkeerd wordt (standaard 25) |
 | `INGRESS_PROXY_IPS` | IP('s) waarvandaan ingress-headers vertrouwd worden (standaard 172.30.32.2) |
+| `UPLOAD_DIR` | Map met ticketfoto's en kennisbank-afbeeldingen (addon: `/config/hotel_tickets/uploads`) |
+| `BETA_MODE` | `true` = testomgeving: geen pushmeldingen, geen e-mail, geen HA-sensoren, banner in de app |
+| `SOURCE_DB_PATH` / `SOURCE_UPLOAD_DIR` | Productiedata die de beta kan kopiëren (read-only) |
+| `BETA_BASE_URL` | Ingress-pad van de beta; wordt na een kopie in `ticket_base_url` gezet |

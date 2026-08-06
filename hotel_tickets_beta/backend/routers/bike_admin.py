@@ -1,0 +1,591 @@
+"""
+Fiets-admin router: Excel-import, export en herbalancering.
+- Import: type naam + prijs uit sectieheader, automatisch fietsen + types aanmaken
+- Export: alle reserveringen als xlsx
+- Rebalance: herverdeelt toekomstige reserveringen voor betere rotatie
+"""
+import asyncio
+import io
+import re
+from datetime import date, datetime, timezone
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import StreamingResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
+from sqlalchemy.orm import selectinload
+
+from ..database import get_db
+from sqlalchemy import delete as sa_delete
+from ..models import (
+    Bike, BikeType, BikeReservation, BikeReservationBike,
+    BikeReservationStatus, BikeStatus, SystemSetting, BikeMaintenanceRecord, BikeLog,
+)
+from ..auth import RequireUser
+
+router = APIRouter(prefix="/bike-admin", tags=["bike-admin"])
+
+SKIP_VALUES = {"onderhoud", "x", "reserve", ""}
+
+
+# ── Excel parsing ──────────────────────────────────────────────────────────────
+
+def _extract_bike_number(header_text: str) -> str | None:
+    if not header_text:
+        return None
+    m = re.search(r"fiets\s+(\d+)", str(header_text).lower())
+    return m.group(1) if m else None
+
+
+def _normalize_name(name) -> str | None:
+    if name is None:
+        return None
+    s = str(name).strip()
+    if not s or s.lower() in SKIP_VALUES:
+        return None
+    return s
+
+
+def _parse_type_and_price(row: tuple) -> tuple[str | None, float | None]:
+    """Lees type naam en prijs uit de sectieheader-rij (bijv. 'Normale fietsen €15,50 ...')."""
+    for c_idx in range(2, len(row)):
+        cell = row[c_idx]
+        if cell is None or isinstance(cell, datetime):
+            continue
+        text = str(cell).strip()
+        if not text:
+            continue
+        m = re.match(r'^(.+?)\s*€\s*([\d,\.]+)', text)
+        if m:
+            type_name = m.group(1).strip().rstrip("-–").strip()
+            price_str = m.group(2).replace(',', '.')
+            try:
+                return type_name, float(price_str)
+            except ValueError:
+                pass
+        # Geen prijs gevonden maar wel tekst → gebruik als typenaam zonder prijs
+        if len(text) > 3:
+            return text, None
+    return None, None
+
+
+def _parse_sections(ws) -> list[dict]:
+    rows = list(ws.iter_rows(min_row=1, values_only=True))
+    section_starts = []
+    for i, row in enumerate(rows):
+        if row and len(row) > 1 and isinstance(row[1], datetime):
+            section_starts.append(i)
+
+    sections = []
+    for sec_idx, start in enumerate(section_starts):
+        dt: datetime = rows[start][1]
+        year, month = dt.year, dt.month
+
+        # Type naam en prijs uit header
+        type_name, price = _parse_type_and_price(rows[start])
+
+        header_row_idx = start + 2
+        if header_row_idx >= len(rows):
+            continue
+        header_row = rows[header_row_idx]
+
+        col_map: dict[int, str] = {}
+        if header_row:
+            for col_i, cell in enumerate(header_row):
+                num = _extract_bike_number(cell)
+                if num:
+                    col_map[col_i] = num
+        if not col_map:
+            continue
+
+        data_start = header_row_idx + 1
+        data_end = section_starts[sec_idx + 1] if sec_idx + 1 < len(section_starts) else len(rows)
+
+        data_rows = []
+        for row_i in range(data_start, data_end):
+            row = rows[row_i]
+            if row and len(row) > 1 and isinstance(row[1], int):
+                data_rows.append((row[1], row))
+
+        sections.append({
+            "year": year,
+            "month": month,
+            "col_map": col_map,
+            "data_rows": data_rows,
+            "type_name": type_name,
+            "price": price,
+        })
+    return sections
+
+
+def _extract_segments(data_rows: list, col_idx: int) -> list[dict]:
+    segments = []
+    current = None
+    for day, row in data_rows:
+        name = _normalize_name(row[col_idx]) if col_idx < len(row) else None
+        if name and current and name.lower() == current["guest_name"].lower():
+            current["end_day"] = day
+        elif name:
+            if current:
+                segments.append(current)
+            current = {"start_day": day, "end_day": day, "guest_name": name}
+        else:
+            if current:
+                segments.append(current)
+            current = None
+    if current:
+        segments.append(current)
+    return segments
+
+
+def _parse_excel(file_bytes: bytes) -> tuple[list[dict], dict[str, float], dict[str, str], list[str]]:
+    """
+    Retourneert:
+    - reservations: lijst van reservation-dicts (incl. type_name)
+    - bike_types: {type_name: price} (alle gevonden types)
+    - bike_type_map: {bike_number: type_name} (fiets → type mapping)
+    - errors: lijst van foutmeldingen
+    """
+    import openpyxl
+    wb = openpyxl.load_workbook(io.BytesIO(file_bytes))
+    results = []
+    errors = []
+    bike_types: dict[str, float] = {}    # type_name → price
+    bike_type_map: dict[str, str] = {}   # bike_number → type_name
+    today = date.today()
+
+    for sheet_name in wb.sheetnames:
+        if sheet_name == "Blad2":
+            continue
+        ws = wb[sheet_name]
+        sections = _parse_sections(ws)
+
+        for section in sections:
+            year = section["year"]
+            month = section["month"]
+            col_map = section["col_map"]
+            data_rows = section["data_rows"]
+            type_name = section.get("type_name")
+            price = section.get("price")
+
+            # Registreer type en prijs (eerste keer gevonden wint)
+            if type_name:
+                if type_name not in bike_types:
+                    bike_types[type_name] = price if price is not None else 0.0
+                # Koppel fietsnummers aan type (eerste keer gevonden wint)
+                for bike_number in col_map.values():
+                    if bike_number not in bike_type_map:
+                        bike_type_map[bike_number] = type_name
+
+            for col_idx, bike_number in col_map.items():
+                segments = _extract_segments(data_rows, col_idx)
+                for seg in segments:
+                    try:
+                        start_date = date(year, month, int(seg["start_day"]))
+                        end_date = date(year, month, int(seg["end_day"]))
+                    except (ValueError, OverflowError) as e:
+                        errors.append(f"Ongeldige datum in {sheet_name}: {e}")
+                        continue
+                    num_days = (end_date - start_date).days + 1
+                    status = (
+                        BikeReservationStatus.completed
+                        if end_date < today
+                        else BikeReservationStatus.active
+                    )
+                    results.append({
+                        "bike_number": bike_number,
+                        "guest_name": seg["guest_name"],
+                        "start_date": start_date,
+                        "end_date": end_date,
+                        "num_days": num_days,
+                        "status": status,
+                        "type_name": type_name,
+                    })
+    return results, bike_types, bike_type_map, errors
+
+
+# ── Export helper ──────────────────────────────────────────────────────────────
+
+def _build_export_excel(reservations: list[dict]) -> bytes:
+    import openpyxl
+    from openpyxl.styles import Font, PatternFill, Alignment
+    from openpyxl.utils import get_column_letter
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = "Reserveringen"
+
+    headers = ["ID", "Gast", "Kamer", "Startdatum", "Einddatum",
+               "Dagen", "# Fietsen", "Fietstype", "Status", "Fietsnummers", "Notities"]
+    header_fill = PatternFill("solid", fgColor="1E3A5F")
+    header_font = Font(bold=True, color="FFFFFF")
+
+    for col_i, h in enumerate(headers, 1):
+        cell = ws.cell(row=1, column=col_i, value=h)
+        cell.fill = header_fill
+        cell.font = header_font
+        cell.alignment = Alignment(horizontal="center")
+
+    status_nl = {"active": "Actief", "completed": "Afgerond", "cancelled": "Geannuleerd"}
+
+    for row_i, res in enumerate(reservations, 2):
+        ws.cell(row=row_i, column=1, value=res["id"])
+        ws.cell(row=row_i, column=2, value=res["guest_name"])
+        ws.cell(row=row_i, column=3, value=res["guest_room"] or "")
+        ws.cell(row=row_i, column=4, value=res["start_date"])
+        ws.cell(row=row_i, column=5, value=res["end_date"])
+        ws.cell(row=row_i, column=6, value=res["num_days"])
+        ws.cell(row=row_i, column=7, value=res["num_bikes"])
+        ws.cell(row=row_i, column=8, value=res["bike_type_name"] or "")
+        ws.cell(row=row_i, column=9, value=status_nl.get(res["status"], res["status"]))
+        ws.cell(row=row_i, column=10, value=res["bike_numbers"] or "")
+        ws.cell(row=row_i, column=11, value=res["notes"] or "")
+        for col in (4, 5):
+            ws.cell(row=row_i, column=col).number_format = "DD-MM-YYYY"
+        if res["status"] == "completed":
+            fill = PatternFill("solid", fgColor="F0F9F0")
+        elif res["status"] == "cancelled":
+            fill = PatternFill("solid", fgColor="FFF0F0")
+        else:
+            fill = PatternFill("solid", fgColor="F0F4FF")
+        for col in range(1, len(headers) + 1):
+            ws.cell(row=row_i, column=col).fill = fill
+
+    col_widths = [8, 25, 10, 14, 14, 8, 10, 22, 14, 22, 35]
+    for i, w in enumerate(col_widths, 1):
+        ws.column_dimensions[get_column_letter(i)].width = w
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    return buf.read()
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────────────
+
+@router.post("/import-excel")
+async def import_excel(
+    user: RequireUser,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    if not user.is_admin:
+        raise HTTPException(403, "Alleen admins kunnen Excel importeren")
+    if not file.filename or not file.filename.endswith(".xlsx"):
+        raise HTTPException(400, "Alleen .xlsx bestanden zijn toegestaan")
+
+    contents = await file.read()
+    parsed, excel_types, bike_type_map, errors = await asyncio.to_thread(_parse_excel, contents)
+
+    # ── Maak / zoek BikeType records ──────────────────────────────────────────
+    db_types: dict[str, BikeType] = {}
+
+    for type_name, price in excel_types.items():
+        result = await db.execute(select(BikeType).where(BikeType.name == type_name))
+        bt = result.scalar_one_or_none()
+        if bt:
+            # Prijs bijwerken als die beter is
+            if price and bt.price_per_day != price:
+                bt.price_per_day = price
+        else:
+            bt = BikeType(name=type_name, price_per_day=price or 0.0)
+            db.add(bt)
+            await db.flush()
+        db_types[type_name] = bt
+
+    # Standaard fallback type (voor fietsen zonder type in Excel)
+    default_type: BikeType | None = None
+
+    # ── Maak / zoek Bike records ──────────────────────────────────────────────
+    bikes_result = await db.execute(select(Bike))
+    bike_lookup: dict[str, Bike] = {b.number: b for b in bikes_result.scalars().all()}
+
+    bikes_created = 0
+    types_created = len([t for t in excel_types if t not in db_types])
+
+    # ── Deduplicatie: bestaande (bike_id, start, end) ─────────────────────────
+    existing_result = await db.execute(
+        select(BikeReservationBike.bike_id, BikeReservation.start_date, BikeReservation.end_date)
+        .join(BikeReservation, BikeReservation.id == BikeReservationBike.reservation_id)
+    )
+    existing_keys: set[tuple] = {
+        (row.bike_id, row.start_date, row.end_date) for row in existing_result
+    }
+
+    max_id_result = await db.execute(select(func.max(BikeReservation.id)))
+    next_id = (max_id_result.scalar() or 0) + 1
+
+    imported = 0
+    skipped_dup = 0
+
+    for entry in parsed:
+        bike_number = entry["bike_number"]
+        bike = bike_lookup.get(bike_number)
+
+        if not bike:
+            # Zoek het juiste type op basis van de Excel-mapping
+            type_name = bike_type_map.get(bike_number)
+            if type_name and type_name in db_types:
+                bt = db_types[type_name]
+            else:
+                # Fallback: gebruik eerste beschikbare type of maak standaard aan
+                if default_type is None:
+                    result = await db.execute(select(BikeType).limit(1))
+                    default_type = result.scalar_one_or_none()
+                    if not default_type:
+                        default_type = BikeType(name="Standaard", price_per_day=0.0)
+                        db.add(default_type)
+                        await db.flush()
+                bt = default_type
+
+            bike = Bike(
+                number=bike_number,
+                name=f"Fiets {bike_number}",
+                type_id=bt.id,
+                is_reserve=False,
+                status=BikeStatus.available,
+                total_rental_days=0,
+            )
+            db.add(bike)
+            await db.flush()
+            bike_lookup[bike_number] = bike
+            bikes_created += 1
+        else:
+            # Update type van bestaande fiets als Excel een type heeft
+            type_name = bike_type_map.get(bike_number)
+            if type_name and type_name in db_types:
+                bt = db_types[type_name]
+                if bike.type_id != bt.id:
+                    bike.type_id = bt.id
+
+        dedup_key = (bike.id, entry["start_date"], entry["end_date"])
+        if dedup_key in existing_keys:
+            skipped_dup += 1
+            continue
+
+        res = BikeReservation(
+            id=next_id,
+            guest_name=entry["guest_name"],
+            guest_room=None,
+            start_date=entry["start_date"],
+            end_date=entry["end_date"],
+            num_days=entry["num_days"],
+            num_bikes=1,
+            bike_type_id=bike.type_id,
+            status=entry["status"],
+            notes="Geïmporteerd uit Excel",
+        )
+        db.add(res)
+        await db.flush()
+        db.add(BikeReservationBike(reservation_id=res.id, bike_id=bike.id))
+        bike.total_rental_days += entry["num_days"]
+        existing_keys.add(dedup_key)
+        next_id += 1
+        imported += 1
+
+    # Counter bijwerken
+    counter = await db.get(SystemSetting, "bike_reservation_counter")
+    if counter:
+        counter.value = str(next_id)
+    else:
+        db.add(SystemSetting(key="bike_reservation_counter", value=str(next_id)))
+
+    await db.commit()
+
+    return {
+        "ok": True,
+        "imported": imported,
+        "skipped": skipped_dup,
+        "skipped_duplicates": skipped_dup,
+        "skipped_no_bike": 0,
+        "bikes_created": bikes_created,
+        "types_found": list(excel_types.keys()),
+        "errors": errors[:10],
+    }
+
+
+@router.get("/export-excel")
+async def export_excel(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    if not user.is_admin:
+        raise HTTPException(403, "Alleen admins kunnen exporteren")
+
+    res_result = await db.execute(
+        select(BikeReservation).order_by(BikeReservation.start_date.desc())
+    )
+    reservations = res_result.scalars().all()
+
+    types_result = await db.execute(select(BikeType))
+    type_lookup: dict[int, str] = {t.id: t.name for t in types_result.scalars().all()}
+
+    bikes_res = await db.execute(select(Bike))
+    bike_lookup_id: dict[int, str] = {b.id: b.number for b in bikes_res.scalars().all()}
+
+    links_result = await db.execute(select(BikeReservationBike))
+    bike_links: dict[int, list[int]] = {}
+    for link in links_result.scalars().all():
+        bike_links.setdefault(link.reservation_id, []).append(link.bike_id)
+
+    rows = []
+    for r in reservations:
+        linked_bikes = bike_links.get(r.id, [])
+        bike_numbers = ", ".join(f"#{bike_lookup_id[bid]}" for bid in linked_bikes if bid in bike_lookup_id)
+        rows.append({
+            "id": r.id,
+            "guest_name": r.guest_name,
+            "guest_room": r.guest_room,
+            "start_date": r.start_date,
+            "end_date": r.end_date,
+            "num_days": r.num_days,
+            "num_bikes": r.num_bikes,
+            "bike_type_name": type_lookup.get(r.bike_type_id) if r.bike_type_id else None,
+            "status": r.status.value if hasattr(r.status, "value") else r.status,
+            "bike_numbers": bike_numbers,
+            "notes": r.notes,
+        })
+
+    excel_bytes = await asyncio.to_thread(_build_export_excel, rows)
+    today_str = date.today().strftime("%Y-%m-%d")
+    return StreamingResponse(
+        io.BytesIO(excel_bytes),
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="fietsreserveringen_{today_str}.xlsx"'},
+    )
+
+
+@router.post("/rebalance")
+async def rebalance_bikes(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    dry_run: bool = False,
+):
+    """
+    Herbalanceer toekomstige (niet-gestarte) reserveringen voor betere rotatie.
+    Wijs fietsen opnieuw toe op basis van verhuurdagen (minste eerst).
+    Met dry_run=true wordt niets opgeslagen, alleen het preview-resultaat teruggegeven.
+    """
+    if not user.is_admin:
+        raise HTTPException(403, "Alleen admins")
+
+    today = date.today()
+
+    # Toekomstige reserveringen die nog niet gestart zijn
+    res_result = await db.execute(
+        select(BikeReservation)
+        .options(selectinload(BikeReservation.reservation_bikes))
+        .where(
+            BikeReservation.status == BikeReservationStatus.active,
+            BikeReservation.start_date > today,
+        )
+        .order_by(BikeReservation.start_date)
+    )
+    future_res = res_result.scalars().all()
+
+    if not future_res:
+        return {"ok": True, "changed": 0, "total_future": 0}
+
+    # Alle beschikbare fietsen
+    bikes_result = await db.execute(
+        select(Bike).where(Bike.status == BikeStatus.available)
+    )
+    all_bikes = list(bikes_result.scalars().all())
+    bike_by_id = {b.id: b for b in all_bikes}
+
+    # Sla originele toewijzingen op vóór verwijdering
+    original: dict[int, set[int]] = {
+        res.id: {rb.bike_id for rb in res.reservation_bikes}
+        for res in future_res
+    }
+
+    # Trek bijdragen van toekomstige reserveringen af van total_rental_days (baseline)
+    for res in future_res:
+        for rb in res.reservation_bikes:
+            if rb.bike_id in bike_by_id:
+                bike_by_id[rb.bike_id].total_rental_days = max(
+                    0, bike_by_id[rb.bike_id].total_rental_days - res.num_days
+                )
+        for rb in list(res.reservation_bikes):
+            await db.delete(rb)
+    await db.flush()
+
+    # In-memory schema voor conflictdetectie tijdens herbalancering
+    schedule: dict[int, list[tuple[date, date]]] = {b.id: [] for b in all_bikes}
+
+    # Voeg lopende reserveringen toe aan schema
+    current_result = await db.execute(
+        select(BikeReservationBike.bike_id, BikeReservation.start_date, BikeReservation.end_date)
+        .join(BikeReservation, BikeReservation.id == BikeReservationBike.reservation_id)
+        .where(
+            BikeReservation.status == BikeReservationStatus.active,
+            BikeReservation.start_date <= today,
+        )
+    )
+    for row in current_result:
+        if row.bike_id in schedule:
+            schedule[row.bike_id].append((row.start_date, row.end_date))
+
+    changed = 0
+
+    for res in future_res:
+        # Kandidaten: juiste type, gesorteerd op verhuurdagen (rotatie)
+        candidates = [b for b in all_bikes if b.type_id == res.bike_type_id]
+        candidates.sort(key=lambda b: b.total_rental_days)
+
+        # Filter conflicten
+        available = []
+        for bike in candidates:
+            conflict = any(
+                s <= res.end_date and e >= res.start_date
+                for s, e in schedule.get(bike.id, [])
+            )
+            if not conflict:
+                available.append(bike)
+            if len(available) >= res.num_bikes:
+                break
+
+        assigned = available[:res.num_bikes]
+        new_ids = {b.id for b in assigned}
+
+        for bike in assigned:
+            db.add(BikeReservationBike(reservation_id=res.id, bike_id=bike.id))
+            bike.total_rental_days += res.num_days
+            schedule[bike.id].append((res.start_date, res.end_date))
+
+        if new_ids != original[res.id]:
+            changed += 1
+
+    if dry_run:
+        # Sla de geprojecteerde verdeling op per fiets voordat we terugrollen
+        projected_days = {b.id: b.total_rental_days for b in all_bikes}
+        await db.rollback()
+        return {
+            "ok": True,
+            "changed": changed,
+            "total_future": len(future_res),
+            "dry_run": dry_run,
+            "projected_days": projected_days,
+        }
+    else:
+        await db.commit()
+    return {"ok": True, "changed": changed, "total_future": len(future_res), "dry_run": dry_run}
+
+
+# ── Database reset ─────────────────────────────────────────────────────────────
+
+@router.delete("/reset")
+async def reset_bikes_database(
+    current_user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Verwijdert alle fietsdata: reserveringen, fietsen en fietstypes. Alleen voor admins."""
+    if current_user.role != "admin":
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen de fietsendatabase resetten.")
+
+    # Verwijder in volgorde van afhankelijkheden
+    await db.execute(sa_delete(BikeLog))
+    await db.execute(sa_delete(BikeMaintenanceRecord))
+    await db.execute(sa_delete(BikeReservationBike))
+    await db.execute(sa_delete(BikeReservation))
+    await db.execute(sa_delete(Bike))
+    await db.execute(sa_delete(BikeType))
+    await db.commit()
+
+    return {"ok": True, "message": "Alle fietsdata is verwijderd."}

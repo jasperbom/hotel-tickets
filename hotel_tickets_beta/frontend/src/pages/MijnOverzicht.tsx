@@ -1,0 +1,757 @@
+import { useEffect, useState, useRef, type CSSProperties, type ReactNode } from "react";
+import { Link, useNavigate } from "react-router-dom";
+import { format } from "date-fns";
+import { nl } from "date-fns/locale";
+import api, { ticketApi, locationApi, userApi, recurringApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
+import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
+import { OverviewRow, type ExtraRoom } from "../components/OverviewRow";
+import {
+  DndContext,
+  PointerSensor,
+  TouchSensor,
+  useSensor,
+  useSensors,
+  closestCenter,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext,
+  arrayMove,
+  verticalListSortingStrategy,
+  useSortable,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+interface Overview {
+  user: {
+    ha_user_id: string;
+    display_name: string;
+    role: Role;
+    department: Category | null;
+  };
+  stats: {
+    my_open: number;
+    team_open: number;
+    urgent: number;
+  };
+  urgent_tickets: Ticket[];
+  my_tickets: Ticket[];
+  available_tickets: Ticket[];
+  today_recurring: UpcomingRecurring[];
+  upcoming_recurring: UpcomingRecurring[];
+}
+
+const ROLE_LABELS: Record<Role, string> = {
+  admin: "Beheerder",
+  supervisor: "Supervisor",
+  employee: "Medewerker",
+};
+
+const DEPT_LABELS: Record<Category, string> = {
+  technical: "TD",
+  housekeeping: "Huishouding",
+  reception: "Receptie",
+  service: "Bediening",
+  kitchen: "Keuken",
+  sales: "Sales",
+  garden: "Tuin",
+};
+
+const ALL_CATEGORIES: Category[] = ["technical", "housekeeping", "reception", "service", "kitchen", "sales", "garden"];
+
+const PRIORITY_ORDER: Record<string, number> = {
+  urgent: 0,
+  high: 1,
+  medium: 2,
+  low: 3,
+};
+
+function greeting(): string {
+  const h = new Date().getHours();
+  if (h < 12) return "Goedemorgen";
+  if (h < 18) return "Goedemiddag";
+  return "Goedenavond";
+}
+
+export default function MijnOverzicht() {
+  const [overview, setOverview] = useState<Overview | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [locations, setLocations] = useState<Record<string, string>>({});
+  const [users, setUsers] = useState<Record<string, string>>({});
+  const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
+  const [assignedMe, setAssignedMe] = useState(() => localStorage.getItem("ht_assigned_me") === "1");
+  const [showAllToday, setShowAllToday] = useState(() => localStorage.getItem("ht_show_all_today") === "1");
+  const [deptFilter, setDeptFilter] = useState<Category | "">(() => {
+    const saved = localStorage.getItem("ht_dept_filter");
+    if (saved && (ALL_CATEGORIES as string[]).includes(saved)) return saved as Category;
+    return "";
+  });
+  const [showUpcoming, setShowUpcoming] = useState(() => localStorage.getItem("ht_show_upcoming") === "1");
+  // Standaard open; alleen expliciet ingeklapt onthouden
+  const [showAvailable, setShowAvailable] = useState(() => localStorage.getItem("ht_show_available") !== "0");
+  const [showTodayTasks, setShowTodayTasks] = useState(() => localStorage.getItem("ht_show_today") !== "0");
+  const [showMyTickets, setShowMyTickets] = useState(() => localStorage.getItem("ht_show_mine") !== "0");
+  // Stil verversen (filterwissel/achtergrond): inhoud dimmen i.p.v. fullscreen spinner
+  const [refreshing, setRefreshing] = useState(false);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_upcoming", showUpcoming ? "1" : "0");
+  }, [showUpcoming]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_available", showAvailable ? "1" : "0");
+  }, [showAvailable]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_today", showTodayTasks ? "1" : "0");
+  }, [showTodayTasks]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_mine", showMyTickets ? "1" : "0");
+  }, [showMyTickets]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_show_all_today", showAllToday ? "1" : "0");
+  }, [showAllToday]);
+
+  useEffect(() => {
+    localStorage.setItem("ht_assigned_me", assignedMe ? "1" : "0");
+  }, [assignedMe]);
+  const todaySectionRef = useRef<HTMLElement>(null);
+  const navigate = useNavigate();
+
+  async function loadKeycards(tickets: Ticket[], recurring: UpcomingRecurring[], locs: Record<string, string>) {
+    const ticketLocs = tickets.map(t => t.location_id).filter(Boolean) as string[];
+    const recurringLocs = recurring.map(t => t.location_id).filter(Boolean) as string[];
+    const roomsItems = recurring
+      .filter(t => t.subtask_mode === "rooms")
+      .flatMap(t => t.subtask_items ?? []);
+    const areaIds = [...new Set([...ticketLocs, ...recurringLocs, ...roomsItems])];
+    const results = await Promise.allSettled(
+      areaIds.map(id => locationApi.keycard(id).then(r => ({ id, occupied: r.data.found ? r.data.occupied : null })))
+    );
+    const map: Record<string, boolean | null> = {};
+    results.forEach(r => { if (r.status === "fulfilled") map[r.value.id] = r.value.occupied; });
+    setKeycards(map);
+    setLocations(locs);
+  }
+
+  async function loadData(dept?: Category | "") {
+    // "all" = expliciet alle afdelingen — ook voor gewone medewerkers
+    const params = `?department=${dept || "all"}`;
+    const [ov, locs, usrs] = await Promise.all([
+      api.get<Overview>(`/users/me/overview${params}`),
+      locationApi.list(),
+      userApi.list(),
+    ]);
+    setOverview(ov.data);
+    setUsers(Object.fromEntries(usrs.data.map((u) => [u.ha_user_id, u.display_name])));
+    const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
+    const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
+    const allRecurring = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
+    loadKeycards(allTickets, allRecurring, locMap);
+  }
+
+  useEffect(() => {
+    loadData(deptFilter).finally(() => setLoading(false));
+  }, []);
+
+  // Stil verversen: wanneer de app weer zichtbaar wordt en elke minuut,
+  // zodat een pagina die de hele dienst openstaat actueel blijft.
+  useEffect(() => {
+    const refresh = () => {
+      if (document.visibilityState !== "visible") return;
+      loadData(deptFilter).catch(() => {});
+    };
+    const id = window.setInterval(refresh, 60_000);
+    document.addEventListener("visibilitychange", refresh);
+    return () => {
+      window.clearInterval(id);
+      document.removeEventListener("visibilitychange", refresh);
+    };
+  }, [deptFilter]);
+
+  function changeDeptFilter(value: Category | "") {
+    setDeptFilter(value);
+    localStorage.setItem("ht_dept_filter", value);
+    setRefreshing(true);
+    loadData(value).finally(() => setRefreshing(false));
+  }
+
+  async function claimTicket(ticketId: string) {
+    await ticketApi.claim(ticketId);
+    await loadData(deptFilter);
+  }
+
+  async function closeTicket(ticketId: string, ticketTitle: string) {
+    if (!window.confirm(`Ticket "${ticketTitle}" sluiten?`)) return;
+    await ticketApi.update(ticketId, { status: "closed" });
+    await loadData(deptFilter);
+  }
+
+  async function togglePin(ticket: Ticket) {
+    if (ticket.pinned) {
+      await ticketApi.unpin(ticket.id);
+    } else {
+      await ticketApi.pin(ticket.id);
+    }
+    await loadData(deptFilter);
+  }
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
+  );
+
+  function handleMyTicketsDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    if (!overview) return;
+    const tickets = overview.my_tickets;
+    const activeTicket = tickets.find((t) => t.id === active.id);
+    const overTicket = tickets.find((t) => t.id === over.id);
+    if (!activeTicket || !overTicket) return;
+    // Alleen herschikken binnen dezelfde prioriteit én pin-status.
+    if (activeTicket.priority !== overTicket.priority) return;
+    if (!!activeTicket.pinned !== !!overTicket.pinned) return;
+    const oldIndex = tickets.findIndex((t) => t.id === active.id);
+    const newIndex = tickets.findIndex((t) => t.id === over.id);
+    if (oldIndex < 0 || newIndex < 0) return;
+    const newOrder = arrayMove(tickets, oldIndex, newIndex);
+    setOverview({ ...overview, my_tickets: newOrder });
+    ticketApi.reorder(newOrder.map((t) => t.id)).catch(() => loadData(deptFilter));
+  }
+
+  async function completeRecurring(taskId: string, taskTitle: string) {
+    if (!window.confirm(`Taak "${taskTitle}" afronden?`)) return;
+    await recurringApi.complete(taskId);
+    await loadData(deptFilter);
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+      </div>
+    );
+  }
+
+  if (!overview) return null;
+
+  const { user, stats, urgent_tickets = [], my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
+  const isManager = user.role === "admin" || user.role === "supervisor";
+  // Iedereen ziet alles, maar afvinken/claimen kan alleen binnen de eigen afdeling
+  const canActOn = (category: Category) => isManager || user.department === category;
+  const visibleToday = showAllToday ? today_recurring : today_recurring.slice(0, 3);
+
+  // Filter "Toegewezen aan mij": urgente tickets beperken tot eigen tickets en
+  // de sectie met niet-toegewezen tickets verbergen. Herhalende taken zijn
+  // niet persoonsgebonden en blijven zichtbaar.
+  const visibleUrgent = assignedMe ? urgent_tickets.filter((t) => t.assigned_to === user.ha_user_id) : urgent_tickets;
+  const visibleAvailable = assignedMe ? [] : available_tickets;
+
+  return (
+    <div className={`space-y-6 transition-opacity ${refreshing ? "opacity-60" : ""}`}>
+
+      {/* Kop: begroeting + persoonlijke statistieken in één blok */}
+      <div className="bg-gradient-to-r from-blue-700 to-blue-500 rounded-2xl px-5 py-4 text-white shadow">
+        <div className="flex items-baseline justify-between gap-x-3 gap-y-0.5 flex-wrap">
+          <h1 className="text-lg font-bold">
+            {greeting()}, {user.display_name}
+          </h1>
+          <p className="text-blue-200 text-xs">
+            {format(new Date(), "EEEE d MMMM", { locale: nl })}
+            {" · "}
+            {ROLE_LABELS[user.role]}
+            {user.department ? ` · ${DEPT_LABELS[user.department]}` : ""}
+          </p>
+        </div>
+        <div className="grid grid-cols-3 gap-2 mt-3">
+          <HeaderStat
+            value={stats.my_open}
+            label="Mijn openstaand"
+            emptyLabel="Niets te doen"
+            onClick={() => navigate("/tickets?status=open,in_progress&assigned=me")}
+          />
+          <HeaderStat
+            value={stats.urgent}
+            label="Urgent"
+            urgent={stats.urgent > 0}
+            onClick={() => navigate("/tickets?priority=urgent&status=open,in_progress")}
+          />
+          <HeaderStat
+            value={today_recurring.length}
+            label="Herhalend vandaag"
+            emptyLabel="Geen taken"
+            onClick={() => todaySectionRef.current?.scrollIntoView({ behavior: "smooth" })}
+          />
+        </div>
+      </div>
+
+      {/* Afdelingsfilter — één horizontaal scrollbare regel */}
+      <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4">
+        <button
+          onClick={() => setAssignedMe(!assignedMe)}
+          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+            assignedMe
+              ? "bg-purple-600 text-white border-purple-600"
+              : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
+          }`}
+          title="Toon alleen tickets die aan jou zijn toegewezen"
+        >
+          {assignedMe && <span className="text-xs mr-1">✓</span>}
+          👤 Aan mij
+        </button>
+        {([["", "Alle afdelingen"], ...ALL_CATEGORIES.map((c) => [c, DEPT_LABELS[c]] as [Category, string])] as Array<[Category | "", string]>).map(([val, label]) => (
+          <button
+            key={val}
+            onClick={() => changeDeptFilter(val as Category | "")}
+            className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
+              deptFilter === val
+                ? "bg-blue-600 text-white border-blue-600"
+                : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
+            }`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      {/* Urgente tickets — bewust niet inklapbaar */}
+      {visibleUrgent.length > 0 && (
+        <section>
+          <SectionHeader
+            icon="🚨"
+            title="Urgente tickets"
+            titleClass="text-red-700"
+            count={visibleUrgent.length}
+            badgeClass="bg-red-600 text-white"
+          />
+          <div className="space-y-2">
+            {visibleUrgent.map((t) => (
+              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} assigneeName={t.assigned_to ? users[t.assigned_to] || t.assigned_to : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Herhalende taken vandaag */}
+      {today_recurring.length > 0 && (
+        <section ref={todaySectionRef}>
+          <SectionHeader
+            icon="🔁"
+            title="Herhalende taken vandaag"
+            count={today_recurring.length}
+            badgeClass="bg-purple-600 text-white"
+            collapsed={!showTodayTasks}
+            onToggle={() => setShowTodayTasks(!showTodayTasks)}
+          />
+          {showTodayTasks && (
+            <>
+              <div className="space-y-2">
+                {visibleToday.map((t) => (
+                  <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
+                ))}
+              </div>
+              {!showAllToday && today_recurring.length > 3 && (
+                <button
+                  onClick={() => setShowAllToday(true)}
+                  className="mt-2 text-sm text-blue-600 hover:underline w-full text-center py-1"
+                >
+                  +{today_recurring.length - 3} meer tonen
+                </button>
+              )}
+              {showAllToday && today_recurring.length > 3 && (
+                <button
+                  onClick={() => setShowAllToday(false)}
+                  className="mt-2 text-sm text-gray-500 hover:text-gray-700 hover:underline w-full text-center py-1"
+                >
+                  ▲ Minder tonen
+                </button>
+              )}
+            </>
+          )}
+        </section>
+      )}
+
+      {/* Mijn tickets */}
+      <section>
+        <SectionHeader
+          icon="🎫"
+          title="Mijn openstaande tickets"
+          count={my_tickets.length}
+          badgeClass="bg-blue-100 text-blue-700"
+          collapsed={!showMyTickets}
+          onToggle={() => setShowMyTickets(!showMyTickets)}
+          action={
+            <Link to="/tickets?assigned=me" className="text-sm text-blue-600 hover:underline">
+              Alle →
+            </Link>
+          }
+        />
+        {showMyTickets && (
+          my_tickets.length === 0 ? (
+            <div className="card py-8 text-center text-gray-400">
+              <p className="text-2xl mb-1">✓</p>
+              <p className="text-sm">Geen openstaande tickets. Goed werk!</p>
+            </div>
+          ) : (
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMyTicketsDragEnd}>
+              <SortableContext items={my_tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
+                <div className="space-y-2">
+                  {my_tickets.map((t) => (
+                    <SortableMyTicketRow
+                      key={t.id}
+                      ticket={t}
+                      locationName={t.location_id ? locations[t.location_id] : undefined}
+                      occupied={t.location_id ? keycards[t.location_id] : undefined}
+                      onClose={() => closeTicket(t.id, t.title)}
+                      onTogglePin={() => togglePin(t)}
+                    />
+                  ))}
+                </div>
+              </SortableContext>
+            </DndContext>
+          )
+        )}
+      </section>
+
+      {/* Beschikbaar om op te pakken */}
+      {visibleAvailable.length > 0 && (
+        <section>
+          <SectionHeader
+            icon="🎫"
+            title="Beschikbaar om op te pakken"
+            count={visibleAvailable.length}
+            badgeClass="bg-blue-100 text-blue-700"
+            collapsed={!showAvailable}
+            onToggle={() => setShowAvailable(!showAvailable)}
+            action={
+              <Link to="/tickets?status=open" className="text-sm text-blue-600 hover:underline">
+                Alle open →
+              </Link>
+            }
+          />
+          {showAvailable && (
+            <div className="space-y-2">
+              {visibleAvailable.map((t) => (
+                <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={canActOn(t.category) ? () => claimTicket(t.id) : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* Aankomende herhalende taken */}
+      {upcoming_recurring.length > 0 && (
+        <section>
+          <SectionHeader
+            icon="🔁"
+            title="Aankomende taken"
+            count={upcoming_recurring.length}
+            badgeClass="bg-purple-100 text-purple-700"
+            collapsed={!showUpcoming}
+            onToggle={() => setShowUpcoming(!showUpcoming)}
+            action={
+              <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
+            }
+          />
+          {showUpcoming && (
+            <div className="space-y-2">
+              {upcoming_recurring.map((t) => (
+                <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+    </div>
+  );
+}
+
+function HeaderStat({
+  value, label, emptyLabel, urgent = false, onClick,
+}: {
+  value: number;
+  label: string;
+  emptyLabel?: string;
+  urgent?: boolean;
+  onClick?: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      className={`rounded-xl py-2 px-1 text-center transition-colors ${
+        urgent ? "bg-red-500/90 hover:bg-red-500" : "bg-white/15 hover:bg-white/25"
+      }`}
+    >
+      <p className={`text-2xl font-bold leading-tight ${urgent ? "animate-pulse" : ""}`}>{value}</p>
+      <p className={`text-[11px] font-medium leading-tight mt-0.5 ${urgent ? "text-red-100" : "text-blue-100"}`}>
+        {value === 0 && emptyLabel ? emptyLabel : label}
+      </p>
+    </button>
+  );
+}
+
+/** Uniforme sectiekop: icoon + titel + teller, optioneel inklapbaar en met actielink rechts. */
+function SectionHeader({
+  icon, title, titleClass = "text-gray-900", count, badgeClass = "bg-gray-100 text-gray-600", collapsed, onToggle, action,
+}: {
+  icon: string;
+  title: string;
+  titleClass?: string;
+  count?: number;
+  badgeClass?: string;
+  collapsed?: boolean;
+  onToggle?: () => void;
+  action?: ReactNode;
+}) {
+  const inner = (
+    <>
+      <span className="text-lg">{icon}</span>
+      <h2 className={`font-semibold ${titleClass}`}>{title}</h2>
+      {count !== undefined && (
+        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${badgeClass}`}>{count}</span>
+      )}
+      {onToggle && <span className="text-gray-400 text-sm">{collapsed ? "▼" : "▲"}</span>}
+    </>
+  );
+  return (
+    <div className="flex items-center justify-between mb-3">
+      {onToggle ? (
+        <button
+          onClick={onToggle}
+          className="flex items-center gap-2"
+          aria-expanded={!collapsed}
+          title={collapsed ? "Uitklappen" : "Inklappen"}
+        >
+          {inner}
+        </button>
+      ) : (
+        <div className="flex items-center gap-2">{inner}</div>
+      )}
+      {action}
+    </div>
+  );
+}
+
+function formatNextRun(dateStr: string): string {
+  const date = parseUTC(dateStr);
+  const now = new Date();
+  const diffMs = date.getTime() - now.getTime();
+  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return "Vandaag";
+  if (diffDays === 1) return "Morgen";
+  if (diffDays < 7) return `Over ${diffDays} dagen`;
+  return format(date, "dd-MM-yyyy", { locale: nl });
+}
+
+function ticketSubtaskCount(ticket: Ticket): { done: number; total: number } | undefined {
+  if (!ticket.subtasks || ticket.subtasks.length === 0) return undefined;
+  return {
+    done: ticket.subtasks.filter((s) => s.done).length,
+    total: ticket.subtasks.length,
+  };
+}
+
+function roomsModeExtras(
+  task: UpcomingRecurring,
+  locations?: Record<string, string>,
+  keycards?: Record<string, boolean | null>,
+): { main?: { name: string; occupied?: boolean | null }; extras: ExtraRoom[] } {
+  const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
+  if (!isRoomsMode) return { extras: [] };
+  const ids = task.subtask_items!;
+  const [firstId, ...rest] = ids;
+  return {
+    main: { name: locations?.[firstId] ?? firstId, occupied: keycards?.[firstId] },
+    extras: rest.map((id) => ({ id, name: locations?.[id] ?? id, occupied: keycards?.[id] })),
+  };
+}
+
+function MyTicketRow({ ticket, locationName, occupied, onClose, onTogglePin }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void; onTogglePin: () => void }) {
+  return (
+    <OverviewRow
+      to={`/tickets/${ticket.id}`}
+      priority={ticket.priority}
+      roomName={locationName}
+      occupied={occupied}
+      title={ticket.title}
+      statusSlot={<StatusBadge status={ticket.status} />}
+      prioritySlot={<PriorityBadge priority={ticket.priority} />}
+      dateText={format(parseUTC(ticket.created_at), "dd-MM", { locale: nl })}
+      subtasks={ticketSubtaskCount(ticket)}
+      photoCount={ticket.photos?.length}
+      commentCount={ticket.comment_count}
+      onComplete={onClose}
+      completeTitle="Ticket sluiten"
+      pinned={ticket.pinned}
+      onTogglePin={onTogglePin}
+    />
+  );
+}
+
+function SortableMyTicketRow(props: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void; onTogglePin: () => void }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.ticket.id });
+  const style: CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.6 : 1,
+    zIndex: isDragging ? 10 : undefined,
+    position: "relative",
+  };
+  return (
+    <div ref={setNodeRef} style={style} className="flex items-stretch gap-1">
+      <button
+        {...attributes}
+        {...listeners}
+        type="button"
+        aria-label="Versleep om volgorde te wijzigen"
+        title="Versleep om volgorde te wijzigen"
+        className="shrink-0 cursor-grab active:cursor-grabbing touch-none w-5 flex items-center justify-center text-gray-300 hover:text-gray-500 select-none"
+      >
+        <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
+          <circle cx="2.5" cy="3" r="1.2" />
+          <circle cx="2.5" cy="8" r="1.2" />
+          <circle cx="2.5" cy="13" r="1.2" />
+          <circle cx="7.5" cy="3" r="1.2" />
+          <circle cx="7.5" cy="8" r="1.2" />
+          <circle cx="7.5" cy="13" r="1.2" />
+        </svg>
+      </button>
+      <div className="flex-1 min-w-0">
+        <MyTicketRow {...props} />
+      </div>
+    </div>
+  );
+}
+
+function UrgentTicketRow({ ticket, locationName, occupied, assigneeName, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; assigneeName?: string; onClose?: () => void }) {
+  return (
+    <OverviewRow
+      to={`/tickets/${ticket.id}`}
+      priority="urgent"
+      borderOverride="border-l-red-500"
+      containerClassName="bg-red-50"
+      roomName={locationName}
+      occupied={occupied}
+      titleIcon="🚨"
+      title={ticket.title}
+      assigneeName={assigneeName}
+      titleClassName="font-semibold text-red-900"
+      statusSlot={<StatusBadge status={ticket.status} />}
+      prioritySlot={<PriorityBadge priority={ticket.priority} />}
+      dateText={format(parseUTC(ticket.created_at), "dd-MM HH:mm", { locale: nl })}
+      dateClassName="text-red-400"
+      subtasks={ticketSubtaskCount(ticket)}
+      photoCount={ticket.photos?.length}
+      commentCount={ticket.comment_count}
+      onComplete={onClose}
+      completeTitle="Ticket sluiten"
+    />
+  );
+}
+
+function AvailableTicketRow({ ticket, locationName, occupied, onClaim, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim?: () => void; onClose?: () => void }) {
+  const claimBtn = onClaim ? (
+    <button
+      onClick={(e) => { e.preventDefault(); onClaim(); }}
+      className="text-sm text-blue-600 font-medium border border-blue-200 rounded-lg px-3 py-1 hover:bg-blue-50 transition-colors"
+    >
+      Pakken
+    </button>
+  ) : undefined;
+  return (
+    <OverviewRow
+      to={`/tickets/${ticket.id}`}
+      priority={ticket.priority}
+      roomName={locationName}
+      occupied={occupied}
+      title={ticket.title}
+      statusSlot={<StatusBadge status={ticket.status} />}
+      prioritySlot={<PriorityBadge priority={ticket.priority} />}
+      dateText={format(parseUTC(ticket.created_at), "dd-MM", { locale: nl })}
+      subtasks={ticketSubtaskCount(ticket)}
+      photoCount={ticket.photos?.length}
+      commentCount={ticket.comment_count}
+      actionSlot={claimBtn}
+      onComplete={onClose}
+      completeTitle="Ticket sluiten"
+    />
+  );
+}
+
+function RecurringTaskRow({ task, locationName, occupied, keycards, locations, onComplete }: {
+  task: UpcomingRecurring;
+  locationName?: string;
+  occupied?: boolean | null;
+  keycards?: Record<string, boolean | null>;
+  locations?: Record<string, string>;
+  onComplete?: () => void;
+}) {
+  const nextRunDate = parseUTC(task.next_run);
+  const isOverdue = nextRunDate < new Date();
+  const rooms = roomsModeExtras(task, locations, keycards);
+  const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
+
+  const statusChip = isOverdue ? (
+    <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-lg">Verlopen</span>
+  ) : (
+    <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-lg">Vandaag</span>
+  );
+
+  return (
+    <OverviewRow
+      to={`/recurring/${task.id}`}
+      priority={task.priority}
+      borderOverride={isOverdue ? "border-l-red-500" : "border-l-purple-400"}
+      containerClassName={isOverdue ? "bg-red-50" : ""}
+      roomName={displayRoom?.name}
+      occupied={displayRoom?.occupied}
+      extraRooms={rooms.extras}
+      titleIcon="🔁"
+      title={task.title}
+      titleClassName={isOverdue ? "text-red-900" : ""}
+      statusSlot={statusChip}
+      prioritySlot={<PriorityBadge priority={task.priority} />}
+      dateText={isOverdue ? format(nextRunDate, "HH:mm") : ""}
+      dateClassName={isOverdue ? "text-red-500" : "text-gray-400"}
+      subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
+      onComplete={onComplete}
+      completeTitle="Taak afronden"
+    />
+  );
+}
+
+function UpcomingRecurringRow({ task, locationName, occupied, keycards, locations, onComplete }: {
+  task: UpcomingRecurring;
+  locationName?: string;
+  occupied?: boolean | null;
+  keycards?: Record<string, boolean | null>;
+  locations?: Record<string, string>;
+  onComplete?: () => void;
+}) {
+  const rooms = roomsModeExtras(task, locations, keycards);
+  const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
+  const herhalendBadge = <span className="badge bg-purple-100 text-purple-700">Herhalend</span>;
+
+  return (
+    <OverviewRow
+      to={`/recurring/${task.id}`}
+      priority={task.priority}
+      borderOverride="border-l-purple-400"
+      roomName={displayRoom?.name}
+      occupied={displayRoom?.occupied}
+      extraRooms={rooms.extras}
+      titleIcon="🔁"
+      title={task.title}
+      statusSlot={herhalendBadge}
+      prioritySlot={<PriorityBadge priority={task.priority} />}
+      dateText={formatNextRun(task.next_run)}
+      dateClassName="text-gray-500"
+      subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
+      onComplete={onComplete}
+      completeTitle="Taak afronden"
+    />
+  );
+}
