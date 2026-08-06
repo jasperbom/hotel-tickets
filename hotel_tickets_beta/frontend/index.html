@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="nl">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
+    <title>Sterrenberg App</title>
+    <!-- Naam op het beginscherm bij "Zet op beginscherm" (iOS) -->
+    <meta name="apple-mobile-web-app-title" content="Sterrenberg" />
+    <meta name="application-name" content="Sterrenberg App" />
+    <!-- Web-app modus op iOS: fullscreen met doorschijnende statusbalk; de app
+         reserveert zelf ruimte via env(safe-area-inset-top) -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="theme-color" content="#a68571" />
+    <link rel="icon" type="image/png" href="./icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="./apple-touch-icon.png" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

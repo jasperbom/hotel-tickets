@@ -269,6 +269,59 @@ condition:
 
 ---
 
+## Beta-omgeving (testen met echte data)
+
+Naast de gewone addon staat er een tweede addon in deze repository:
+**Hotel Ticket System (Beta)** (`hotel_tickets_beta`). Dat is exact dezelfde
+app, maar met een eigen database — bedoeld om een grote update eerst op een
+kopie van de echte data uit te proberen.
+
+### Installeren
+
+1. Supervisor → Add-on Store → dezelfde repository → **Hotel Ticket System (Beta)**
+2. Installeren en starten. De beta verschijnt als apart paneel (**Tickets β**).
+3. Ga in de beta naar **Instellingen → Beta → Productiedata kopiëren**.
+
+Bij het kopiëren wordt alles overgenomen: tickets, commentaren, herhaaltaken,
+medewerkers (inclusief wachtwoorden), kennisbank, fietsen, zwembadlogboek en
+alle foto's. De productie-addon wordt daarbij **alleen gelezen** — die
+verandert niet. De vorige beta-database blijft als `.vorige` naast de nieuwe
+staan.
+
+### Wat er in de beta bewust uit staat
+
+| | |
+|---|---|
+| Pushmeldingen en e-mail | uit — testen belt het personeel niet wakker |
+| `sensor.hotel_tickets_*` in HA | blijven van productie |
+| Installeren van de HA-integratie | geblokkeerd (die staat in de gedeelde `/config`) |
+| Herhaaltaken | lopen wél; er komen dus vanzelf testtickets bij |
+
+Overal in de app staat een gele balk met **BETA**, ook op de loginpagina, zodat
+niemand per ongeluk in de testomgeving werkt.
+
+### Scheiding van data
+
+| | Productie | Beta |
+|---|---|---|
+| Database | `/config/hotel_tickets/hotel_tickets.db` | `/config/hotel_tickets_beta/hotel_tickets.db` |
+| Foto's | `/config/hotel_tickets/uploads/` | `/config/hotel_tickets_beta/uploads/` |
+| LAN-poorten | 8080 / 8443 | 8081 / 8444 |
+| Ingress | `/hassio/ingress/hotel_tickets` | `/hassio/ingress/hotel_tickets_beta` |
+
+### Update-volgorde
+
+Beide addons volgen dezelfde repository, maar Home Assistant installeert een
+update pas als je erop klikt. De werkwijze is dus: nieuwe versie pushen →
+**alleen de beta bijwerken** → testen op de gekopieerde data → daarna pas
+productie bijwerken.
+
+> `hotel_tickets_beta/` is gegenereerde code (`scripts/sync-beta.sh`). Pas
+> functionaliteit aan in `hotel_tickets/` en beta-specifieke instellingen in
+> `scripts/beta-overlay/`; een GitHub Action synchroniseert de rest.
+
+---
+
 ## Lokaal ontwikkelen
 
 ```bash
@@ -292,6 +345,15 @@ npm run dev -- --port 5174
 ```
 
 In `DEV_MODE` wordt elke request met `Authorization: Bearer dev-token` geaccepteerd zonder echte HA authenticatie.
+
+Lokaal de beta-modus nabootsen (banner, geen meldingen, kopieerknop):
+
+```bash
+DEV_MODE=true BETA_MODE=true \
+  DB_PATH=./beta.db UPLOAD_DIR=./beta-uploads \
+  SOURCE_DB_PATH=./test.db SOURCE_UPLOAD_DIR=./data/uploads \
+  .venv/bin/python3.13 -m uvicorn backend.main:app --reload --port 8099
+```
 
 ---
 

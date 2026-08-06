@@ -13,6 +13,17 @@ if [ ! -f "$DB_PATH" ] && [ -f "/data/hotel_tickets.db" ]; then
     bashio::log.info "Database gemigreerd van /data/ naar /config/hotel_tickets/"
 fi
 
+# Uploads (ticketfoto's + kennisbank-afbeeldingen) horen naast de database in
+# /config: de containerlaag wordt bij elke addon-update weggegooid, waardoor
+# foto's verloren gingen. Vanaf hier overleven ze updates én kan de beta-addon
+# ze meekopiëren.
+export UPLOAD_DIR="/config/hotel_tickets/uploads"
+mkdir -p "$UPLOAD_DIR"
+if [ -d /app/data/uploads ] && [ -z "$(ls -A "$UPLOAD_DIR" 2>/dev/null)" ]; then
+    cp -a /app/data/uploads/. "$UPLOAD_DIR"/ 2>/dev/null \
+        && bashio::log.info "Uploads gemigreerd naar ${UPLOAD_DIR}"
+fi
+
 # Optionele SMTP velden met lege string als fallback
 if bashio::config.has_value 'smtp_host'; then
     export SMTP_HOST=$(bashio::config 'smtp_host')

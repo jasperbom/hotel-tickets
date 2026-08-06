@@ -1,0 +1,1521 @@
+"""
+Kennisbank / bot voor personeel.
+
+- Iedereen mag vragen stellen en de kennisbank doorzoeken.
+- Alleen admins beheren de wachtrij en de entries.
+
+De bot put uitsluitend uit de kennisbank (knowledge_entries) en verzint nooit
+zelf antwoorden. Vindt hij niets, dan komt de vraag in de wachtrij voor admins.
+"""
+import base64
+import io
+import json
+import logging
+import os
+import re
+import uuid
+import zipfile
+from datetime import datetime, timezone
+from typing import Optional
+from urllib.parse import unquote
+
+from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File
+from fastapi.responses import FileResponse
+from pydantic import BaseModel, Field
+from sqlalchemy import select, func, or_
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from ..auth import RequireUser
+from ..database import get_db
+from ..models import (
+    KnowledgeEntry,
+    KnowledgeQuestion,
+    KnowledgeQuestionStatus,
+    KnowledgeDocument,
+    KnowledgeChunk,
+    KnowledgeVisibility,
+    SystemSetting,
+    Category,
+    Role,
+    Ticket,
+    Status,
+)
+from ..services.knowledge_search import (
+    knowledge_search,
+    search_chunks,
+    search_chunk_documents,
+    visibility_clause,
+    can_see,
+)
+from ..services import ai_client
+
+logger = logging.getLogger(__name__)
+
+router = APIRouter(prefix="/knowledge", tags=["knowledge"])
+
+# Afbeeldingen worden per entry opgeslagen onder UPLOAD_DIR/knowledge/<entry_id>/,
+# net als de foto's bij tickets.
+UPLOAD_DIR = os.environ.get(
+    "UPLOAD_DIR", os.path.join(os.path.dirname(__file__), "..", "..", "data", "uploads")
+)
+KNOWLEDGE_SUBDIR = "knowledge"
+KNOWLEDGE_DOC_SUBDIR = "knowledge_documents"
+IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"}
+MD_EXTENSIONS = {".md", ".markdown", ".txt"}
+
+
+def _entry_image_dir(entry_id: str) -> str:
+    return os.path.join(UPLOAD_DIR, KNOWLEDGE_SUBDIR, entry_id)
+
+
+def _document_image_dir(document_id: str) -> str:
+    return os.path.join(UPLOAD_DIR, KNOWLEDGE_DOC_SUBDIR, document_id)
+
+
+def _load_images(e: KnowledgeEntry) -> list[str]:
+    if not e.images:
+        return []
+    try:
+        return json.loads(e.images)
+    except (ValueError, TypeError):
+        return []
+
+
+def _require_admin(user) -> None:
+    """Kennisbeheer is voorbehouden aan admins (niet supervisors)."""
+    if user.role != Role.admin:
+        raise HTTPException(403, "Alleen admins kunnen de kennisbank beheren")
+
+
+# ── Pydantic schemas ──────────────────────────────────────────────────────────
+
+class EntryOut(BaseModel):
+    id: str
+    title: str
+    answer: str
+    keywords: Optional[str] = None
+    context: Optional[str] = None
+    category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
+    folder: Optional[str] = None
+    source_ticket_id: Optional[str] = None
+    images: list[str] = []
+    ask_count: int
+    is_published: bool
+    created_at: str
+    updated_at: str
+
+
+class EntryCreate(BaseModel):
+    title: str = Field(..., min_length=1)
+    answer: str = Field(..., min_length=1)
+    keywords: Optional[str] = None
+    context: Optional[str] = None
+    category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
+    folder: Optional[str] = None
+    is_published: bool = True
+    source_ticket_id: Optional[str] = None
+
+
+class EntryUpdate(BaseModel):
+    title: Optional[str] = None
+    answer: Optional[str] = None
+    keywords: Optional[str] = None
+    context: Optional[str] = None
+    category: Optional[Category] = None
+    visibility: Optional[KnowledgeVisibility] = None
+    folder: Optional[str] = None
+    is_published: Optional[bool] = None
+
+
+class ChatTurn(BaseModel):
+    role: str
+    content: str
+
+
+class AskRequest(BaseModel):
+    question: str = Field(..., min_length=1)
+    category: Optional[Category] = None
+    history: list[ChatTurn] = []
+
+
+class AskDocument(BaseModel):
+    """Minimale document-info voor de chat: alleen nodig om foto's te tonen."""
+    id: str
+    title: str
+    images: list[str] = []
+
+
+class AskResponse(BaseModel):
+    answered: bool
+    question_id: str
+    entries: list[EntryOut]
+    documents: list[AskDocument] = []      # bijdragende documenten (voor foto's)
+    ai_answer: Optional[str] = None        # door Claude geformuleerd antwoord (RAG)
+    source: Optional[str] = None           # "ai" of "entries"
+
+
+class QuestionOut(BaseModel):
+    id: str
+    question_text: str
+    asked_by: str
+    asked_by_name: Optional[str] = None
+    category: Optional[Category] = None
+    status: KnowledgeQuestionStatus
+    matched_entry_id: Optional[str] = None
+    resolved_entry_id: Optional[str] = None
+    proposed_answer: Optional[str] = None
+    proposed_by: Optional[str] = None
+    conversation: Optional[str] = None
+    created_at: str
+    resolved_at: Optional[str] = None
+    resolved_by: Optional[str] = None
+
+
+class SolutionRequest(BaseModel):
+    solution: str = Field(..., min_length=1)
+    conversation: list[ChatTurn] = []
+
+
+class AnswerQueueRequest(BaseModel):
+    title: str = Field(..., min_length=1)
+    answer: str = Field(..., min_length=1)
+    keywords: Optional[str] = None
+    category: Optional[Category] = None
+    folder: Optional[str] = None
+
+
+class FromTicketRequest(BaseModel):
+    title: Optional[str] = None
+    answer: Optional[str] = None
+    keywords: Optional[str] = None
+    category: Optional[Category] = None
+
+
+class StatsOut(BaseModel):
+    pending_count: int
+    entry_count: int
+    top_entries: list[EntryOut]
+
+
+def _entry_out(e: KnowledgeEntry) -> dict:
+    return {
+        "id": e.id,
+        "title": e.title,
+        "answer": e.answer,
+        "keywords": e.keywords,
+        "context": e.context,
+        "category": e.category.value if isinstance(e.category, Category) else e.category,
+        "visibility": e.visibility.value if isinstance(e.visibility, KnowledgeVisibility) else (e.visibility or "all"),
+        "folder": e.folder,
+        "source_ticket_id": e.source_ticket_id,
+        "images": _load_images(e),
+        "ask_count": e.ask_count,
+        "is_published": e.is_published,
+        "created_at": e.created_at.isoformat() if e.created_at else "",
+        "updated_at": e.updated_at.isoformat() if e.updated_at else "",
+    }
+
+
+def _question_out(q: KnowledgeQuestion) -> dict:
+    return {
+        "id": q.id,
+        "question_text": q.question_text,
+        "asked_by": q.asked_by,
+        "asked_by_name": q.asked_by_name,
+        "category": q.category.value if isinstance(q.category, Category) else q.category,
+        "status": q.status.value if isinstance(q.status, KnowledgeQuestionStatus) else q.status,
+        "matched_entry_id": q.matched_entry_id,
+        "resolved_entry_id": q.resolved_entry_id,
+        "proposed_answer": q.proposed_answer,
+        "proposed_by": q.proposed_by,
+        "conversation": q.conversation,
+        "created_at": q.created_at.isoformat() if q.created_at else "",
+        "resolved_at": q.resolved_at.isoformat() if q.resolved_at else None,
+        "resolved_by": q.resolved_by,
+    }
+
+
+# ── Vragen stellen (alle medewerkers) ──────────────────────────────────────────
+
+async def _setting(db: AsyncSession, key: str) -> str:
+    row = await db.get(SystemSetting, key)
+    return (row.value if row and row.value else "").strip()
+
+
+async def _ai_key(db: AsyncSession) -> str:
+    """API-sleutel: app-instelling heeft voorrang op de addon-optie/omgeving."""
+    return (await _setting(db, "knowledge_ai_key")) or ai_client.env_api_key()
+
+
+async def _ai_model(db: AsyncSession) -> str:
+    return (await _setting(db, "knowledge_ai_model")) or ai_client.env_model() or ai_client.DEFAULT_MODEL
+
+
+async def _ai_enabled(db: AsyncSession) -> bool:
+    """AI is actief als de admin 'm aanzette én er een API-sleutel is."""
+    row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    if not (row and row.value == "true"):
+        return False
+    return bool(await _ai_key(db))
+
+
+def _clean_domain(d: str) -> str:
+    return re.sub(r"^https?://", "", d.strip(), flags=re.IGNORECASE).strip("/")
+
+
+def _parse_web_sites(raw: str) -> list[tuple[str, str]]:
+    """Zet de door de admin ingevoerde websites om naar (domein, omschrijving)-
+    paren. Per regel één website; alles achter het domein (optioneel na een
+    streepje/dubbele punt) is de omschrijving waarvoor die site dient. Een regel
+    zonder omschrijving mag ook meerdere komma-gescheiden websites bevatten."""
+    sites: list[tuple[str, str]] = []
+    seen: set[str] = set()
+    for line in (raw or "").splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        first, _, rest = line.partition(" ")
+        rest = rest.strip()
+        if first.endswith((",", ";")) or rest.startswith((",", ";")):
+            rest = ""  # komma-gescheiden websitelijst zonder omschrijving
+        else:
+            rest = re.sub(r"^[-—:|]\s*", "", rest)
+        if rest:
+            d = _clean_domain(first.rstrip(",;:"))
+            if d and d not in seen:
+                seen.add(d)
+                sites.append((d, rest))
+        else:
+            for part in re.split(r"[\s,;]+", line):
+                d = _clean_domain(part)
+                if d and d not in seen:
+                    seen.add(d)
+                    sites.append((d, ""))
+    return sites
+
+
+async def _web_sites(db: AsyncSession) -> list[tuple[str, str]]:
+    """De websites waarop de bot mag zoeken (met omschrijving). Leeg = websearch
+    uit: de instelling moet aanstaan én er moet minstens één website ingevuld
+    zijn."""
+    row = await db.get(SystemSetting, "knowledge_web_search_enabled")
+    if not (row and row.value == "true"):
+        return []
+    return _parse_web_sites(await _setting(db, "knowledge_web_domains"))
+
+
+async def _log_pending(db: AsyncSession, data: "AskRequest", user) -> AskResponse:
+    """Log een onbeantwoorde vraag in de wachtrij (dedup op tekst)."""
+    existing = await db.execute(
+        select(KnowledgeQuestion).where(
+            KnowledgeQuestion.status == KnowledgeQuestionStatus.pending,
+            func.lower(KnowledgeQuestion.question_text) == data.question.strip().lower(),
+        ).limit(1)
+    )
+    q = existing.scalar_one_or_none()
+    if q is None:
+        q = KnowledgeQuestion(
+            question_text=data.question.strip(),
+            asked_by=user.ha_user_id,
+            asked_by_name=user.display_name,
+            category=data.category,
+            status=KnowledgeQuestionStatus.pending,
+        )
+        db.add(q)
+        await db.flush()
+    return AskResponse(answered=False, question_id=q.id, entries=[])
+
+
+async def _log_answered(
+    db: AsyncSession, data: "AskRequest", user, matched_entry_id: Optional[str]
+) -> KnowledgeQuestion:
+    q = KnowledgeQuestion(
+        question_text=data.question.strip(),
+        asked_by=user.ha_user_id,
+        asked_by_name=user.display_name,
+        category=data.category,
+        status=KnowledgeQuestionStatus.answered_by_bot,
+        matched_entry_id=matched_entry_id,
+    )
+    db.add(q)
+    await db.flush()
+    return q
+
+
+async def _answer_documents(
+    db: AsyncSession, retrieval_q: str, category: Optional[Category], user, max_docs: int = 3
+) -> list[AskDocument]:
+    """De bijdragende documenten mét foto's, om bij een bot-antwoord te tonen."""
+    doc_ids = await search_chunk_documents(db, retrieval_q, category, limit=8, user=user)
+    out: list[AskDocument] = []
+    for did in doc_ids:
+        doc = await db.get(KnowledgeDocument, did)
+        if not doc:
+            continue
+        imgs = _load_images(doc)
+        if imgs:
+            out.append(AskDocument(id=doc.id, title=doc.title, images=imgs))
+        if len(out) >= max_docs:
+            break
+    return out
+
+
+@router.post("/ask", response_model=AskResponse)
+async def ask(data: AskRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    # ── RAG-route: AI doorzoekt documenten + entries en formuleert een antwoord ──
+    if await _ai_enabled(db):
+        key = await _ai_key(db)
+        model = await _ai_model(db)
+        # Retrieval-query: bij een vervolgvraag ook de vorige vraag meenemen
+        retrieval_q = data.question
+        last_user = next(
+            (t.content for t in reversed(data.history) if t.role == "user" and t.content), None
+        )
+        if last_user:
+            retrieval_q = f"{last_user} {data.question}"
+
+        chunks = await search_chunks(db, retrieval_q, data.category, limit=8, user=user)
+        entries = await knowledge_search.search(db, retrieval_q, data.category, user=user)
+
+        # Slimmer zoeken: levert de gewone zoekopdracht weinig op, laat Claude de
+        # vraag dan herformuleren (synoniemen) en zoek op die varianten.
+        if len(chunks) < 3:
+            existing_ids = {e.id for e in entries}
+            for variant in await ai_client.expand_query(data.question, key, model):
+                for c in await search_chunks(db, variant, data.category, limit=5, user=user):
+                    if c not in chunks:
+                        chunks.append(c)
+                for e in await knowledge_search.search(db, variant, data.category, user=user):
+                    if e.id not in existing_ids:
+                        entries.append(e)
+                        existing_ids.add(e.id)
+            chunks = chunks[:12]
+
+        contexts: list[str] = list(chunks)
+        for e in entries:
+            contexts.append(f"{e.title}\n{e.answer}")
+
+        history = [{"role": t.role, "content": t.content} for t in data.history]
+        web_sites = await _web_sites(db)
+        if contexts or history or web_sites:
+            result = await ai_client.answer_from_context(
+                data.question, contexts, key, model, history=history,
+                web_sites=web_sites or None,
+            )
+            if result is not None:
+                if result["answered"] and result["answer"]:
+                    matched_id = entries[0].id if entries else None
+                    if entries:
+                        entries[0].ask_count += 1
+                    q = await _log_answered(db, data, user, matched_id)
+                    return AskResponse(
+                        answered=True,
+                        question_id=q.id,
+                        entries=[EntryOut(**_entry_out(e)) for e in entries],
+                        documents=await _answer_documents(db, retrieval_q, data.category, user),
+                        ai_answer=result["answer"],
+                        source="ai",
+                    )
+                # AI concludeert dat het antwoord er niet in staat → wachtrij
+                return await _log_pending(db, data, user)
+        # Geen context gevonden → wachtrij
+        return await _log_pending(db, data, user)
+
+    # ── Zonder AI: trefwoord-zoeken in de kennisbank-entries ──
+    entries = await knowledge_search.search(db, data.question, data.category, user=user)
+    if entries:
+        top = entries[0]
+        top.ask_count += 1
+        q = await _log_answered(db, data, user, top.id)
+        return AskResponse(
+            answered=True,
+            question_id=q.id,
+            entries=[EntryOut(**_entry_out(e)) for e in entries],
+            source="entries",
+        )
+    return await _log_pending(db, data, user)
+
+
+def _overlap_covered(solution: str, contexts: list[str]) -> bool:
+    """Eenvoudige fallback-check (zonder AI): staat de oplossing qua woorden al
+    grotendeels in de bestaande kennis?"""
+    sol_tokens = {t for t in re.findall(r"\w+", solution.lower()) if len(t) >= 4}
+    if not sol_tokens:
+        return False
+    ctx_tokens = set(re.findall(r"\w+", " ".join(contexts).lower()))
+    overlap = len(sol_tokens & ctx_tokens) / len(sol_tokens)
+    return overlap >= 0.7
+
+
+@router.post("/questions/{question_id}/solution", status_code=200)
+async def submit_solution(
+    question_id: str,
+    data: SolutionRequest,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """De medewerker loste het zelf op en draagt de oplossing aan. Eerst checken
+    of de oplossing niet al in de kennis staat; zo nee, bewaren op de vraag en in
+    de wachtrij zetten zodat een admin 'm kan beoordelen en opnemen."""
+    q = await db.get(KnowledgeQuestion, question_id)
+    if not q:
+        raise HTTPException(404, "Vraag niet gevonden")
+    solution = data.solution.strip()
+
+    # Verzamel bestaande kennis rond de oorspronkelijke vraag
+    chunks = await search_chunks(db, q.question_text, q.category)
+    entries = await knowledge_search.search(db, q.question_text, q.category)
+    contexts = list(chunks) + [f"{e.title}\n{e.answer}" for e in entries]
+
+    # Was dit eigenlijk al een gegeven oplossing? (AI-oordeel, anders tekstvergelijking)
+    covered: bool | None = None
+    if contexts:
+        if await _ai_enabled(db):
+            covered = await ai_client.is_covered(
+                solution, contexts, await _ai_key(db), await _ai_model(db)
+            )
+        if covered is None:
+            covered = _overlap_covered(solution, contexts)
+
+    if covered:
+        return {"status": "already_known"}
+
+    q.proposed_answer = solution
+    q.proposed_by = user.ha_user_id
+    if data.conversation:
+        lines = []
+        for t in data.conversation:
+            who = "Medewerker" if t.role == "user" else "Jaisper"
+            if t.content and t.content.strip():
+                lines.append(f"{who}: {t.content.strip()}")
+        if lines:
+            q.conversation = "\n".join(lines)
+    if q.status != KnowledgeQuestionStatus.resolved:
+        q.status = KnowledgeQuestionStatus.pending
+    await db.flush()
+    return {"status": "queued"}
+
+
+# ── Kennisbank bladeren (alle medewerkers) ─────────────────────────────────────
+
+@router.get("/entries", response_model=list[EntryOut])
+async def list_entries(
+    user: RequireUser,
+    q: Optional[str] = Query(None),
+    category: Optional[Category] = Query(None),
+    include_unpublished: bool = Query(False),
+    db: AsyncSession = Depends(get_db),
+):
+    query = select(KnowledgeEntry)
+    if not (include_unpublished and user.role == Role.admin):
+        query = query.where(KnowledgeEntry.is_published == True)  # noqa: E712
+    # Afscherming op rol + afdeling (admin/supervisor zien (vrijwel) alles).
+    query = query.where(visibility_clause(KnowledgeEntry, user))
+    if category is not None:
+        query = query.where(KnowledgeEntry.category == category)
+    if q:
+        like = f"%{q.strip()}%"
+        query = query.where(
+            or_(
+                KnowledgeEntry.title.ilike(like),
+                KnowledgeEntry.answer.ilike(like),
+                KnowledgeEntry.keywords.ilike(like),
+            )
+        )
+    query = query.order_by(KnowledgeEntry.ask_count.desc(), KnowledgeEntry.created_at.desc())
+    rows = await db.execute(query)
+    return [_entry_out(e) for e in rows.scalars().all()]
+
+
+@router.get("/stats", response_model=StatsOut)
+async def stats(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    pending = await db.scalar(
+        select(func.count(KnowledgeQuestion.id)).where(
+            KnowledgeQuestion.status == KnowledgeQuestionStatus.pending
+        )
+    )
+    total = await db.scalar(select(func.count(KnowledgeEntry.id)))
+    top_rows = await db.execute(
+        select(KnowledgeEntry).order_by(KnowledgeEntry.ask_count.desc()).limit(5)
+    )
+    return StatsOut(
+        pending_count=pending or 0,
+        entry_count=total or 0,
+        top_entries=[EntryOut(**_entry_out(e)) for e in top_rows.scalars().all()],
+    )
+
+
+@router.get("/entries/{entry_id}", response_model=EntryOut)
+async def get_entry(entry_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    e = await db.get(KnowledgeEntry, entry_id)
+    if not e:
+        raise HTTPException(404, "Kennis-entry niet gevonden")
+    if not can_see(user, e.visibility, e.category):
+        raise HTTPException(404, "Kennis-entry niet gevonden")
+    return _entry_out(e)
+
+
+# ── Kennisbeheer (alleen admin) ────────────────────────────────────────────────
+
+@router.post("/entries", response_model=EntryOut, status_code=201)
+async def create_entry(data: EntryCreate, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    e = KnowledgeEntry(
+        title=data.title.strip(),
+        answer=data.answer.strip(),
+        keywords=(data.keywords or None),
+        context=(data.context.strip() if data.context and data.context.strip() else None),
+        category=data.category,
+        visibility=data.visibility or KnowledgeVisibility.all,
+        folder=(data.folder.strip() if data.folder else None),
+        is_published=data.is_published,
+        source_ticket_id=data.source_ticket_id,
+        created_by=user.ha_user_id,
+    )
+    db.add(e)
+    await db.flush()
+    await db.refresh(e)
+    return _entry_out(e)
+
+
+@router.patch("/entries/{entry_id}", response_model=EntryOut)
+async def update_entry(
+    entry_id: str, data: EntryUpdate, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    _require_admin(user)
+    e = await db.get(KnowledgeEntry, entry_id)
+    if not e:
+        raise HTTPException(404, "Kennis-entry niet gevonden")
+    updates = data.model_dump(exclude_unset=True)
+    for key, val in updates.items():
+        if key in ("title", "answer") and isinstance(val, str):
+            val = val.strip()
+        setattr(e, key, val)
+    await db.flush()
+    await db.refresh(e)
+    return _entry_out(e)
+
+
+@router.delete("/entries/{entry_id}", status_code=204)
+async def delete_entry(entry_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    e = await db.get(KnowledgeEntry, entry_id)
+    if not e:
+        raise HTTPException(404, "Kennis-entry niet gevonden")
+    await db.delete(e)
+
+
+# ── Wachtrij (alleen admin) ────────────────────────────────────────────────────
+
+@router.get("/queue", response_model=list[QuestionOut])
+async def queue(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    rows = await db.execute(
+        select(KnowledgeQuestion)
+        .where(KnowledgeQuestion.status == KnowledgeQuestionStatus.pending)
+        .order_by(KnowledgeQuestion.created_at.desc())
+    )
+    return [_question_out(q) for q in rows.scalars().all()]
+
+
+@router.post("/queue/{question_id}/answer", response_model=EntryOut, status_code=201)
+async def answer_queue(
+    question_id: str,
+    data: AnswerQueueRequest,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    _require_admin(user)
+    q = await db.get(KnowledgeQuestion, question_id)
+    if not q:
+        raise HTTPException(404, "Vraag niet gevonden")
+
+    entry = KnowledgeEntry(
+        title=data.title.strip(),
+        answer=data.answer.strip(),
+        keywords=(data.keywords or None),
+        category=data.category if data.category is not None else q.category,
+        folder=(data.folder.strip() if data.folder else None),
+        created_by=user.ha_user_id,
+    )
+    db.add(entry)
+    await db.flush()
+
+    q.status = KnowledgeQuestionStatus.resolved
+    q.resolved_entry_id = entry.id
+    q.resolved_at = datetime.now(timezone.utc)
+    q.resolved_by = user.ha_user_id
+    await db.flush()
+    await db.refresh(entry)
+    return _entry_out(entry)
+
+
+@router.post("/queue/{question_id}/dismiss", status_code=200)
+async def dismiss_queue(question_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    q = await db.get(KnowledgeQuestion, question_id)
+    if not q:
+        raise HTTPException(404, "Vraag niet gevonden")
+    q.status = KnowledgeQuestionStatus.dismissed
+    q.resolved_at = datetime.now(timezone.utc)
+    q.resolved_by = user.ha_user_id
+    return {"ok": True}
+
+
+# ── Ticket → kennis (alleen admin) ─────────────────────────────────────────────
+
+@router.post("/from-ticket/{ticket_id}", response_model=EntryOut, status_code=201)
+async def from_ticket(
+    ticket_id: str,
+    data: FromTicketRequest,
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+):
+    """Promoveer een gesloten ticket tot kennis-entry. Het antwoord wordt
+    voorgevuld uit de omschrijving + comments, tenzij meegegeven in de body."""
+    _require_admin(user)
+    result = await db.execute(
+        select(Ticket).where(Ticket.id == ticket_id).options(selectinload(Ticket.comments))
+    )
+    ticket = result.scalar_one_or_none()
+    if not ticket:
+        raise HTTPException(404, "Ticket niet gevonden")
+    if ticket.status != Status.closed:
+        raise HTTPException(400, "Alleen gesloten tickets kunnen aan de kennisbank toegevoegd worden")
+
+    title = (data.title or ticket.title).strip()
+
+    if data.answer:
+        answer = data.answer.strip()
+    else:
+        parts: list[str] = []
+        if ticket.description:
+            parts.append(ticket.description.strip())
+        comments = sorted(ticket.comments, key=lambda c: c.created_at or datetime.min)
+        for c in comments:
+            if c.body and c.body.strip():
+                parts.append(c.body.strip())
+        answer = "\n\n".join(parts) if parts else title
+
+    entry = KnowledgeEntry(
+        title=title,
+        answer=answer,
+        keywords=(data.keywords or None),
+        category=data.category if data.category is not None else ticket.category,
+        source_ticket_id=ticket.id,
+        created_by=user.ha_user_id,
+    )
+    db.add(entry)
+    await db.flush()
+    await db.refresh(entry)
+    return _entry_out(entry)
+
+
+# ── Afbeeldingen bij entries (alleen admin) ────────────────────────────────────
+
+def _safe_image_name(name: str) -> str:
+    base = unquote(os.path.basename((name or "").split("?")[0].split("#")[0]))
+    base = re.sub(r"[^A-Za-z0-9._-]", "_", base)
+    return base or "afbeelding"
+
+
+@router.post("/entries/{entry_id}/images", status_code=201)
+async def upload_image(
+    entry_id: str,
+    user: RequireUser,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    _require_admin(user)
+    e = await db.get(KnowledgeEntry, entry_id)
+    if not e:
+        raise HTTPException(404, "Kennis-entry niet gevonden")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise HTTPException(400, "Alleen afbeeldingen zijn toegestaan")
+    d = _entry_image_dir(entry_id)
+    os.makedirs(d, exist_ok=True)
+    fname = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(d, fname), "wb") as f:
+        f.write(await file.read())
+    imgs = _load_images(e)
+    imgs.append(fname)
+    e.images = json.dumps(imgs)
+    await db.flush()
+    return {"filename": fname}
+
+
+@router.get("/entries/{entry_id}/images/{filename}")
+async def get_image(entry_id: str, filename: str, user: RequireUser):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Ongeldige bestandsnaam")
+    filepath = os.path.join(_entry_image_dir(entry_id), filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(404, "Afbeelding niet gevonden")
+    return FileResponse(filepath)
+
+
+@router.delete("/entries/{entry_id}/images/{filename}", status_code=204)
+async def delete_image(
+    entry_id: str, filename: str, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    _require_admin(user)
+    e = await db.get(KnowledgeEntry, entry_id)
+    if not e:
+        raise HTTPException(404, "Kennis-entry niet gevonden")
+    base = os.path.basename(filename)
+    filepath = os.path.join(_entry_image_dir(entry_id), base)
+    if os.path.isfile(filepath):
+        os.remove(filepath)
+    imgs = [i for i in _load_images(e) if i != base]
+    e.images = json.dumps(imgs) if imgs else None
+    await db.flush()
+
+
+# ── Import vanuit Markdown / ZIP (alleen admin) ────────────────────────────────
+
+_HEADING_RE = re.compile(r"^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$")
+_QPREFIX_RE = re.compile(r"^\s*(?:Q|Vraag|Question)\s*[:.\-]\s*(.+)$", re.IGNORECASE)
+_BOLD_LINE_RE = re.compile(r"^\s*\*\*(.+?)\*\*\s*:?\s*$")
+_APREFIX_RE = re.compile(r"^\s*(?:A|Antwoord|Answer)\s*[:.\-]\s*", re.IGNORECASE)
+_IMG_RE = re.compile(r"!\[([^\]]*)\]\(([^)]+)\)")
+
+
+def _detect_question(line: str) -> Optional[str]:
+    for rx in (_HEADING_RE, _QPREFIX_RE, _BOLD_LINE_RE):
+        m = rx.match(line)
+        if m:
+            return m.group(1).strip()
+    return None
+
+
+def _parse_qa(md_text: str) -> list[tuple[str, str]]:
+    """Splits Markdown in (titel, antwoord)-paren. Elke kop (#/##/###), 'Q:'-regel
+    of vetgedrukte regel start een nieuwe vraag; de tekst eronder is het antwoord."""
+    pairs: list[tuple[str, str]] = []
+    title: Optional[str] = None
+    body: list[str] = []
+
+    def flush():
+        if title:
+            answer = "\n".join(body).strip()
+            answer = _APREFIX_RE.sub("", answer, count=1).strip()
+            pairs.append((title, answer))
+
+    for line in md_text.splitlines():
+        q = _detect_question(line)
+        if q is not None:
+            flush()
+            title = q
+            body = []
+        elif title is not None:
+            body.append(line)
+    flush()
+    return pairs
+
+
+def _process_images(answer: str, zip_images: dict[str, bytes], entry_dir: str) -> tuple[str, list[str]]:
+    """Vind image-refs in het antwoord, sla de bytes op (uit ZIP of base64) en
+    herschrijf de ref naar de opgeslagen bestandsnaam. Externe/onbekende refs
+    blijven ongewijzigd."""
+    stored: list[str] = []
+
+    def repl(m: "re.Match") -> str:
+        alt, ref = m.group(1), m.group(2).strip()
+        data_m = re.match(r"data:image/([\w+]+);base64,(.+)", ref, re.DOTALL)
+        if data_m:
+            ext = "." + data_m.group(1).lower().replace("jpeg", "jpg").replace("svg+xml", "svg")
+            try:
+                raw = base64.b64decode(data_m.group(2))
+            except Exception:
+                return m.group(0)
+            fname = f"{uuid.uuid4().hex}{ext}"
+            os.makedirs(entry_dir, exist_ok=True)
+            with open(os.path.join(entry_dir, fname), "wb") as f:
+                f.write(raw)
+            stored.append(fname)
+            return f"![{alt}]({fname})"
+        base = unquote(os.path.basename(ref.split("?")[0].split("#")[0]))
+        if base in zip_images:
+            ext = os.path.splitext(base)[1].lower() or ".png"
+            fname = f"{uuid.uuid4().hex}{ext}"
+            os.makedirs(entry_dir, exist_ok=True)
+            with open(os.path.join(entry_dir, fname), "wb") as f:
+                f.write(zip_images[base])
+            stored.append(fname)
+            return f"![{alt}]({fname})"
+        return m.group(0)
+
+    return _IMG_RE.sub(repl, answer), stored
+
+
+class ImportResult(BaseModel):
+    found: int
+    imported: int
+    skipped: int
+    images: int
+
+
+@router.post("/import", response_model=ImportResult)
+async def import_qa(
+    user: RequireUser,
+    file: UploadFile = File(...),
+    category: Optional[Category] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Importeer Q&A uit een .md-bestand of een .zip (Markdown + afbeeldingen).
+    Duplicaten (zelfde titel) worden overgeslagen."""
+    _require_admin(user)
+    raw = await file.read()
+    fname = (file.filename or "").lower()
+
+    md_texts: list[str] = []
+    zip_images: dict[str, bytes] = {}
+
+    is_zip = fname.endswith(".zip") or raw[:2] == b"PK"
+    if is_zip:
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except zipfile.BadZipFile:
+            raise HTTPException(400, "Ongeldig ZIP-bestand")
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            ext = os.path.splitext(info.filename)[1].lower()
+            if ext in MD_EXTENSIONS:
+                md_texts.append(zf.read(info).decode("utf-8", errors="replace"))
+            elif ext in IMAGE_EXTENSIONS:
+                zip_images[os.path.basename(info.filename)] = zf.read(info)
+    else:
+        md_texts.append(raw.decode("utf-8", errors="replace"))
+
+    if not md_texts:
+        raise HTTPException(400, "Geen Markdown/tekst gevonden in het bestand")
+
+    pairs: list[tuple[str, str]] = []
+    for txt in md_texts:
+        pairs.extend(_parse_qa(txt))
+
+    if not pairs:
+        raise HTTPException(
+            400,
+            "Geen vraag/antwoord-paren gevonden. Zet elke vraag als een kop "
+            "(#, ## of ###) met het antwoord eronder.",
+        )
+
+    imported = 0
+    skipped = 0
+    images_stored = 0
+    for title, answer in pairs:
+        title = title.strip()
+        if not title:
+            continue
+        exists = await db.execute(
+            select(KnowledgeEntry.id)
+            .where(func.lower(KnowledgeEntry.title) == title.lower())
+            .limit(1)
+        )
+        if exists.scalar_one_or_none() is not None:
+            skipped += 1
+            continue
+        entry = KnowledgeEntry(
+            title=title,
+            answer=answer or title,
+            category=category,
+            created_by=user.ha_user_id,
+        )
+        db.add(entry)
+        await db.flush()  # entry.id beschikbaar
+        new_answer, stored = _process_images(entry.answer, zip_images, _entry_image_dir(entry.id))
+        if stored:
+            entry.answer = new_answer
+            entry.images = json.dumps(stored)
+            images_stored += len(stored)
+        imported += 1
+
+    await db.flush()
+    return ImportResult(found=len(pairs), imported=imported, skipped=skipped, images=images_stored)
+
+
+# ── Documenten (RAG-bron) + AI-instellingen (alleen admin) ─────────────────────
+
+def _chunk_text(text: str, size: int = 900, overlap: int = 150) -> list[str]:
+    """Hak tekst in overlappende stukken voor retrieval. Splitst bij voorkeur op
+    paragraafgrenzen en valt anders terug op harde knippen."""
+    text = text.strip()
+    if not text:
+        return []
+    paragraphs = re.split(r"\n\s*\n", text)
+    chunks: list[str] = []
+    current = ""
+    for para in paragraphs:
+        para = para.strip()
+        if not para:
+            continue
+        if len(current) + len(para) + 2 <= size:
+            current = f"{current}\n\n{para}" if current else para
+        else:
+            if current:
+                chunks.append(current)
+            # paragraaf zelf te groot? hard knippen met overlap
+            if len(para) > size:
+                start = 0
+                while start < len(para):
+                    chunks.append(para[start:start + size])
+                    start += size - overlap
+                current = ""
+            else:
+                current = para
+    if current:
+        chunks.append(current)
+    return chunks
+
+
+def _extract_text(filename: str, raw: bytes) -> str:
+    """Haal platte tekst uit een geüpload bestand (.md/.txt/.pdf/.zip)."""
+    name = (filename or "").lower()
+    ext = os.path.splitext(name)[1]
+    if ext == ".pdf":
+        try:
+            from pypdf import PdfReader
+            reader = PdfReader(io.BytesIO(raw))
+            return "\n\n".join((page.extract_text() or "") for page in reader.pages)
+        except Exception as exc:
+            raise HTTPException(400, f"PDF kon niet gelezen worden: {exc}")
+    if ext == ".zip" or raw[:2] == b"PK":
+        try:
+            zf = zipfile.ZipFile(io.BytesIO(raw))
+        except zipfile.BadZipFile:
+            raise HTTPException(400, "Ongeldig ZIP-bestand")
+        parts: list[str] = []
+        for info in zf.infolist():
+            if info.is_dir():
+                continue
+            iext = os.path.splitext(info.filename)[1].lower()
+            if iext in MD_EXTENSIONS:
+                parts.append(zf.read(info).decode("utf-8", errors="replace"))
+            elif iext == ".pdf":
+                try:
+                    from pypdf import PdfReader
+                    reader = PdfReader(io.BytesIO(zf.read(info)))
+                    parts.append("\n\n".join((p.extract_text() or "") for p in reader.pages))
+                except Exception:
+                    continue
+        return "\n\n".join(parts)
+    # tekst/markdown
+    return raw.decode("utf-8", errors="replace")
+
+
+async def _store_document_chunks(db: AsyncSession, doc: KnowledgeDocument) -> int:
+    # De toelichting (context) + trefwoorden worden voor elk fragment geplakt,
+    # zodat de AI bij élk opgehaald stuk weet waar het document over gaat — handig
+    # wanneer een PDF kromme of context-loze tekst oplevert.
+    context = (doc.context or "").strip()
+    keywords = (doc.keywords or "").strip()
+    header_lines = []
+    if context:
+        header_lines.append(f"[Context: {context}]")
+    if keywords:
+        header_lines.append(f"[Trefwoorden: {keywords}]")
+    prefix = ("\n".join(header_lines) + "\n\n") if header_lines else ""
+    pieces = _chunk_text(doc.content)
+    if not pieces and prefix:
+        # Geen bruikbare inhoud, maar wél context/trefwoorden → bewaar die zelf.
+        pieces = [""]
+    for ch in pieces:
+        db.add(KnowledgeChunk(document_id=doc.id, ordinal=0, content=(prefix + ch).strip()))
+    await db.flush()
+    count = await db.scalar(
+        select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == doc.id)
+    )
+    return count or 0
+
+
+class DocumentOut(BaseModel):
+    id: str
+    title: str
+    source_filename: Optional[str] = None
+    context: Optional[str] = None
+    keywords: Optional[str] = None
+    category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
+    folder: Optional[str] = None
+    images: list[str] = []
+    chunk_count: int = 0
+    created_at: str
+
+
+class DocumentDetailOut(DocumentOut):
+    content: str = ""
+
+
+class DocumentCreate(BaseModel):
+    title: str = Field(..., min_length=1)
+    content: str = Field(..., min_length=1)
+    context: Optional[str] = None
+    keywords: Optional[str] = None
+    category: Optional[Category] = None
+    visibility: KnowledgeVisibility = KnowledgeVisibility.all
+    folder: Optional[str] = None
+
+
+class DocumentUpdate(BaseModel):
+    title: Optional[str] = None
+    content: Optional[str] = None
+    context: Optional[str] = None
+    keywords: Optional[str] = None
+    category: Optional[Category] = None
+    visibility: Optional[KnowledgeVisibility] = None
+    folder: Optional[str] = None
+
+
+class CleanupRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+
+
+class CleanupResult(BaseModel):
+    title: str = ""
+    category: Optional[str] = None
+    folder: Optional[str] = None
+    content: str = ""
+
+
+def _doc_out(d: KnowledgeDocument, chunk_count: int) -> DocumentOut:
+    return DocumentOut(
+        id=d.id,
+        title=d.title,
+        source_filename=d.source_filename,
+        context=d.context,
+        keywords=d.keywords,
+        category=d.category.value if isinstance(d.category, Category) else d.category,
+        visibility=d.visibility.value if isinstance(d.visibility, KnowledgeVisibility) else (d.visibility or "all"),
+        folder=d.folder,
+        images=_load_images(d),
+        chunk_count=chunk_count,
+        created_at=d.created_at.isoformat() if d.created_at else "",
+    )
+
+
+@router.get("/documents", response_model=list[DocumentOut])
+async def list_documents(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    rows = await db.execute(select(KnowledgeDocument).order_by(KnowledgeDocument.created_at.desc()))
+    docs = rows.scalars().all()
+    out = []
+    for d in docs:
+        cnt = await db.scalar(
+            select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == d.id)
+        )
+        out.append(_doc_out(d, cnt or 0))
+    return out
+
+
+@router.post("/documents", response_model=DocumentOut, status_code=201)
+async def create_document(data: DocumentCreate, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Plak vrije tekst als kennisdocument."""
+    _require_admin(user)
+    doc = KnowledgeDocument(
+        title=data.title.strip(),
+        content=data.content.strip(),
+        context=(data.context.strip() if data.context and data.context.strip() else None),
+        keywords=(data.keywords.strip() if data.keywords and data.keywords.strip() else None),
+        category=data.category,
+        visibility=data.visibility or KnowledgeVisibility.all,
+        folder=(data.folder.strip() if data.folder else None),
+        created_by=user.ha_user_id,
+    )
+    db.add(doc)
+    await db.flush()
+    cnt = await _store_document_chunks(db, doc)
+    return _doc_out(doc, cnt)
+
+
+@router.post("/documents/upload", response_model=DocumentOut, status_code=201)
+async def upload_document(
+    user: RequireUser,
+    file: UploadFile = File(...),
+    title: Optional[str] = Query(None),
+    context: Optional[str] = Query(None),
+    keywords: Optional[str] = Query(None),
+    category: Optional[Category] = Query(None),
+    visibility: KnowledgeVisibility = Query(KnowledgeVisibility.all),
+    folder: Optional[str] = Query(None),
+    db: AsyncSession = Depends(get_db),
+):
+    """Upload een document (.md/.txt/.pdf/.zip) als kennisbron voor de AI.
+    Met `context` geef je een toelichting mee die de AI helpt de tekst te duiden
+    (handig bij PDF's die kromme of onsamenhangende tekst opleveren)."""
+    _require_admin(user)
+    raw = await file.read()
+    content = _extract_text(file.filename or "", raw).strip()
+    ctx = (context.strip() if context and context.strip() else None)
+    if not content and not ctx:
+        raise HTTPException(
+            400,
+            "Geen tekst gevonden in het bestand. Voeg een context/toelichting toe "
+            "om dit bestand toch op te slaan.",
+        )
+    doc = KnowledgeDocument(
+        title=(title or os.path.splitext(file.filename or "Document")[0]).strip() or "Document",
+        source_filename=file.filename,
+        content=content,
+        context=ctx,
+        keywords=(keywords.strip() if keywords and keywords.strip() else None),
+        category=category,
+        visibility=visibility or KnowledgeVisibility.all,
+        folder=(folder.strip() if folder else None),
+        created_by=user.ha_user_id,
+    )
+    db.add(doc)
+    await db.flush()
+    cnt = await _store_document_chunks(db, doc)
+    return _doc_out(doc, cnt)
+
+
+@router.get("/documents/{document_id}", response_model=DocumentDetailOut)
+async def get_document(document_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    cnt = await db.scalar(
+        select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == doc.id)
+    )
+    base = _doc_out(doc, cnt or 0)
+    return DocumentDetailOut(**base.model_dump(), content=doc.content or "")
+
+
+@router.patch("/documents/{document_id}", response_model=DocumentDetailOut)
+async def update_document(
+    document_id: str, data: DocumentUpdate, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    """Wijzig een document. Verandert de inhoud, dan worden de chunks opnieuw
+    opgebouwd zodat de AI altijd de actuele tekst doorzoekt."""
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+
+    updates = data.model_dump(exclude_unset=True)
+    content_changed = False
+    if "title" in updates and updates["title"] is not None:
+        doc.title = updates["title"].strip() or doc.title
+    if "content" in updates and updates["content"] is not None:
+        new_content = updates["content"].strip()
+        if new_content and new_content != (doc.content or ""):
+            doc.content = new_content
+            content_changed = True
+    if "context" in updates:
+        new_ctx = updates["context"]
+        new_ctx = new_ctx.strip() if isinstance(new_ctx, str) and new_ctx.strip() else None
+        if new_ctx != (doc.context or None):
+            doc.context = new_ctx
+            content_changed = True  # context zit in de chunks → opnieuw opbouwen
+    if "keywords" in updates:
+        new_kw = updates["keywords"]
+        new_kw = new_kw.strip() if isinstance(new_kw, str) and new_kw.strip() else None
+        if new_kw != (doc.keywords or None):
+            doc.keywords = new_kw
+            content_changed = True  # trefwoorden zitten in de chunks → opnieuw opbouwen
+    if "category" in updates:
+        doc.category = updates["category"]
+    if "visibility" in updates and updates["visibility"] is not None:
+        doc.visibility = updates["visibility"]
+    if "folder" in updates:
+        folder = updates["folder"]
+        doc.folder = folder.strip() if isinstance(folder, str) and folder.strip() else None
+
+    await db.flush()
+
+    if content_changed:
+        # oude chunks weg, opnieuw opbouwen uit de nieuwe inhoud
+        old = await db.execute(
+            select(KnowledgeChunk).where(KnowledgeChunk.document_id == doc.id)
+        )
+        for ch in old.scalars().all():
+            await db.delete(ch)
+        await db.flush()
+        cnt = await _store_document_chunks(db, doc)
+    else:
+        cnt = await db.scalar(
+            select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == doc.id)
+        ) or 0
+
+    return DocumentDetailOut(**_doc_out(doc, cnt).model_dump(), content=doc.content or "")
+
+
+@router.delete("/documents/{document_id}", status_code=204)
+async def delete_document(document_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    await db.delete(doc)
+
+
+# ── Afbeeldingen bij documenten (alleen admin; tonen mag iedereen) ─────────────
+
+@router.post("/documents/{document_id}/images", status_code=201)
+async def upload_document_image(
+    document_id: str,
+    user: RequireUser,
+    file: UploadFile = File(...),
+    db: AsyncSession = Depends(get_db),
+):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    ext = os.path.splitext(file.filename or "")[1].lower()
+    if ext not in IMAGE_EXTENSIONS:
+        raise HTTPException(400, "Alleen afbeeldingen zijn toegestaan")
+    d = _document_image_dir(document_id)
+    os.makedirs(d, exist_ok=True)
+    fname = f"{uuid.uuid4().hex}{ext}"
+    with open(os.path.join(d, fname), "wb") as f:
+        f.write(await file.read())
+    imgs = _load_images(doc)
+    imgs.append(fname)
+    doc.images = json.dumps(imgs)
+    await db.flush()
+    return {"filename": fname}
+
+
+@router.get("/documents/{document_id}/images/{filename}")
+async def get_document_image(document_id: str, filename: str, user: RequireUser):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(400, "Ongeldige bestandsnaam")
+    filepath = os.path.join(_document_image_dir(document_id), filename)
+    if not os.path.isfile(filepath):
+        raise HTTPException(404, "Afbeelding niet gevonden")
+    return FileResponse(filepath)
+
+
+@router.delete("/documents/{document_id}/images/{filename}", status_code=204)
+async def delete_document_image(
+    document_id: str, filename: str, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    _require_admin(user)
+    doc = await db.get(KnowledgeDocument, document_id)
+    if not doc:
+        raise HTTPException(404, "Document niet gevonden")
+    base = os.path.basename(filename)
+    filepath = os.path.join(_document_image_dir(document_id), base)
+    if os.path.isfile(filepath):
+        os.remove(filepath)
+    imgs = [i for i in _load_images(doc) if i != base]
+    doc.images = json.dumps(imgs) if imgs else None
+    await db.flush()
+
+
+# ── Zoeken door alle kennis (alleen admin) ─────────────────────────────────────
+
+def _snippet(text: str, query: str, width: int = 200) -> str:
+    """Korte fragmenttekst rond de eerste match (of het begin als er geen match
+    in de tekst zelf zit, bijv. bij een treffer in de titel)."""
+    text = (text or "").replace("\n", " ").strip()
+    if not text:
+        return ""
+    low = text.lower()
+    i = low.find(query.lower()) if query else -1
+    if i < 0:
+        return text[:width].strip() + ("…" if len(text) > width else "")
+    start = max(0, i - width // 3)
+    end = min(len(text), i + len(query) + (2 * width) // 3)
+    return ("…" if start > 0 else "") + text[start:end].strip() + ("…" if end < len(text) else "")
+
+
+class DocumentMatch(DocumentOut):
+    snippet: str = ""
+
+
+class SearchResults(BaseModel):
+    entries: list[EntryOut]
+    documents: list[DocumentMatch]
+
+
+@router.get("/search", response_model=SearchResults)
+async def search_all(
+    user: RequireUser,
+    q: str = Query(..., min_length=1),
+    db: AsyncSession = Depends(get_db),
+):
+    """Doorzoek de hele kennisbank (kennis-items + documenten) op een trefwoord,
+    zodat een beheerder ziet wat er al over een onderwerp bekend is."""
+    _require_admin(user)
+    term = q.strip()
+    if not term:
+        return SearchResults(entries=[], documents=[])
+    like = f"%{term}%"
+
+    erows = await db.execute(
+        select(KnowledgeEntry)
+        .where(
+            or_(
+                KnowledgeEntry.title.ilike(like),
+                KnowledgeEntry.answer.ilike(like),
+                KnowledgeEntry.keywords.ilike(like),
+                KnowledgeEntry.folder.ilike(like),
+            )
+        )
+        .order_by(KnowledgeEntry.ask_count.desc(), KnowledgeEntry.created_at.desc())
+        .limit(50)
+    )
+    entries = [EntryOut(**_entry_out(e)) for e in erows.scalars().all()]
+
+    drows = await db.execute(
+        select(KnowledgeDocument)
+        .where(
+            or_(
+                KnowledgeDocument.title.ilike(like),
+                KnowledgeDocument.content.ilike(like),
+                KnowledgeDocument.context.ilike(like),
+                KnowledgeDocument.keywords.ilike(like),
+                KnowledgeDocument.folder.ilike(like),
+            )
+        )
+        .order_by(KnowledgeDocument.created_at.desc())
+        .limit(50)
+    )
+    documents: list[DocumentMatch] = []
+    for d in drows.scalars().all():
+        cnt = await db.scalar(
+            select(func.count(KnowledgeChunk.id)).where(KnowledgeChunk.document_id == d.id)
+        )
+        base = _doc_out(d, cnt or 0)
+        documents.append(DocumentMatch(**base.model_dump(), snippet=_snippet(d.content or "", term)))
+
+    return SearchResults(entries=entries, documents=documents)
+
+
+class AiSettingsOut(BaseModel):
+    ai_available: bool          # is er een API-sleutel beschikbaar (app of addon)?
+    ai_enabled: bool            # heeft de admin AI aangezet?
+    model: str                  # actief model
+    has_key: bool               # is er überhaupt een sleutel ingesteld?
+    key_from_addon: bool        # komt de sleutel uit de addon-optie (env)?
+    web_search_enabled: bool    # mag de bot (op toegestane websites) zoeken?
+    web_domains: str            # toegestane websites, zoals door de admin ingevoerd
+
+
+class AiSettingsUpdate(BaseModel):
+    enabled: Optional[bool] = None
+    api_key: Optional[str] = None   # "" of null = niet wijzigen; spaties = wissen
+    model: Optional[str] = None
+    web_search_enabled: Optional[bool] = None
+    web_domains: Optional[str] = None   # null = niet wijzigen; leeg/spaties = wissen
+
+
+async def _set_setting(db: AsyncSession, key: str, value: str | None) -> None:
+    row = await db.get(SystemSetting, key)
+    if value:
+        if row:
+            row.value = value
+        else:
+            db.add(SystemSetting(key=key, value=value))
+    elif row is not None:
+        # lege waarde → instelling verwijderen (valt terug op addon-optie)
+        await db.delete(row)
+
+
+async def _ai_settings_out(db: AsyncSession) -> AiSettingsOut:
+    enabled_row = await db.get(SystemSetting, "knowledge_ai_enabled")
+    web_row = await db.get(SystemSetting, "knowledge_web_search_enabled")
+    app_key = await _setting(db, "knowledge_ai_key")
+    env_key = ai_client.env_api_key()
+    return AiSettingsOut(
+        ai_available=bool(app_key or env_key),
+        ai_enabled=bool(enabled_row and enabled_row.value == "true"),
+        model=await _ai_model(db),
+        has_key=bool(app_key or env_key),
+        key_from_addon=not app_key and bool(env_key),
+        web_search_enabled=bool(web_row and web_row.value == "true"),
+        web_domains=await _setting(db, "knowledge_web_domains"),
+    )
+
+
+_CATEGORY_LABELS = {
+    "technical": "Technisch",
+    "housekeeping": "Huishouding",
+    "reception": "Receptie",
+    "service": "Bediening",
+    "kitchen": "Keuken",
+    "sales": "Sales",
+    "garden": "Tuin",
+}
+
+
+async def _known_folders(db: AsyncSession) -> list[str]:
+    """Verzamel de bestaande onderwerpen/mappen uit entries + documenten."""
+    folders: set[str] = set()
+    for model in (KnowledgeEntry, KnowledgeDocument):
+        rows = await db.execute(
+            select(model.folder).where(model.folder.isnot(None)).distinct()
+        )
+        for f in rows.scalars().all():
+            if f and f.strip():
+                folders.add(f.strip())
+    return sorted(folders)
+
+
+@router.post("/ai/cleanup", response_model=CleanupResult)
+async def ai_cleanup(data: CleanupRequest, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Laat Claude ruwe tekst herstructureren tot een nette kennispagina en
+    afdeling/onderwerp voorstellen. Vereist een ingestelde API-sleutel."""
+    _require_admin(user)
+    key = await _ai_key(db)
+    if not key:
+        raise HTTPException(400, "Geen API-sleutel ingesteld voor de AI")
+    model = await _ai_model(db)
+    categories = [f"{val} ({label})" for val, label in _CATEGORY_LABELS.items()]
+    folders = await _known_folders(db)
+    result = await ai_client.cleanup_document(data.text, key, model, categories, folders)
+    if result is None:
+        raise HTTPException(502, "De AI kon de tekst niet verwerken. Probeer het opnieuw.")
+
+    category = (result.get("category") or "").strip() or None
+    if category not in _CATEGORY_LABELS:
+        category = None
+    folder = (result.get("folder") or "").strip() or None
+    return CleanupResult(
+        title=(result.get("title") or "").strip(),
+        category=category,
+        folder=folder,
+        content=(result.get("content") or "").strip(),
+    )
+
+
+@router.get("/ai-settings", response_model=AiSettingsOut)
+async def get_ai_settings(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    return await _ai_settings_out(db)
+
+
+@router.patch("/ai-settings", response_model=AiSettingsOut)
+async def update_ai_settings(
+    data: AiSettingsUpdate, user: RequireUser, db: AsyncSession = Depends(get_db)
+):
+    _require_admin(user)
+    if data.enabled is not None:
+        await _set_setting(db, "knowledge_ai_enabled", "true" if data.enabled else "false")
+    if data.api_key is not None:
+        # lege string laat ongewijzigd; alleen-spaties wist de sleutel
+        if data.api_key == "":
+            pass
+        else:
+            await _set_setting(db, "knowledge_ai_key", data.api_key.strip())
+    if data.model is not None:
+        await _set_setting(db, "knowledge_ai_model", data.model.strip())
+    if data.web_search_enabled is not None:
+        await _set_setting(
+            db, "knowledge_web_search_enabled", "true" if data.web_search_enabled else "false"
+        )
+    if data.web_domains is not None:
+        # lege waarde wist de lijst (en zet websearch daarmee effectief uit)
+        await _set_setting(db, "knowledge_web_domains", data.web_domains.strip())
+    await db.flush()
+    return await _ai_settings_out(db)

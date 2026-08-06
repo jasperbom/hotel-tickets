@@ -1,0 +1,104 @@
+create_ticket:
+  name: Ticket aanmaken
+  description: Maak een nieuw ticket aan in het hotel ticket systeem. Geschikt voor gebruik in automaties.
+  fields:
+    title:
+      name: Titel
+      description: Korte omschrijving van het ticket
+      required: true
+      example: "Kraan lekt in kamer 204"
+      selector:
+        text:
+    category:
+      name: Categorie
+      description: Afdeling waarvoor het ticket bedoeld is
+      required: true
+      example: "technical"
+      selector:
+        select:
+          options:
+            - label: "TD"
+              value: "technical"
+            - label: "Huishouding"
+              value: "housekeeping"
+            - label: "Receptie"
+              value: "reception"
+    description:
+      name: Beschrijving
+      description: Optionele uitgebreide beschrijving
+      required: false
+      example: "De kraan in de badkamer druppelt continu"
+      selector:
+        text:
+          multiline: true
+    priority:
+      name: Prioriteit
+      description: Urgentie van het ticket
+      required: false
+      default: "medium"
+      selector:
+        select:
+          options:
+            - label: "Laag"
+              value: "low"
+            - label: "Normaal"
+              value: "medium"
+            - label: "Hoog"
+              value: "high"
+            - label: "Urgent"
+              value: "urgent"
+    location:
+      name: Locatie
+      description: HA area_id van de kamer of zone (optioneel)
+      required: false
+      example: "kamer_204"
+      selector:
+        area:
+    assigned_to:
+      name: Toegewezen aan
+      description: HA user_id van de medewerker (optioneel)
+      required: false
+      selector:
+        text:
+    creator_name:
+      name: Aangemaakt door (naam)
+      description: Weergavenaam van de persoon die het ticket aanmaakt (optioneel, voor gebruik via card of automatie)
+      required: false
+      example: "Jan de Vries"
+      selector:
+        text:
+
+navigate:
+  name: Navigeer naar pagina
+  description: Stuur een push-notificatie met een deep link naar een specifieke pagina in de Hotel Tickets app. Bruikbaar vanuit automaties om gebruikers direct naar tickets, dashboard of andere pagina's te sturen.
+  fields:
+    target:
+      name: Doel
+      description: De notify service van het apparaat (bijv. mobile_app_iphone_jan)
+      required: true
+      example: "mobile_app_iphone_jan"
+      selector:
+        text:
+    path:
+      name: Pad
+      description: Het pad in de app om naartoe te navigeren. Ondersteunt query parameters voor filters.
+      required: true
+      example: "/tickets?category=technical&status=open,in_progress"
+      selector:
+        text:
+    title:
+      name: Titel
+      description: Titel van de push-notificatie
+      required: false
+      default: "Hotel Tickets"
+      example: "Openstaande tickets"
+      selector:
+        text:
+    message:
+      name: Bericht
+      description: Inhoud van de push-notificatie
+      required: false
+      default: "Tik om te openen"
+      example: "Er zijn 3 nieuwe technische tickets"
+      selector:
+        text:

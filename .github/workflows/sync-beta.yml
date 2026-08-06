@@ -1,0 +1,43 @@
+name: Beta-addon synchroniseren
+
+# hotel_tickets_beta/ is een gegenereerde kopie van hotel_tickets/ (zie
+# scripts/sync-beta.sh). Deze workflow houdt die kopie automatisch gelijk,
+# zodat de beta-addon nooit achterloopt op productie.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "hotel_tickets/**"
+      - "scripts/beta-overlay/**"
+      - "scripts/sync-beta.sh"
+  workflow_dispatch:
+
+concurrency:
+  group: sync-beta
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Beta-addon genereren
+        run: ./scripts/sync-beta.sh
+
+      - name: Wijzigingen committen
+        run: |
+          if [ -z "$(git status --porcelain hotel_tickets_beta)" ]; then
+            echo "Beta-addon was al in sync."
+            exit 0
+          fi
+          VERSION=$(sed -n 's/^version:[[:space:]]*"\{0,1\}\([^"[:space:]]*\)"\{0,1\}.*/\1/p' hotel_tickets/config.yaml | head -1)
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add hotel_tickets_beta
+          git commit -m "chore: beta-addon gesynchroniseerd met v${VERSION}"
+          git push
