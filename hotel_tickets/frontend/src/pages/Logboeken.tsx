@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { locationApi, logbookApi, parseUTC, type LogObject } from "../api/client";
-import { herhaalKort, intervalTekst } from "../werk";
+import { onderhoudTekst } from "../werk";
 
 /**
  * Logboeken — het naslagscherm.
@@ -186,9 +186,7 @@ export default function Logboeken() {
               o.kind || (o.location_id ? (locaties[o.location_id] ?? o.location_id) : TYPE_LABELS[o.type]),
               o.kind && o.location_id ? (locaties[o.location_id] ?? o.location_id) : null,
               o.overdue ? `${o.open_tickets} open` : laatsteTekst(o),
-              o.maintenance_interval_days
-                ? `onderhoud ${intervalTekst(o.maintenance_interval_days)}`
-                : herhaalKort(o.schedule ?? undefined),
+              onderhoudTekst(o.maintenance),
             ].filter(Boolean).join(" · ")}
           </span>
         </span>

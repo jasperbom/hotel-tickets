@@ -7,7 +7,7 @@ import {
   locationApi, logbookApi, parseUTC, userApi,
   type LogEntry, type LogObject, type UserRole,
 } from "../api/client";
-import { AFDELING_LABELS, herhaalKort, intervalTekst } from "../werk";
+import { AFDELING_LABELS, eersteControle, onderhoudTekst } from "../werk";
 import { laatsteTekst } from "./Logboeken";
 
 /**
@@ -128,9 +128,7 @@ export default function LogboekObject() {
   const metaregel = [
     obj.location_id ? (locaties[obj.location_id] ?? obj.location_id) : null,
     TYPE_LABELS[obj.type],
-    obj.maintenance_interval_days
-      ? `onderhoud ${intervalTekst(obj.maintenance_interval_days)}`
-      : herhaalKort(obj.schedule ?? undefined),
+    onderhoudTekst(obj.maintenance),
     obj.department ? AFDELING_LABELS[obj.department] : null,
   ].filter(Boolean).join(" · ");
 
@@ -140,6 +138,7 @@ export default function LogboekObject() {
   // dat is geen geldige ISO-string. Middaguur voorkomt dat een tijdzone er een
   // dag naast gaat zitten.
   const aankoop = obj.purchase_date ? new Date(`${obj.purchase_date}T12:00:00`) : null;
+  const volgende = eersteControle(obj.maintenance);
   const herkomst = [
     aankoop ? `Gekocht ${format(aankoop, "d MMMM yyyy", { locale: nl })}` : null,
     obj.supplier ? `bij ${obj.supplier}` : null,
@@ -171,9 +170,9 @@ export default function LogboekObject() {
       <p className="meta mt-1.5">{metaregel}</p>
       {obj.serial && <p className="meta">Serienummer {obj.serial}</p>}
       {herkomst && <p className="meta">{herkomst}</p>}
-      {obj.next_check_at && (
+      {volgende && (
         <p className="meta">
-          Volgende controle {format(parseUTC(obj.next_check_at), "d MMMM yyyy", { locale: nl })}
+          Volgende controle {format(parseUTC(volgende), "d MMMM yyyy", { locale: nl })}
         </p>
       )}
       {obj.nfc_tag_id && <p className="meta print:hidden">NFC-sticker gekoppeld</p>}
@@ -303,7 +302,7 @@ export default function LogboekObject() {
       {!nieuw.open && (
         <div
           className="fixed left-0 right-0 z-30 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5 md:left-[calc(4rem+220px)] print:hidden"
-          style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: "var(--onderbalk)" }}
         >
           <div className="max-w-2xl flex gap-2">
             {magSchrijven && (

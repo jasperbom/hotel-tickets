@@ -151,6 +151,9 @@ export default function App() {
   const [bikesModuleRoles, setBikesModuleRoles] = useState<BikesModuleRoles>("all");
   const [brandColor, setBrandColor] = useState<string | null>(cachedBranding?.brand_color ?? null);
   const [brandLogo, setBrandLogo] = useState<string | null>(cachedBranding?.brand_logo ?? null);
+  const [brandTextColor, setBrandTextColor] = useState<string | null>(
+    cachedBranding?.brand_text_color ?? null,
+  );
   const [beta, setBeta] = useState<BetaStatus | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const navigate = useNavigate();
@@ -189,6 +192,7 @@ export default function App() {
           // verwijderde huisstijl niet uit de cache blijft hangen.
           setBrandColor(b.brand_color);
           setBrandLogo(b.brand_logo);
+          setBrandTextColor(b.brand_text_color);
           applyButtonPalette(b.btn_color);
           applyAppBackground(b.bg_image, b.bg_color);
           saveCachedAppBranding(b);
@@ -345,7 +349,13 @@ export default function App() {
         // Verschil tussen layout-viewport en zichtbare viewport = toetsenbord.
         // Kleine verschillen (bijv. de adresbalk) tellen niet als toetsenbord.
         const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-        root.style.setProperty("--kb-inset", kb < 120 ? "0px" : `${Math.round(kb)}px`);
+        const open = kb >= 120;
+        root.style.setProperty("--kb-inset", open ? `${Math.round(kb)}px` : "0px");
+        // De onderbalk verdwijnt zolang er getypt wordt: hij is dan toch
+        // onbruikbaar, en iOS tilt vaste elementen boven het toetsenbord —
+        // waardoor de balk midden in beeld kwam te staan (zichtbaar in de
+        // kennisbot, die als enige een vaste-hoogte layout heeft).
+        document.body.classList.toggle("kb-open", open);
       });
     };
     vv.addEventListener("resize", update);
@@ -355,6 +365,7 @@ export default function App() {
       vv.removeEventListener("scroll", update);
       cancelAnimationFrame(raf);
       root.style.removeProperty("--kb-inset");
+      document.body.classList.remove("kb-open");
     };
   }, []);
   // Sluit het accountmenu bij navigatie
@@ -451,9 +462,11 @@ export default function App() {
   const schermTitel = SCHERMTITELS[location.pathname] ?? afgeleideTitel(location.pathname, activeModule);
 
   // Tekst op de merkkleur wordt berekend in plaats van gegokt: bij een lichte
-  // merkkleur haalde wit (en zeker text-white/60) het contrast niet.
+  // merkkleur haalde wit (en zeker text-white/60) het contrast niet. Een
+  // huisstijl waarin die berekening net niet klopt — crèmewit op donkerblauw —
+  // kan hem overschrijven bij Instellingen → Huisstijl.
   const merkAchtergrond = brandColor ?? "#1C1B19";
-  const opMerk = leesbareTekstkleur(merkAchtergrond);
+  const opMerk = brandTextColor || leesbareTekstkleur(merkAchtergrond);
 
   return (
     <>
@@ -591,7 +604,7 @@ export default function App() {
           <main
             className={`flex-1 px-4 py-6 w-full max-w-[1100px] ${
               location.pathname === "/kennis" ? "" : "touch-keyboard-pb"
-            } ${toonMelden ? "fab-clearance" : ""} pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-6`}
+            } ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`}
           >
             {/* Modules die nog hun eigen schermen hebben houden op mobiel een
                 eigen regel; de onderbalk hieronder is van de hoofdnavigatie. */}
@@ -680,6 +693,7 @@ export default function App() {
 
         {/* ── Mobiel: onderbalk van 56 px, horizontaal schuifbaar ─────────── */}
         <nav
+          data-onderbalk
           className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex overflow-x-auto scrollbar-none
                      border-t border-ink-12 bg-paper-raised"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
@@ -727,7 +741,7 @@ export default function App() {
             className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 rounded-full
                        bg-brand text-[color:var(--on-brand,#fff)] shadow-lg active:scale-95 transition"
             style={{
-              bottom: "calc(4.5rem + var(--undo-lift, 0px) + env(safe-area-inset-bottom, 0px))",
+              bottom: "calc(var(--onderbalk) + 1rem + var(--undo-lift, 0px))",
             }}
           >
             <Plus size={26} strokeWidth={2} aria-hidden="true" />

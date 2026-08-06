@@ -715,7 +715,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
             ? "sticky bottom-0 -mx-4 mt-5 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5"
             : "fixed left-0 right-0 z-30 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5 md:left-[calc(4rem+220px)]"
         }
-        style={ingebed ? undefined : { bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+        style={ingebed ? undefined : { bottom: "var(--onderbalk)" }}
       >
         <div className="max-w-2xl flex gap-2">
           {meekijken ? (

@@ -22,6 +22,31 @@
     /* Leesbare tekstkleur óp de merkkleur; branding.ts rekent hem uit zodra
        er een eigen knopkleur is ingesteld. */
     --on-brand: #ffffff;
+
+    /* Hoogte van de mobiele onderbalk, inclusief de veilige zone van de
+       telefoon. Eén getal, op één plek: de balk zelf, de onderkant-padding van
+       elke pagina en elke zwevende actiebalk rekenen hiermee. Stond dit los van
+       elkaar, dan eindigde de pagina op sommige schermen precies onder de balk
+       — en verdween daar de opslaan-knop. */
+    --onderbalk: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+  }
+
+  /* Vanaf tablet is er geen onderbalk; dan is er ook niets te reserveren. */
+  @media (min-width: 768px) {
+    :root {
+      --onderbalk: 0px;
+    }
+  }
+
+  /* Zolang het toetsenbord openstaat is de onderbalk verborgen (zie App.tsx):
+     hij is dan onbruikbaar én iOS duwt vaste elementen boven het toetsenbord,
+     waardoor hij midden in beeld kwam te staan. De gereserveerde ruimte
+     verdwijnt mee. */
+  body.kb-open [data-onderbalk] {
+    display: none;
+  }
+  body.kb-open {
+    --onderbalk: 0px;
   }
 
   /* Reserveer onderaan ruimte waar het virtuele toetsenbord opkomt: iOS
@@ -98,25 +123,33 @@ body.undo-open {
   --undo-lift: 4.75rem;
 }
 
+/* Elke pagina eindigt bóven de onderbalk, niet eronder. */
+.pagina-einde {
+  padding-bottom: calc(var(--onderbalk) + 1rem);
+}
+
 /* Ruimte onderin voor de zwevende actieknop (het vraag-wolkje), zodat de
    inhoud onderaan de pagina er nooit onder verdwijnt als je helemaal naar
-   beneden scrolt: 1rem afstand + 3,5rem knop + marge. */
+   beneden scrolt: de balk + 1rem afstand + 3,5rem knop + marge. */
 .fab-clearance {
-  padding-bottom: calc(7rem + env(safe-area-inset-bottom, 0px));
+  padding-bottom: calc(var(--onderbalk) + 5.5rem);
 }
 
 /* Op touch-apparaten extra onderkant-padding zodat er altijd scrollruimte
    is onder het laatste invoerveld wanneer het toetsenbord opent. */
 @media (hover: none) and (pointer: coarse) {
+  /* Ruimte onder het laatste invoerveld wanneer het toetsenbord opent. Nooit
+     minder dan de onderbalk: met een gesloten toetsenbord is --kb-inset 0 en
+     zonder deze ondergrens eindigde de pagina exact achter de balk. */
   .touch-keyboard-pb {
-    padding-bottom: calc(var(--kb-inset, 40vh) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(max(var(--kb-inset, 40vh), var(--onderbalk)) + 1rem);
   }
 
   /* Toetsenbord-padding en FAB-ruimte gecombineerd: de grootste van de twee
      geldt. Bij gesloten toetsenbord (inset 0) blijft zo de FAB-ruimte over —
      zonder deze regel zou .touch-keyboard-pb de FAB-ruimte wegdrukken. */
   .touch-keyboard-pb.fab-clearance {
-    padding-bottom: calc(max(var(--kb-inset, 40vh), 7rem) + env(safe-area-inset-bottom, 0px));
+    padding-bottom: calc(max(var(--kb-inset, 40vh), var(--onderbalk) + 4.5rem) + 1rem);
   }
 
   /* Vaste-hoogte pagina's (bijv. de kennisbot-chat) zetten de body in `kb-fit`-

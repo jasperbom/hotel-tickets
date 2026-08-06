@@ -7,7 +7,8 @@ import {
 } from "../api/client";
 import { BevestigKnop } from "../components/BevestigKnop";
 import AreaSelector from "../components/AreaSelector";
-import { intervalTekst } from "../werk";
+import { onderhoudTekst } from "../werk";
+import { leesbareTekstkleur } from "../branding";
 import { mapVan } from "./Logboeken";
 
 type Tab = "systeem" | "logboeken" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot" | "beta";
@@ -1061,6 +1062,8 @@ function HuisstijlPanel() {
   const [bgImage, setBgImage] = useState<string | null>(null);
   const [logo, setLogo] = useState<string | null>(null);
 
+  // Leeg = automatisch: zwart of wit, wat het beste leest op de balkkleur.
+  const [brandTextColor, setBrandTextColor] = useState<string | null>(null);
   const [savingColors, setSavingColors] = useState(false);
   const [savedColors, setSavedColors] = useState(false);
   const [logoUploading, setLogoUploading] = useState(false);
@@ -1076,6 +1079,7 @@ function HuisstijlPanel() {
     brandingApi.get().then((r) => {
       const d = r.data;
       if (d.brand_color) setBrandColor(d.brand_color);
+      if (d.brand_text_color) setBrandTextColor(d.brand_text_color);
       if (d.btn_color) setBtnColor(d.btn_color);
       if (d.bg_color) { setBgColor(d.bg_color); setBgMode("color"); }
       if (d.bg_image) { setBgImage(d.bg_image); setBgMode("image"); }
@@ -1088,6 +1092,8 @@ function HuisstijlPanel() {
     try {
       await brandingApi.update({
         brand_color: brandColor,
+        // Lege string wist de eigen keuze; dan rekent de app hem weer uit.
+        brand_text_color: brandTextColor ?? "",
         btn_color: btnColor,
         bg_color: bgMode === "color" ? bgColor : undefined,
       });
@@ -1153,6 +1159,46 @@ function HuisstijlPanel() {
         </p>
         <div className="space-y-3">
           <ColorRow label="Navigatiebalk" value={brandColor} onChange={setBrandColor} />
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-ink-70 w-40 shrink-0">Tekst op de balk</span>
+            {brandTextColor === null ? (
+              <>
+                <span
+                  className="inline-flex items-center h-tap px-3 rounded-[10px] border border-ink-12 text-meta"
+                  style={{ backgroundColor: brandColor, color: leesbareTekstkleur(brandColor) }}
+                >
+                  Automatisch
+                </span>
+                <button
+                  onClick={() => setBrandTextColor(leesbareTekstkleur(brandColor))}
+                  className="text-sm text-brand hover:underline"
+                >
+                  Zelf kiezen
+                </button>
+              </>
+            ) : (
+              <>
+                <input
+                  type="color"
+                  value={brandTextColor}
+                  onChange={(e) => setBrandTextColor(e.target.value)}
+                  className="h-tap w-16 rounded-[10px] border border-ink-12 bg-paper-raised"
+                />
+                <span
+                  className="inline-flex items-center h-tap px-3 rounded-[10px] text-meta font-semibold"
+                  style={{ backgroundColor: brandColor, color: brandTextColor }}
+                >
+                  Voorbeeld
+                </span>
+                <button
+                  onClick={() => setBrandTextColor(null)}
+                  className="text-sm text-ink-45 hover:text-ink"
+                >
+                  Terug naar automatisch
+                </button>
+              </>
+            )}
+          </div>
           <ColorRow label="Knoppen" value={btnColor} onChange={setBtnColor} />
         </div>
         <div className="flex items-center gap-3 pt-2">
@@ -1681,8 +1727,9 @@ const LEEG_OBJECT = {
   kind: "",
   purchase_date: "",
   supplier: "",
-  // Als tekst in het formulier, zodat "leeg" ook echt leeg is en niet 0.
-  maintenance_interval_days: "",
+  // Onderhoudsschema's als lijst: één ding heeft vaak meer dan één ritme.
+  // De dagen staan als tekst in het formulier, zodat "leeg" ook echt leeg is.
+  maintenance: [] as { id: string | null; title: string; dagen: string }[],
 };
 
 /**
@@ -1690,7 +1737,6 @@ const LEEG_OBJECT = {
  * bestaan — een keuring is soms elke 14 maanden.
  */
 const INTERVALLEN: { label: string; dagen: string }[] = [
-  { label: "Geen", dagen: "" },
   { label: "Wekelijks", dagen: "7" },
   { label: "Maandelijks", dagen: "30" },
   { label: "Per kwartaal", dagen: "91" },
@@ -1760,7 +1806,9 @@ function LogboekObjectenPanel() {
       kind: form.kind.trim() || null,
       purchase_date: form.purchase_date || null,
       supplier: form.supplier.trim() || null,
-      maintenance_interval_days: Number(form.maintenance_interval_days) || null,
+      maintenance: form.maintenance
+        .filter((m) => Number(m.dagen) > 0)
+        .map((m) => ({ id: m.id, title: m.title.trim() || null, interval_days: Number(m.dagen) })),
     };
     try {
       if (bewerkt) await logbookApi.updateObject(bewerkt, data);
@@ -1782,9 +1830,9 @@ function LogboekObjectenPanel() {
   return (
     <Section title="Logboekobjecten">
       <p className="text-sm text-ink-45">
-        Een object is een ding met een naam, een plek en een geschiedenis. Zet er een
-        onderhoudsinterval op en de controle komt vanzelf als taak op Vandaag; het
-        afvinken schrijft dan een onwisbare regel in het boek.
+        Een object is een ding met een naam, een plek en een geschiedenis. Zet er
+        onderhoud op — één ritme of meerdere — en elke controle komt vanzelf als
+        taak op Vandaag; het afvinken schrijft dan een onwisbare regel in het boek.
       </p>
 
       {!open && (
@@ -1880,44 +1928,88 @@ function LogboekObjectenPanel() {
           </div>
           <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
 
-          {/* Onderhoudsinterval — wordt een herhaaltaak op dit object */}
+          {/* Onderhoudsschema's — elk wordt een herhaaltaak op dit object */}
           <div className="rounded-[10px] bg-ink-6 p-3 space-y-2">
-            <p className="text-sm font-semibold text-ink">Onderhoudsinterval</p>
-            <div className="flex flex-wrap gap-1.5">
-              {INTERVALLEN.map((i) => (
-                <button
-                  key={i.label}
-                  type="button"
-                  onClick={() => setForm({ ...form, maintenance_interval_days: i.dagen })}
-                  className={`h-tap px-3.5 inline-flex items-center rounded-full text-meta font-medium transition-colors ${
-                    form.maintenance_interval_days === i.dagen
-                      ? "bg-ink text-paper font-semibold"
-                      : "bg-paper-raised border border-ink-12 text-ink-70 hover:bg-ink-6"
-                  }`}
-                >
-                  {i.label}
-                </button>
-              ))}
-              <span className="flex items-center gap-1.5">
-                <span className="meta">of elke</span>
-                <input
-                  type="number"
-                  min={1}
-                  inputMode="numeric"
-                  value={form.maintenance_interval_days}
-                  onChange={(e) => setForm({ ...form, maintenance_interval_days: e.target.value })}
-                  placeholder="90"
-                  className="h-tap w-20 rounded-[10px] border border-ink-12 px-3 text-body"
-                />
-                <span className="meta">dagen</span>
-              </span>
-            </div>
+            <p className="text-sm font-semibold text-ink">Onderhoud</p>
+            {form.maintenance.length === 0 && (
+              <p className="meta">Nog geen onderhoud ingesteld.</p>
+            )}
+            {form.maintenance.map((m, i) => {
+              const wijzig = (velden: Partial<typeof m>) =>
+                setForm({
+                  ...form,
+                  maintenance: form.maintenance.map((x, j) => (j === i ? { ...x, ...velden } : x)),
+                });
+              return (
+                <div key={m.id ?? `nieuw-${i}`} className="rounded-[10px] bg-paper-raised border border-ink-12 p-3 space-y-2">
+                  <div className="flex gap-2">
+                    <input
+                      value={m.title}
+                      onChange={(e) => wijzig({ title: e.target.value })}
+                      placeholder={`Wat er gebeurt, bijv. "Visuele controle"`}
+                      className="flex-1 min-w-0 h-tap rounded-[10px] border border-ink-12 px-3 text-body"
+                    />
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setForm({ ...form, maintenance: form.maintenance.filter((_, j) => j !== i) })
+                      }
+                      className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-meta font-semibold text-urgent hover:bg-urgent-soft"
+                    >
+                      Weg
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {INTERVALLEN.map((optie) => (
+                      <button
+                        key={optie.label}
+                        type="button"
+                        onClick={() => wijzig({ dagen: optie.dagen })}
+                        className={`h-tap px-3.5 inline-flex items-center rounded-full text-meta font-medium transition-colors ${
+                          m.dagen === optie.dagen
+                            ? "bg-ink text-paper font-semibold"
+                            : "bg-paper-raised border border-ink-12 text-ink-70 hover:bg-ink-6"
+                        }`}
+                      >
+                        {optie.label}
+                      </button>
+                    ))}
+                    <span className="flex items-center gap-1.5">
+                      <span className="meta">of elke</span>
+                      <input
+                        type="number"
+                        min={1}
+                        inputMode="numeric"
+                        value={m.dagen}
+                        onChange={(e) => wijzig({ dagen: e.target.value })}
+                        placeholder="90"
+                        className="h-tap w-20 rounded-[10px] border border-ink-12 px-3 text-body"
+                      />
+                      <span className="meta">dagen</span>
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
+            <button
+              type="button"
+              onClick={() =>
+                setForm({
+                  ...form,
+                  maintenance: [...form.maintenance, { id: null, title: "", dagen: "30" }],
+                })
+              }
+              className="h-tap px-4 inline-flex items-center rounded-[10px] border border-ink-12 bg-paper-raised text-meta font-semibold text-ink hover:bg-ink-6"
+            >
+              + Onderhoud toevoegen
+            </button>
             <p className="meta">
-              De teller loopt vanaf de laatste registratie, niet vanaf een vaste
-              kalenderdag. De controle verschijnt als gewone taak op Vandaag;
-              afvinken schrijft de regel in dit boek.
+              Eén ding heeft vaak meer dan één ritme: maandelijks een visuele
+              controle, jaarlijks de keuring. Elke regel wordt een eigen taak op
+              Vandaag, met een eigen teller die loopt vanaf de laatste registratie.
             </p>
           </div>
+
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -1956,9 +2048,7 @@ function LogboekObjectenPanel() {
                     o.kind || OBJECT_TYPES.find((t) => t.value === o.type)?.label,
                     o.location_id ? (locaties[o.location_id] ?? o.location_id) : null,
                     o.department ? DEPT_FULL_LABELS[o.department] : "iedereen mag schrijven",
-                    o.maintenance_interval_days
-                      ? `onderhoud ${intervalTekst(o.maintenance_interval_days)}`
-                      : null,
+                    onderhoudTekst(o.maintenance),
                     o.supplier,
                     o.nfc_tag_id ? "NFC" : null,
                   ].filter(Boolean).join(" · ")}
@@ -1973,8 +2063,11 @@ function LogboekObjectenPanel() {
                     department: o.department, serial: o.serial ?? "", description: o.description ?? "",
                     nfc_tag_id: o.nfc_tag_id ?? "", folder: o.folder ?? "", kind: o.kind ?? "",
                     purchase_date: o.purchase_date ?? "", supplier: o.supplier ?? "",
-                    maintenance_interval_days: o.maintenance_interval_days
-                      ? String(o.maintenance_interval_days) : "",
+                    maintenance: (o.maintenance ?? []).map((m) => ({
+                      id: m.id,
+                      title: m.title,
+                      dagen: m.interval_days ? String(m.interval_days) : "",
+                    })),
                   });
                 }}
                 className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"

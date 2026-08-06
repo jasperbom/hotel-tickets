@@ -307,11 +307,33 @@ export interface LogObject {
   last_check_at: string | null;
   open_tickets: number;
   overdue: boolean;
-  schedule: string | null;
-  /** Onderhoudsinterval in dagen; achter de schermen een herhaaltaak. */
-  maintenance_interval_days: number | null;
-  next_check_at: string | null;
+  /** Onderhoudsschema's; achter de schermen elk een eigen herhaaltaak. */
+  maintenance: Maintenance[];
 }
+
+/** Eén onderhoudsritme van een object — de cv-ketel heeft er vaak twee. */
+export interface Maintenance {
+  id: string;
+  title: string;
+  interval_days: number | null;
+  next_check_at: string | null;
+  is_active: boolean;
+}
+
+/** Wat je bij het opslaan meestuurt: zonder id is het schema nieuw. */
+export interface MaintenanceInput {
+  id: string | null;
+  title: string | null;
+  interval_days: number;
+}
+
+/**
+ * Een object zoals je het opslaat. De afgeleide velden (volgende controle,
+ * open tickets) komen terug van de server en stuur je niet mee.
+ */
+export type LogObjectInput = Partial<Omit<LogObject, "maintenance">> & {
+  maintenance?: MaintenanceInput[];
+};
 
 export interface LogEntry {
   id: string;
@@ -328,8 +350,8 @@ export interface LogEntry {
 export const logbookApi = {
   listObjects: () => api.get<LogObject[]>("/logbook/objects"),
   getObject: (id: string) => api.get<LogObject>(`/logbook/objects/${id}`),
-  createObject: (data: Partial<LogObject>) => api.post<LogObject>("/logbook/objects", data),
-  updateObject: (id: string, data: Partial<LogObject>) => api.patch<LogObject>(`/logbook/objects/${id}`, data),
+  createObject: (data: LogObjectInput) => api.post<LogObject>("/logbook/objects", data),
+  updateObject: (id: string, data: LogObjectInput) => api.patch<LogObject>(`/logbook/objects/${id}`, data),
   entries: (id: string, params?: Record<string, string>) =>
     api.get<LogEntry[]>(`/logbook/objects/${id}/entries`, { params }),
   addEntry: (id: string, data: { type?: LogEntryType; body?: string; value?: string; corrects_id?: string }) =>
@@ -544,11 +566,18 @@ export interface BrandingSettings {
   btn_color: string | null;
   bg_color: string | null;
   bg_image: string | null;
+  /** Tekst op de navigatiekleur; leeg = automatisch zwart of wit. */
+  brand_text_color: string | null;
 }
 
 export const brandingApi = {
   get: () => api.get<BrandingSettings>("/settings/branding"),
-  update: (data: { brand_color?: string | null; btn_color?: string | null; bg_color?: string | null }) =>
+  update: (data: {
+    brand_color?: string | null;
+    btn_color?: string | null;
+    bg_color?: string | null;
+    brand_text_color?: string | null;
+  }) =>
     api.patch<BrandingSettings>("/settings/branding", data),
   uploadLogo: (file: File) => {
     const fd = new FormData();
