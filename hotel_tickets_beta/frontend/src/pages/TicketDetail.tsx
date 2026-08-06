@@ -2,10 +2,14 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUTC, type Ticket, type Comment, type UserRole, type Priority, type KeycardStatus, type Role, type Category } from "../api/client";
+import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUTC, type Ticket, type Comment, type TicketEvent, type UserRole, type Priority, type KeycardStatus, type Role, type Category } from "../api/client";
 import { Camera, Check, ChevronLeft, MoreHorizontal } from "lucide-react";
 import { AFDELING_KORT, AFDELING_LABELS, eigendom, leeftijdTekst, prioriteitWoord } from "../werk";
 import { MentionTextarea, renderWithMentions } from "../components/MentionTextarea";
+
+const PRIO_WOORD: Record<string, string> = {
+  urgent: "urgent", high: "hoog", medium: "normaal", low: "laag",
+};
 
 const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: "urgent", label: "Urgent" },
@@ -26,6 +30,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
   const location = useLocation();
   const [ticket, setTicket] = useState<Ticket | null>(null);
   const [comments, setComments] = useState<Comment[]>([]);
+  const [events, setEvents] = useState<TicketEvent[]>([]);
   const [users, setUsers] = useState<UserRole[]>([]);
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [keycard, setKeycard] = useState<KeycardStatus | null>(null);
@@ -60,13 +65,15 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
     const t = await ticketApi.get(id);
     setTicket(t.data);
 
-    const [c, u, locs, p] = await Promise.allSettled([
+    const [c, u, locs, p, ev] = await Promise.allSettled([
       ticketApi.getComments(id),
       userApi.list(),
       locationApi.list(),
       ticketApi.listPhotos(id),
+      ticketApi.getEvents(id),
     ]);
     if (c.status === "fulfilled") setComments(c.value.data);
+    if (ev.status === "fulfilled") setEvents(ev.value.data);
     if (u.status === "fulfilled") setUsers(u.value.data);
     if (locs.status === "fulfilled") {
       setLocations(Object.fromEntries(locs.value.data.map((l) => [l.id, l.name])));
@@ -236,27 +243,62 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
   const kamerBezet = keycard?.found ? keycard.occupied : null;
   const meekijken = !canEdit;
 
-  // Verloop: aanmaak, reacties en afronding chronologisch in één lijst. Wie
-  // wanneer toewees of herprioriteerde staat er niet bij — dat legt de backend
-  // (nog) niet vast.
+  const naam = (id: string | null | undefined) =>
+    !id ? "iemand" : id === "system" ? "Home Assistant" : usersMap[id] ?? id;
+
+  /** Eén regel per gebeurtenis, in gewoon Nederlands. */
+  function gebeurtenisTekst(e: TicketEvent): string {
+    switch (e.type) {
+      case "created": return `${naam(e.actor_id)} meldde dit`;
+      case "assigned":
+        return e.to_value === e.actor_id
+          ? `${naam(e.actor_id)} pakte dit op`
+          : `${naam(e.actor_id)} wees dit toe aan ${naam(e.to_value)}`;
+      case "unassigned": return `${naam(e.actor_id)} haalde de toewijzing eraf`;
+      case "priority": return `${naam(e.actor_id)} zette de prioriteit op ${PRIO_WOORD[e.to_value ?? ""] ?? e.to_value}`;
+      case "category": return `${naam(e.actor_id)} verplaatste dit naar een andere afdeling`;
+      case "closed": return `${naam(e.actor_id)} rondde dit af`;
+      case "reopened": return `${naam(e.actor_id)} heropende dit`;
+      default: return naam(e.actor_id);
+    }
+  }
+
+  /**
+   * Verloop: het gebeurtenissenlogboek en de reacties chronologisch door
+   * elkaar. Tickets van vóór dit logboek hebben nog geen gebeurtenissen; dan
+   * vallen we terug op created_by/closed_by, zodat oude tickets niet leeg zijn.
+   */
+  // Per regel terugvallen, niet in één keer: een bestaand ticket dat ná de
+  // upgrade voor het eerst gewijzigd wordt heeft wél gebeurtenissen maar geen
+  // "gemeld"-regel, en die hoort er toch te staan.
+  const heeftAanmaak = events.some((e) => e.type === "created");
+  const heeftAfronding = events.some((e) => e.type === "closed");
   const verloop = [
-    {
-      key: "aangemaakt",
-      op: ticket.created_at,
-      tekst: `${usersMap[ticket.created_by] ?? ticket.created_by} meldde dit`,
+    ...(heeftAanmaak
+      ? []
+      : [{
+          key: "aangemaakt",
+          op: ticket.created_at,
+          tekst: `${naam(ticket.created_by)} meldde dit`,
+          body: null as string | null,
+        }]),
+    ...events.map((e) => ({
+      key: e.id,
+      op: e.created_at,
+      tekst: gebeurtenisTekst(e),
       body: null as string | null,
-    },
+    })),
     ...comments.map((c) => ({
       key: c.id,
       op: c.created_at,
-      tekst: `${usersMap[c.author_id] ?? c.author_id}${c.updated_at ? " (bewerkt)" : ""}`,
+      tekst: `${naam(c.author_id)}${c.updated_at ? " (bewerkt)" : ""}`,
       body: c.body,
     })),
-    ...(isAf && ticket.closed_at
+    ...(!heeftAfronding && isAf && ticket.closed_at
       ? [{
           key: "afgerond",
           op: ticket.closed_at,
-          tekst: `${usersMap[ticket.closed_by ?? ""] ?? ticket.closed_by ?? "iemand"} rondde dit af`,
+          tekst: `${naam(ticket.closed_by)} rondde dit af`,
           body: null as string | null,
         }]
       : []),

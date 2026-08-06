@@ -168,6 +168,19 @@ export interface Comment {
   updated_at: string | null;
 }
 
+export type TicketEventType =
+  | "created" | "assigned" | "unassigned" | "priority" | "closed" | "reopened" | "category";
+
+export interface TicketEvent {
+  id: string;
+  ticket_id: string;
+  actor_id: string;
+  type: TicketEventType;
+  from_value: string | null;
+  to_value: string | null;
+  created_at: string;
+}
+
 export interface UserRole {
   ha_user_id: string;
   display_name: string;
@@ -291,6 +304,8 @@ export const ticketApi = {
   unpin: (id: string) => api.delete(`/tickets/${id}/pin`),
   reorder: (ticket_ids: string[]) => api.post(`/tickets/reorder`, { ticket_ids }),
   getComments: (id: string) => api.get<Comment[]>(`/tickets/${id}/comments`),
+  /** Het verloop: wie deed wat, en wanneer. */
+  getEvents: (id: string) => api.get<TicketEvent[]>(`/tickets/${id}/events`),
   addComment: (id: string, body: string) => api.post<Comment>(`/tickets/${id}/comments`, { body }),
   updateComment: (ticketId: string, commentId: string, body: string) =>
     api.patch<Comment>(`/tickets/${ticketId}/comments/${commentId}`, { body }),

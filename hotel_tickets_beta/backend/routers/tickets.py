@@ -12,7 +12,7 @@ from sqlalchemy import select, and_, or_, case, delete, func
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
-from ..models import Ticket, TicketComment, TicketPin, TicketNotification, NotificationType, Category, Status, Priority, Role, UserRole, BikeReservation, RecurringTemplate
+from ..models import Ticket, TicketComment, TicketPin, TicketNotification, TicketEvent, TicketEventType, NotificationType, Category, Status, Priority, Role, UserRole, BikeReservation, RecurringTemplate
 from ..auth import RequireUser, CurrentUser
 from ..services.notifications import notify_ticket_assigned, notify_urgent_ticket, notify_new_department_ticket, notify_mention
 from ..services.ha_entities import sync_ticket_sensors
@@ -124,7 +124,38 @@ class CommentOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+class TicketEventOut(BaseModel):
+    id: str
+    ticket_id: str
+    actor_id: str
+    type: TicketEventType
+    from_value: str | None
+    to_value: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
 # --- Helpers ---
+
+
+def _log_event(
+    db: AsyncSession,
+    ticket_id: str,
+    actor_id: str,
+    type: TicketEventType,
+    from_value: str | None = None,
+    to_value: str | None = None,
+) -> None:
+    """Leg een gebeurtenis vast. Append-only: nooit bijwerken of verwijderen."""
+    db.add(TicketEvent(
+        ticket_id=ticket_id,
+        actor_id=actor_id or "system",
+        type=type,
+        from_value=from_value,
+        to_value=to_value,
+    ))
+
 
 def _require_edit_access(user: CurrentUser, ticket: Ticket) -> None:
     """Iedereen mag alle tickets zien, maar wijzigen (status, claimen,
@@ -389,6 +420,10 @@ async def create_ticket(
     db.add(ticket)
     await db.flush()
 
+    _log_event(db, ticket.id, ticket.created_by, TicketEventType.created)
+    if body.assigned_to:
+        _log_event(db, ticket.id, user.ha_user_id, TicketEventType.assigned, None, body.assigned_to)
+
     # Notificaties
     base_url = await get_ticket_base_url(db)
     ticket_url = f"{base_url}/#/tickets/{ticket.id}"
@@ -550,9 +585,27 @@ async def update_ticket(
     _require_edit_access(user, ticket)
 
     old_assigned = ticket.assigned_to
+    old_priority = ticket.priority
+    old_status = ticket.status
 
     for field, value in body.model_dump(exclude_none=True).items():
         setattr(ticket, field, value)
+
+    # Wat er veranderde vastleggen — dit is het stuk dat tot nu toe nergens
+    # stond en dat bij escalaties altijd als eerste gevraagd wordt.
+    if "assigned_to" in body.model_fields_set and body.assigned_to != old_assigned:
+        if body.assigned_to:
+            _log_event(db, ticket.id, user.ha_user_id, TicketEventType.assigned, old_assigned, body.assigned_to)
+        else:
+            _log_event(db, ticket.id, user.ha_user_id, TicketEventType.unassigned, old_assigned, None)
+    if body.priority is not None and body.priority != old_priority:
+        _log_event(db, ticket.id, user.ha_user_id, TicketEventType.priority,
+                   old_priority.value if old_priority else None, body.priority.value)
+    if body.status is not None and body.status != old_status:
+        if body.status == Status.closed:
+            _log_event(db, ticket.id, user.ha_user_id, TicketEventType.closed)
+        elif old_status == Status.closed:
+            _log_event(db, ticket.id, user.ha_user_id, TicketEventType.reopened)
 
     if body.status == Status.closed and not ticket.closed_at:
         ticket.closed_at = datetime.now(timezone.utc)
@@ -590,6 +643,15 @@ async def update_ticket(
     return ticket
 
 
+@router.get("/{ticket_id}/events", response_model=list[TicketEventOut])
+async def list_ticket_events(ticket_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Het verloop van een ticket: wie deed wat, en wanneer."""
+    result = await db.execute(
+        select(TicketEvent).where(TicketEvent.ticket_id == ticket_id).order_by(TicketEvent.created_at)
+    )
+    return result.scalars().all()
+
+
 @router.post("/{ticket_id}/claim", response_model=TicketOut)
 async def claim_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
     """Medewerker pakt een onbehandeld ticket zelf op."""
@@ -602,6 +664,7 @@ async def claim_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = Dep
     ticket.assigned_to = user.ha_user_id
     ticket.status = Status.in_progress
     ticket.updated_at = datetime.now(timezone.utc)
+    _log_event(db, ticket.id, user.ha_user_id, TicketEventType.assigned, None, user.ha_user_id)
     return ticket
 
 
@@ -613,6 +676,7 @@ async def delete_ticket(ticket_id: str, user: RequireUser, db: AsyncSession = De
     if not ticket:
         raise HTTPException(status_code=404, detail="Ticket niet gevonden")
     await db.execute(delete(TicketNotification).where(TicketNotification.ticket_id == ticket_id))
+    await db.execute(delete(TicketEvent).where(TicketEvent.ticket_id == ticket_id))
     await db.delete(ticket)
     await sync_ticket_sensors(db)
 

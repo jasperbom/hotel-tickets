@@ -107,6 +107,40 @@ class TicketNotification(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
 
+class TicketEventType(str, PyEnum):
+    created = "created"        # gemeld
+    assigned = "assigned"      # toegewezen aan iemand
+    unassigned = "unassigned"  # toewijzing eraf gehaald
+    priority = "priority"      # prioriteit gewijzigd
+    closed = "closed"          # afgerond
+    reopened = "reopened"      # heropend
+    category = "category"      # naar een andere afdeling gezet
+
+
+class TicketEvent(Base):
+    """
+    Wie deed wat, en wanneer.
+
+    Het verloop op de ticketpagina werd tot nu toe afgeleid uit created_by,
+    closed_by en de reacties. Wat daarin ontbrak is precies de vraag die bij
+    elke escalatie als eerste komt: wie wist dit, en sinds wanneer. Deze tabel
+    is append-only — een correctie is een nieuwe regel, geen wijziging.
+    """
+    __tablename__ = "ticket_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    ticket_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("tickets.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_id: Mapped[str] = mapped_column(String(255), nullable=False)  # HA user_id of "system"
+    type: Mapped[TicketEventType] = mapped_column(Enum(TicketEventType), nullable=False)
+    # Vrije tekstwaarden zodat er geen migratie nodig is als een enum groeit:
+    # bij 'assigned' de user_id, bij 'priority' de prioriteit, etc.
+    from_value: Mapped[str | None] = mapped_column(String(255))
+    to_value: Mapped[str | None] = mapped_column(String(255))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
 class DirectMessage(Base):
     """Direct bericht tussen twee medewerkers, los van een ticket.
     Een gesprek is de verzameling berichten tussen dezelfde twee personen;
