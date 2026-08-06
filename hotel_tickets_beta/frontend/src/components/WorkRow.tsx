@@ -23,6 +23,10 @@ export type ExtraKamer = { id: string; name: string; occupied?: boolean | null }
 
 export interface WorkRowProps {
   to?: string;
+  /** Alternatief voor `to`: op desktop opent een rij het ticket ernaast in
+   *  plaats van een nieuwe pagina. De rij wordt dan een knop. */
+  onOpen?: (e: React.MouseEvent) => void;
+  geselecteerd?: boolean;
   /** Bepaalt uitsluitend de linkerrand: rood = urgent, amber = hoog, verder niets. */
   priority: Priority;
   kamer?: string | null;
@@ -61,6 +65,8 @@ function rijActie(fn: () => void) {
 
 export function WorkRow({
   to,
+  onOpen,
+  geselecteerd = false,
   priority,
   kamer,
   occupied,
@@ -137,13 +143,28 @@ export function WorkRow({
     </>
   );
 
-  const klasse = `row ${randKlasse} min-h-[66px] ${done ? "bg-done-soft" : ""}`;
+  const klasse =
+    `row ${randKlasse} min-h-[66px] ${done ? "bg-done-soft" : ""} ` +
+    (geselecteerd ? "ring-2 ring-ink ring-offset-0 " : "");
 
   if (to) {
     return (
       <Link to={to} className={`${klasse} transition-colors hover:bg-ink-6`}>
         {inhoud}
       </Link>
+    );
+  }
+  if (onOpen) {
+    return (
+      <div
+        role="button"
+        tabIndex={0}
+        onClick={(e) => onOpen(e as unknown as React.MouseEvent)}
+        onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); onOpen(e as unknown as React.MouseEvent); } }}
+        className={`${klasse} cursor-pointer text-left transition-colors hover:bg-ink-6`}
+      >
+        {inhoud}
+      </div>
     );
   }
   return <div className={klasse}>{inhoud}</div>;

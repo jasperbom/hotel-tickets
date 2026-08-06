@@ -1,5 +1,5 @@
 import io
-from datetime import datetime, date
+from datetime import datetime, date, timedelta, timezone
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -50,29 +50,53 @@ async def get_summary(
         count = await db.scalar(select(func.count()).where(and_(Ticket.priority == p, *date_filters)))
         priority_counts[p.value] = count or 0
 
-    # Gemiddelde afdoeningstijd (in uren) voor gesloten tickets
+    # Gemiddelde doorlooptijd (in uren) voor gesloten tickets — totaal en per
+    # afdeling. Dat laatste is de vraag die er echt is: "waar blijft het liggen".
     closed_tickets = (
         await db.execute(
-            select(Ticket.created_at, Ticket.closed_at).where(
+            select(Ticket.created_at, Ticket.closed_at, Ticket.category).where(
                 and_(Ticket.status == Status.closed, Ticket.closed_at.isnot(None), *date_filters)
             )
         )
     ).all()
 
     avg_resolution_hours = None
+    per_category: dict[str, list[float]] = {}
     if closed_tickets:
-        durations = [
-            (row.closed_at - row.created_at).total_seconds() / 3600
-            for row in closed_tickets
-            if row.closed_at and row.created_at
-        ]
+        durations = []
+        for row in closed_tickets:
+            if not (row.closed_at and row.created_at):
+                continue
+            uren = (row.closed_at - row.created_at).total_seconds() / 3600
+            durations.append(uren)
+            sleutel = row.category.value if hasattr(row.category, "value") else str(row.category)
+            per_category.setdefault(sleutel, []).append(uren)
         avg_resolution_hours = round(sum(durations) / len(durations), 1) if durations else None
+
+    avg_resolution_by_category = {
+        c: {"hours": round(sum(v) / len(v), 1), "count": len(v)}
+        for c, v in per_category.items()
+    }
+
+    # Wat te lang blijft liggen: open tickets ouder dan zeven dagen.
+    zeven_dagen_terug = datetime.now(timezone.utc) - timedelta(days=7)
+    open_older_than_7d = await db.scalar(
+        select(func.count()).where(
+            and_(
+                Ticket.status != Status.closed,
+                Ticket.created_at < zeven_dagen_terug.replace(tzinfo=None),
+                *date_filters,
+            )
+        )
+    ) or 0
 
     return {
         "status_counts": status_counts,
         "category_counts": category_counts,
         "priority_counts": priority_counts,
         "avg_resolution_hours": avg_resolution_hours,
+        "avg_resolution_by_category": avg_resolution_by_category,
+        "open_older_than_7d": open_older_than_7d,
         "total_tickets": sum(status_counts.values()),
     }
 

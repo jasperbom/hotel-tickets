@@ -1,12 +1,16 @@
 import { useEffect, useState } from "react";
-import {
-  LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend,
-  PieChart, Pie, Cell,
-} from "recharts";
-import { reportApi, type ReportSummary, type TimelinePoint } from "../api/client";
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend } from "recharts";
+import { reportApi, type Category, type ReportSummary, type TimelinePoint } from "../api/client";
+import { AFDELING_LABELS } from "../werk";
 
-const CATEGORY_COLORS = { technical: "#8b5cf6", housekeeping: "#14b8a6", reception: "#6366f1", service: "#f97316", kitchen: "#f43f5e", sales: "#f59e0b", garden: "#10b981" };
-const CATEGORY_LABELS = { technical: "TD", housekeeping: "Huishouding", reception: "Receptie", service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin" };
+/**
+ * Rapportage — het enige scherm dat over gisteren gaat.
+ *
+ * Absorbeert de vier tegels van het verwijderde Dashboard. De staafgrafiek per
+ * status is eruit: die meet een artefact van hoe iemand een ticket toewees, niet
+ * hoe het hotel draait. Wat ervoor in de plaats komt is de vraag die er echt is:
+ * hoe lang duurt het per afdeling, en wat blijft er te lang liggen.
+ */
 
 function downloadBlob(blob: Blob, filename: string) {
   const url = URL.createObjectURL(blob);
@@ -15,6 +19,12 @@ function downloadBlob(blob: Blob, filename: string) {
   a.download = filename;
   a.click();
   URL.revokeObjectURL(url);
+}
+
+function uurTekst(uren: number): string {
+  if (uren < 1) return `${Math.round(uren * 60)} min`;
+  if (uren < 48) return `${uren.toFixed(1).replace(".0", "")} uur`;
+  return `${(uren / 24).toFixed(1).replace(".0", "")} dagen`;
 }
 
 export default function Reports() {
@@ -31,14 +41,10 @@ export default function Reports() {
     const params: Record<string, string> = { group_by: groupBy };
     if (fromDate) params.from_date = fromDate;
     if (toDate) params.to_date = toDate;
-
-    Promise.all([
-      reportApi.summary(params),
-      reportApi.timeline(params),
-    ])
+    Promise.allSettled([reportApi.summary(params), reportApi.timeline(params)])
       .then(([s, t]) => {
-        setSummary(s.data);
-        setTimeline(t.data);
+        if (s.status === "fulfilled") setSummary(s.value.data);
+        if (t.status === "fulfilled") setTimeline(t.value.data);
       })
       .finally(() => setLoading(false));
   }, [fromDate, toDate, groupBy]);
@@ -46,68 +52,55 @@ export default function Reports() {
   async function exportFile(type: "csv" | "excel") {
     setExporting(true);
     try {
-      const params: Record<string, string> = {};
-      if (fromDate) params.from_date = fromDate;
-      if (toDate) params.to_date = toDate;
-
-      const r = type === "csv"
-        ? await reportApi.exportCsv()
-        : await reportApi.exportExcel();
+      const r = type === "csv" ? await reportApi.exportCsv() : await reportApi.exportExcel();
       downloadBlob(r.data, type === "csv" ? "tickets.csv" : "tickets.xlsx");
     } finally {
       setExporting(false);
     }
   }
 
-  const categoryPieData = summary
-    ? Object.entries(summary.category_counts).map(([key, val]) => ({
-        name: CATEGORY_LABELS[key as keyof typeof CATEGORY_LABELS],
-        value: val,
-        color: CATEGORY_COLORS[key as keyof typeof CATEGORY_COLORS],
-      }))
-    : [];
+  const perAfdeling = Object.entries(summary?.avg_resolution_by_category ?? {})
+    .map(([c, v]) => ({ category: c as Category, ...v! }))
+    .sort((a, b) => b.hours - a.hours);
+  const langste = perAfdeling[0]?.hours ?? 1;
+
+  const verdeling = Object.entries(summary?.category_counts ?? {})
+    .map(([c, aantal]) => ({ category: c as Category, aantal }))
+    .filter((r) => r.aantal > 0)
+    .sort((a, b) => b.aantal - a.aantal);
+  const totaalVerdeling = verdeling.reduce((som, r) => som + r.aantal, 0) || 1;
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-[68rem]">
       <div className="flex items-center justify-between flex-wrap gap-3">
-        <h1 className="text-2xl font-bold text-gray-900">Rapportage</h1>
-        <div className="flex gap-2">
-          <button
-            onClick={() => exportFile("csv")}
-            disabled={exporting}
-            className="btn-secondary text-sm"
-          >
-            Export CSV
+        <h1 className="hidden md:block text-2xl font-bold text-ink">Rapportage</h1>
+        <div className="flex gap-2 ml-auto">
+          <button onClick={() => exportFile("csv")} disabled={exporting}
+            className="h-tap px-4 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6 disabled:opacity-50">
+            CSV
           </button>
-          <button
-            onClick={() => exportFile("excel")}
-            disabled={exporting}
-            className="btn-secondary text-sm"
-          >
-            Export Excel
+          <button onClick={() => exportFile("excel")} disabled={exporting}
+            className="h-tap px-4 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6 disabled:opacity-50">
+            Excel
           </button>
         </div>
       </div>
 
-      {/* Filters */}
       <div className="flex flex-wrap gap-3 items-center">
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Van:</label>
+        <label className="meta">Van
           <input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-2 py-1 text-sm" />
-        </div>
-        <div className="flex items-center gap-2">
-          <label className="text-sm text-gray-600">Tot:</label>
+            className="ml-2 h-tap rounded-[10px] border border-ink-12 px-2 text-meta bg-paper-raised" />
+        </label>
+        <label className="meta">Tot
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
-            className="border border-gray-300 rounded-lg px-2 py-1 text-sm" />
-        </div>
-        <div className="flex gap-1">
+            className="ml-2 h-tap rounded-[10px] border border-ink-12 px-2 text-meta bg-paper-raised" />
+        </label>
+        <div className="flex rounded-full border border-ink-12 bg-paper-raised overflow-hidden">
           {(["day", "week", "month"] as const).map((g) => (
             <button key={g} onClick={() => setGroupBy(g)}
-              className={`px-3 py-1 text-sm rounded-lg border transition-colors ${
-                groupBy === g ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:bg-gray-50"
-              }`}
-            >
+              className={`h-tap px-4 text-meta transition-colors ${
+                groupBy === g ? "bg-ink text-paper font-semibold" : "text-ink-70 font-medium hover:bg-ink-6"
+              }`}>
               {g === "day" ? "Dag" : g === "week" ? "Week" : "Maand"}
             </button>
           ))}
@@ -116,68 +109,103 @@ export default function Reports() {
 
       {loading ? (
         <div className="flex items-center justify-center h-40">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
         </div>
+      ) : !summary ? (
+        <p className="meta">Rapportage kon niet geladen worden.</p>
       ) : (
         <>
-          {/* Samenvattingscijfers */}
-          {summary && (
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="card text-center">
-                <p className="text-3xl font-bold text-blue-700">{summary.total_tickets}</p>
-                <p className="text-sm text-gray-500 mt-1">Totaal tickets</p>
-              </div>
-              <div className="card text-center">
-                <p className="text-3xl font-bold text-yellow-600">{summary.status_counts.open}</p>
-                <p className="text-sm text-gray-500 mt-1">Open</p>
-              </div>
-              <div className="card text-center">
-                <p className="text-3xl font-bold text-green-600">{summary.status_counts.closed}</p>
-                <p className="text-sm text-gray-500 mt-1">Gesloten</p>
-              </div>
-              <div className="card text-center">
-                <p className="text-3xl font-bold text-purple-700">
-                  {summary.avg_resolution_hours != null ? `${summary.avg_resolution_hours}u` : "—"}
-                </p>
-                <p className="text-sm text-gray-500 mt-1">Gem. afdoening</p>
-              </div>
-            </div>
-          )}
+          {/* De vier tegels die het Dashboard achterliet */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <Tegel waarde={summary.total_tickets} label="Tickets in periode" />
+            <Tegel waarde={summary.status_counts.open + summary.status_counts.in_progress} label="Nu open" />
+            <Tegel
+              waarde={summary.open_older_than_7d ?? 0}
+              label="Langer dan 7 dagen open"
+              alarm={(summary.open_older_than_7d ?? 0) > 0}
+            />
+            <Tegel
+              waarde={summary.avg_resolution_hours != null ? uurTekst(summary.avg_resolution_hours) : "—"}
+              label="Gem. doorlooptijd"
+            />
+          </div>
 
-          {/* Tijdlijn grafiek */}
-          <div className="card">
-            <h2 className="font-semibold mb-4">Tickets over tijd</h2>
-            <ResponsiveContainer width="100%" height={250}>
+          {/* Doorlooptijd per afdeling — nieuw, en de reden dat dit scherm bestaat */}
+          <section className="pt-5 border-t border-ink-12">
+            <p className="mb-3 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+              Doorlooptijd per afdeling
+            </p>
+            {perAfdeling.length === 0 ? (
+              <p className="meta">Nog niets afgerond in deze periode.</p>
+            ) : (
+              <ul className="space-y-2.5">
+                {perAfdeling.map((r) => (
+                  <li key={r.category} className="flex items-center gap-3">
+                    <span className="w-32 shrink-0 text-meta text-ink-70 truncate">
+                      {AFDELING_LABELS[r.category]}
+                    </span>
+                    <span className="flex-1 h-2.5 rounded-full bg-ink-6 overflow-hidden">
+                      <span
+                        className="block h-full rounded-full bg-ink"
+                        style={{ width: `${Math.max(3, (r.hours / langste) * 100)}%` }}
+                      />
+                    </span>
+                    <span className="w-24 shrink-0 text-right text-meta text-ink tabular-nums">
+                      {uurTekst(r.hours)}
+                    </span>
+                    <span className="w-16 shrink-0 text-right meta tabular-nums">{r.count}×</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          {/* Tickets over tijd */}
+          <section className="pt-5 border-t border-ink-12">
+            <p className="mb-3 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">Tickets over tijd</p>
+            <ResponsiveContainer width="100%" height={240}>
               <LineChart data={timeline}>
-                <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
+                <XAxis dataKey="period" tick={{ fontSize: 12, fill: "#6E6B65" }} />
+                <YAxis tick={{ fontSize: 12, fill: "#6E6B65" }} />
                 <Tooltip />
                 <Legend />
-                <Line type="monotone" dataKey="total" name="Totaal" stroke="#3b82f6" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="open" name="Open" stroke="#eab308" strokeWidth={2} dot={false} />
-                <Line type="monotone" dataKey="closed" name="Gesloten" stroke="#22c55e" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="total" name="Gemeld" stroke="#1C1B19" strokeWidth={2} dot={false} />
+                <Line type="monotone" dataKey="closed" name="Afgerond" stroke="#2F6B46" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
-          </div>
+          </section>
 
-          {/* Categoriegrafiek */}
-          <div className="card">
-            <h2 className="font-semibold mb-4">Verdeling per categorie</h2>
-            <ResponsiveContainer width="100%" height={220}>
-              <PieChart>
-                <Pie data={categoryPieData} dataKey="value" cx="50%" cy="50%" outerRadius={80}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
-                >
-                  {categoryPieData.map((entry, i) => (
-                    <Cell key={i} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
-          </div>
+          {/* Verdeling per afdeling — zonder zeven kleuren */}
+          <section className="pt-5 border-t border-ink-12">
+            <p className="mb-3 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">Verdeling per afdeling</p>
+            <ul className="space-y-2.5">
+              {verdeling.map((r) => (
+                <li key={r.category} className="flex items-center gap-3">
+                  <span className="w-32 shrink-0 text-meta text-ink-70 truncate">
+                    {AFDELING_LABELS[r.category]}
+                  </span>
+                  <span className="flex-1 h-2.5 rounded-full bg-ink-6 overflow-hidden">
+                    <span
+                      className="block h-full rounded-full bg-ink-45"
+                      style={{ width: `${(r.aantal / totaalVerdeling) * 100}%` }}
+                    />
+                  </span>
+                  <span className="w-16 shrink-0 text-right text-meta text-ink tabular-nums">{r.aantal}</span>
+                </li>
+              ))}
+            </ul>
+          </section>
         </>
       )}
+    </div>
+  );
+}
+
+function Tegel({ waarde, label, alarm }: { waarde: number | string; label: string; alarm?: boolean }) {
+  return (
+    <div className="rounded-[10px] border border-ink-12 bg-paper-raised px-4 py-3.5">
+      <p className={`text-[1.75rem] font-bold leading-none ${alarm ? "text-urgent" : "text-ink"}`}>{waarde}</p>
+      <p className="meta mt-1.5">{label}</p>
     </div>
   );
 }

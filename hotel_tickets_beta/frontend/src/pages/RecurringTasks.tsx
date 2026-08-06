@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { recurringApi, locationApi, userApi, type RecurringTemplate, type Category, type Priority, type SubtaskMode, type UserRole } from "../api/client";
+import { recurringApi, locationApi, ticketApi, userApi, type RecurringTemplate, type Category, type Priority, type SubtaskMode, type UserRole } from "../api/client";
+import { herhaalKort } from "../werk";
 import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
 import AreaSelector from "../components/AreaSelector";
 import MultiAreaSelector from "../components/MultiAreaSelector";
@@ -43,6 +44,15 @@ function folderKey(t: RecurringTemplate): string {
   return f === "" ? NO_FOLDER_KEY : f;
 }
 
+/**
+ * Herhalend — twee gezichten, één scherm.
+ *
+ * Voor een medewerker: een leeslijst van wat er terugkomt, gegroepeerd per
+ * herhaalpatroon, met de kamers erbij. Geen afvinkknoppen — dat doe je op
+ * Vandaag. Voor een admin: hetzelfde, plus de bewerkvelden en het signaal
+ * "overgeslagen": een sjabloon waarvan exemplaren blijven openstaan, is óf
+ * onnodig óf er is te weinig personeel.
+ */
 export default function RecurringTasks() {
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
   const [locations, setLocations] = useState<Record<string, string>>({});
@@ -55,15 +65,33 @@ export default function RecurringTasks() {
   const [search, setSearch] = useState("");
   const [me, setMe] = useState<UserRole | null>(null);
   const [formError, setFormError] = useState("");
+  // Open exemplaren per sjabloon: dat is het "overgeslagen"-signaal.
+  const [openPerSjabloon, setOpenPerSjabloon] = useState<Record<string, number>>({});
+  const [beheerOpen, setBeheerOpen] = useState(false);
 
   useEffect(() => {
-    Promise.all([recurringApi.list(), locationApi.list(), userApi.me()])
+    Promise.allSettled([recurringApi.list(), locationApi.list(), userApi.me()])
       .then(([r, locs, meRes]) => {
-        setTemplates(r.data);
-        setLocations(Object.fromEntries(locs.data.map((l) => [l.id, l.name])));
-        setMe(meRes.data);
+        if (r.status === "fulfilled") setTemplates(r.value.data);
+        if (locs.status === "fulfilled") {
+          setLocations(Object.fromEntries(locs.value.data.map((l) => [l.id, l.name])));
+        }
+        if (meRes.status === "fulfilled") setMe(meRes.value.data);
       })
       .finally(() => setLoading(false));
+
+    // Openstaande exemplaren tellen: een sjabloon waarvan er meerdere blijven
+    // hangen is niet afgevinkt en dat is het signaal dat je hier wil zien.
+    ticketApi.list({ status: "open,in_progress" })
+      .then((r) => {
+        const per: Record<string, number> = {};
+        for (const t of r.data) {
+          if (!t.recurring_template_id) continue;
+          per[t.recurring_template_id] = (per[t.recurring_template_id] ?? 0) + 1;
+        }
+        setOpenPerSjabloon(per);
+      })
+      .catch(() => {});
   }, []);
 
   const isManager = me?.role === "admin" || me?.role === "supervisor";
@@ -212,19 +240,116 @@ export default function RecurringTasks() {
     }));
   }, [filteredTemplates]);
 
+  /** Leeslijst: gegroepeerd op herhaalpatroon in plaats van op map. */
+  const perPatroon = useMemo(() => {
+    const groepen = new Map<string, RecurringTemplate[]>();
+    for (const t of templates.filter((x) => x.is_active)) {
+      const label = herhaalKort(t.cron_expression, t.interval_days) ?? "onbekend";
+      const lijst = groepen.get(label) ?? [];
+      lijst.push(t);
+      groepen.set(label, lijst);
+    }
+    return [...groepen.entries()]
+      .map(([label, lijst]) => ({ label, lijst: lijst.sort((a, b) => a.title.localeCompare(b.title, "nl")) }))
+      .sort((a, b) => a.label.localeCompare(b.label, "nl"));
+  }, [templates]);
+
+  function kamersVan(t: RecurringTemplate): string {
+    const ids = t.subtask_mode === "rooms" && t.subtask_items?.length
+      ? t.subtask_items
+      : t.location_id ? [t.location_id] : [];
+    return ids.map((id) => locations[id] ?? id).join(" · ");
+  }
+
   function toggleFolder(key: string) {
     setCollapsedFolders((prev) => ({ ...prev, [key]: !prev[key] }));
+  }
+
+  const leeslijst = (
+    <div className="space-y-5 max-w-3xl">
+      {perPatroon.length === 0 ? (
+        <p className="meta">Er komt op dit moment niets terug.</p>
+      ) : (
+        perPatroon.map((groep) => (
+          <section key={groep.label}>
+            <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">{groep.label}</p>
+            <ul className="grid gap-2">
+              {groep.lijst.map((t) => {
+                const blijftLiggen = openPerSjabloon[t.id] ?? 0;
+                return (
+                  <li key={t.id} className="row min-h-[66px]">
+                    <span className="flex-1 min-w-0">
+                      <span className="block text-row text-ink">{t.title}</span>
+                      <span className="meta">
+                        {kamersVan(t) || "geen kamer"}
+                        {blijftLiggen > 1 && (
+                          <>
+                            <span className="text-ink-25"> · </span>
+                            <strong className="font-semibold text-high" title="Deze taak wordt herhaaldelijk niet afgerond">
+                              {blijftLiggen}× overgeslagen
+                            </strong>
+                          </>
+                        )}
+                      </span>
+                    </span>
+                    {isManager && (
+                      <button
+                        onClick={() => startEdit(t)}
+                        className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"
+                      >
+                        Wijzig
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </section>
+        ))
+      )}
+    </div>
+  );
+
+  // Een medewerker ziet alleen wat er terugkomt; instellen is beheerwerk.
+  if (!isManager) {
+    return (
+      <div className="space-y-4">
+        <h1 className="hidden md:block text-2xl font-bold text-ink">Herhalend</h1>
+        <p className="meta max-w-prose">
+          Wat er automatisch terugkomt. Afvinken doe je op Vandaag, zodra de taak
+          aan de beurt is.
+        </p>
+        {leeslijst}
+      </div>
+    );
   }
 
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h1 className="text-2xl font-bold text-gray-900">Terugkerende taken</h1>
-        <button onClick={openNewForm} className="btn-primary whitespace-nowrap">+ Nieuw sjabloon</button>
+        <h1 className="hidden md:block text-2xl font-bold text-ink">Herhalend</h1>
+        <button onClick={openNewForm} className="btn-primary whitespace-nowrap ml-auto">+ Nieuw sjabloon</button>
       </div>
 
+      {!showForm && leeslijst}
+
+      {/* Beheerlijst: dezelfde sjablonen, maar per map en met aan/uit en
+          verwijderen. Standaard ingeklapt zodat het scherm niet twee keer
+          dezelfde lijst toont. */}
+      {!showForm && (
+        <button
+          onClick={() => setBeheerOpen(!beheerOpen)}
+          className="flex items-center gap-2 w-full min-h-tap text-left pt-5 border-t border-ink-12"
+        >
+          <span className="font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+            Alle sjablonen · mappen, aan/uit, verwijderen
+          </span>
+          <span className="ml-auto meta">{beheerOpen ? "verbergen" : "tonen"}</span>
+        </button>
+      )}
+
       {/* Zoekbalk */}
-      <div className="relative">
+      <div className={showForm || beheerOpen ? "relative" : "hidden"}>
         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none">🔍</span>
         <input
           type="search"
@@ -422,10 +547,10 @@ export default function RecurringTasks() {
         </div>
       )}
 
-      {/* Lijst */}
-      {loading ? (
+      {/* Beheerlijst per map */}
+      {!showForm && !beheerOpen ? null : loading ? (
         <div className="flex items-center justify-center h-32">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
         </div>
       ) : templates.length === 0 ? (
         <div className="card py-12 text-center text-gray-500">

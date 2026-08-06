@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { ticketApi, locationApi, userApi, type Category, type Ticket } from "../api/client";
+import { ticketApi, locationApi, userApi, type Category, type Priority, type Ticket, type UserRole } from "../api/client";
+import TicketDetail from "./TicketDetail";
 import { WorkRow } from "../components/WorkRow";
 import {
   AFDELING_LABELS, afdelingTekst, eigendom, leeftijdTekst,
@@ -33,6 +34,25 @@ const AFDELINGEN: { value: Category | ""; label: string }[] = [
 
 const OPEN_STATUS = "open,in_progress";
 
+const BULK_PRIORITEITEN: { value: Priority; label: string }[] = [
+  { value: "urgent", label: "Urgent" },
+  { value: "high", label: "Hoog" },
+  { value: "medium", label: "Normaal" },
+  { value: "low", label: "Laag" },
+];
+
+/** Twee kolommen vanaf 1280 px — daaronder is er simpelweg geen ruimte voor. */
+function useBreedScherm(): boolean {
+  const [breed, setBreed] = useState(() => window.matchMedia("(min-width: 1280px)").matches);
+  useEffect(() => {
+    const mq = window.matchMedia("(min-width: 1280px)");
+    const bij = (e: MediaQueryListEvent) => setBreed(e.matches);
+    mq.addEventListener("change", bij);
+    return () => mq.removeEventListener("change", bij);
+  }, []);
+  return breed;
+}
+
 export default function TicketList() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -54,7 +74,17 @@ export default function TicketList() {
   const [zoek, setZoek] = useState(zoekterm);
   const [aantallen, setAantallen] = useState<{ open: number; klaar: number } | null>(null);
   const [afdelingOpen, setAfdelingOpen] = useState(false);
+  const [alleUsers, setAlleUsers] = useState<UserRole[]>([]);
   const zoekRef = useRef<HTMLInputElement>(null);
+
+  // Master-detail en bulkacties bestaan alleen op desktop: op een telefoon zou
+  // een selectiemodus botsen met tikken-om-te-openen.
+  const breed = useBreedScherm();
+  const geopend = searchParams.get("open");
+  const [selectie, setSelectie] = useState<string[]>([]);
+  const [laatsteIndex, setLaatsteIndex] = useState<number | null>(null);
+  const [bulkBezig, setBulkBezig] = useState(false);
+  const [bulkMenu, setBulkMenu] = useState<"prio" | "wie" | null>(null);
 
   /**
    * Al het filterstate staat in de URL: een gefilterde lijst is daarmee te
@@ -91,6 +121,7 @@ export default function TicketList() {
       }
       if (usrs.status === "fulfilled") {
         setUsers(Object.fromEntries(usrs.value.data.map((u) => [u.ha_user_id, u.display_name])));
+        setAlleUsers(usrs.value.data);
       }
       if (me.status === "fulfilled") {
         setMij({ id: me.value.data.ha_user_id, department: me.value.data.department ?? null });
@@ -107,12 +138,14 @@ export default function TicketList() {
     return p;
   }, [klaar, afdeling, alleenMijne, kamer, zoekterm]);
 
-  useEffect(() => {
+  const herlaad = useCallback(() => {
     setLoading(true);
-    ticketApi.list(params)
+    return ticketApi.list(params)
       .then((r) => setTickets(r.data))
       .finally(() => setLoading(false));
   }, [params]);
+
+  useEffect(() => { herlaad(); }, [herlaad]);
 
   // Tellers voor de twee pillen, binnen de overige filters.
   useEffect(() => {
@@ -135,6 +168,24 @@ export default function TicketList() {
     if (klaar) return tickets; // afgerond: de server sorteert op sluitingsdatum
     return [...tickets].sort((a, b) => Number(!!b.pinned) - Number(!!a.pinned));
   }, [tickets, klaar]);
+
+  // Pijltjes omhoog/omlaag lopen door de lijst zonder terug te navigeren.
+  useEffect(() => {
+    if (!breed || !geopend) return;
+    function bijToets(e: KeyboardEvent) {
+      if (e.key !== "ArrowDown" && e.key !== "ArrowUp") return;
+      const doel = e.target as HTMLElement;
+      if (doel && ["INPUT", "TEXTAREA", "SELECT"].includes(doel.tagName)) return;
+      const i = gesorteerd.findIndex((t) => t.id === geopend);
+      if (i < 0) return;
+      const volgende = e.key === "ArrowDown" ? gesorteerd[i + 1] : gesorteerd[i - 1];
+      if (!volgende) return;
+      e.preventDefault();
+      zetFilter({ open: volgende.id });
+    }
+    window.addEventListener("keydown", bijToets);
+    return () => window.removeEventListener("keydown", bijToets);
+  }, [breed, geopend, gesorteerd, zetFilter]);
 
   function kamerVan(locationId: string | null | undefined): string | undefined {
     if (!locationId) return undefined;
@@ -159,12 +210,44 @@ export default function TicketList() {
     ].filter(Boolean);
   }
 
+  /** Shift-klik selecteert een reeks; gewone klik opent ernaast. */
+  function rijKlik(e: React.MouseEvent, t: Ticket, index: number) {
+    if (!breed) return;
+    if (e.shiftKey && laatsteIndex !== null) {
+      const [van, tot] = laatsteIndex < index ? [laatsteIndex, index] : [index, laatsteIndex];
+      setSelectie(gesorteerd.slice(van, tot + 1).map((x) => x.id));
+      return;
+    }
+    if (e.metaKey || e.ctrlKey) {
+      setSelectie((prev) => prev.includes(t.id) ? prev.filter((x) => x !== t.id) : [...prev, t.id]);
+      setLaatsteIndex(index);
+      return;
+    }
+    setSelectie([]);
+    setLaatsteIndex(index);
+    zetFilter({ open: t.id });
+  }
+
+  async function bulk(wijziging: Partial<Ticket>) {
+    setBulkBezig(true);
+    try {
+      for (const id of selectie) {
+        await ticketApi.update(id, wijziging).catch(() => {});
+      }
+      setSelectie([]);
+      setBulkMenu(null);
+      await herlaad();
+    } finally {
+      setBulkBezig(false);
+    }
+  }
+
   const zoekPlaats = afdeling
     ? AFDELING_LABELS[afdeling].toLowerCase()
     : alleenMijne ? "jouw tickets" : "alle afdelingen";
 
   return (
-    <div className="space-y-4 max-w-3xl">
+    <div className="space-y-4 xl:max-w-none max-w-3xl">
       {/* Op mobiel staat de titel al in de topbalk */}
       <h1 className="hidden md:block text-2xl font-bold text-ink">Tickets</h1>
 
@@ -244,23 +327,123 @@ export default function TicketList() {
         />
       ) : (
         <>
-          <p className="meta">{gesorteerd.length} {gesorteerd.length === 1 ? "ticket" : "tickets"}</p>
-          <div className="grid gap-2">
-            {gesorteerd.map((t) => (
-              <WorkRow
-                key={t.id}
-                to={`/tickets/${t.id}`}
-                priority={t.priority}
-                kamer={kamerVan(t.location_id)}
-                title={t.title}
-                meta={meta(t)}
-                done={t.status === "closed"}
-              />
-            ))}
+          {/* Bulkacties: alléén hier. Op een telefoon zou een selectiemodus
+              botsen met tikken-om-te-openen. */}
+          {breed && selectie.length > 0 ? (
+            <div className="sticky top-[6.5rem] z-30 flex items-center gap-2 flex-wrap rounded-[10px] bg-ink px-3 py-2 text-paper">
+              <span className="text-meta font-semibold">{selectie.length} geselecteerd</span>
+              <div className="relative">
+                <BulkKnop onClick={() => setBulkMenu(bulkMenu === "wie" ? null : "wie")}>Toewijzen</BulkKnop>
+                {bulkMenu === "wie" && (
+                  <div className="absolute left-0 top-full mt-1 z-40 w-56 max-h-72 overflow-auto rounded-xl border border-ink-12 bg-paper-raised shadow-lg py-1">
+                    <button
+                      onClick={() => bulk({ assigned_to: null })}
+                      className="flex w-full items-center px-4 min-h-tap text-meta text-left text-ink-70 hover:bg-ink-6"
+                    >
+                      Niemand
+                    </button>
+                    {alleUsers.map((u) => (
+                      <button
+                        key={u.ha_user_id}
+                        onClick={() => bulk({ assigned_to: u.ha_user_id })}
+                        className="flex w-full items-center px-4 min-h-tap text-meta text-left text-ink-70 hover:bg-ink-6"
+                      >
+                        {u.display_name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="relative">
+                <BulkKnop onClick={() => setBulkMenu(bulkMenu === "prio" ? null : "prio")}>Prioriteit</BulkKnop>
+                {bulkMenu === "prio" && (
+                  <div className="absolute left-0 top-full mt-1 z-40 w-44 rounded-xl border border-ink-12 bg-paper-raised shadow-lg py-1">
+                    {BULK_PRIORITEITEN.map((o) => (
+                      <button
+                        key={o.value}
+                        onClick={() => bulk({ priority: o.value })}
+                        className="flex w-full items-center px-4 min-h-tap text-meta text-left text-ink-70 hover:bg-ink-6"
+                      >
+                        {o.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <BulkKnop onClick={() => bulk({ status: "closed" })} disabled={bulkBezig}>
+                Afronden
+              </BulkKnop>
+              <button
+                onClick={() => { setSelectie([]); setBulkMenu(null); }}
+                className="ml-auto tap px-2 text-meta text-paper/70 hover:text-paper"
+              >
+                Wissen
+              </button>
+            </div>
+          ) : (
+            <p className="meta">
+              {gesorteerd.length} {gesorteerd.length === 1 ? "ticket" : "tickets"}
+              {breed && <span className="text-ink-25"> · klik om te openen, shift-klik voor een reeks</span>}
+            </p>
+          )}
+
+          <div className={breed ? "grid grid-cols-[minmax(0,26rem)_minmax(0,1fr)] gap-5 items-start" : ""}>
+            {/* select-none: shift-klik zou anders de tekst van de rijen selecteren */}
+            <div className={`grid gap-2 content-start ${breed ? "select-none" : ""}`}>
+              {gesorteerd.map((t, i) =>
+                breed ? (
+                  <WorkRow
+                    key={t.id}
+                    onOpen={(e) => rijKlik(e, t, i)}
+                    geselecteerd={selectie.includes(t.id) || geopend === t.id}
+                    priority={t.priority}
+                    kamer={kamerVan(t.location_id)}
+                    title={t.title}
+                    meta={meta(t)}
+                    done={t.status === "closed"}
+                  />
+                ) : (
+                  <WorkRow
+                    key={t.id}
+                    to={`/tickets/${t.id}`}
+                    priority={t.priority}
+                    kamer={kamerVan(t.location_id)}
+                    title={t.title}
+                    meta={meta(t)}
+                    done={t.status === "closed"}
+                  />
+                )
+              )}
+            </div>
+
+            {/* Rechterkolom: hetzelfde detailcomponent, zonder terugnavigatie */}
+            {breed && (
+              <div className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-auto rounded-[10px] border border-ink-12 bg-paper-raised px-4 py-4">
+                {geopend ? (
+                  <TicketDetail key={geopend} ticketId={geopend} ingebed />
+                ) : (
+                  <p className="meta py-8 text-center">Kies links een ticket.</p>
+                )}
+              </div>
+            )}
           </div>
         </>
       )}
     </div>
+  );
+}
+
+function BulkKnop({
+  children, onClick, disabled,
+}: { children: React.ReactNode; onClick: () => void; disabled?: boolean }) {
+  return (
+    <button
+      onClick={onClick}
+      disabled={disabled}
+      className="h-9 px-3 rounded-[8px] border border-paper/40 text-meta font-semibold hover:bg-paper/10 disabled:opacity-50"
+    >
+      {children}
+    </button>
   );
 }
 

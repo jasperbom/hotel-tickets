@@ -14,8 +14,14 @@ const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: "low", label: "Laag" },
 ];
 
-export default function TicketDetail() {
-  const { id } = useParams<{ id: string }>();
+/**
+ * Het ticketdetail. Op desktop (vanaf 1280 px) wordt dit component ingebed in
+ * de rechterkolom van de ticketlijst; dan komt het id als prop binnen en plakt
+ * de actiebalk onderin de kolom in plaats van onderin het venster.
+ */
+export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?: string; ingebed?: boolean } = {}) {
+  const { id: paramId } = useParams<{ id: string }>();
+  const id = ticketId ?? paramId;
   const navigate = useNavigate();
   const location = useLocation();
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -264,16 +270,18 @@ export default function TicketDetail() {
   ].filter(Boolean).join(" · ");
 
   return (
-    <div className="max-w-2xl pb-40">
+    <div className={ingebed ? "" : "max-w-2xl pb-40"}>
       {/* Kop: terug, schermnaam, en één ⋯-menu voor alles wat je zelden doet */}
       <div className="flex items-center gap-1 -mt-2 mb-3">
-        <button
-          onClick={() => (location.key === "default" ? navigate("/tickets") : navigate(-1))}
-          aria-label="Terug"
-          className="tap -ml-2 text-ink-45 hover:text-ink"
-        >
-          <ChevronLeft size={24} aria-hidden="true" />
-        </button>
+        {!ingebed && (
+          <button
+            onClick={() => (location.key === "default" ? navigate("/tickets") : navigate(-1))}
+            aria-label="Terug"
+            className="tap -ml-2 text-ink-45 hover:text-ink"
+          >
+            <ChevronLeft size={24} aria-hidden="true" />
+          </button>
+        )}
         <span className="meta">Ticket</span>
         {canEdit && (
           <div className="ml-auto relative" ref={menuRef}>
@@ -631,8 +639,12 @@ export default function TicketDetail() {
 
       {/* Eén vaste actiebalk onderin — altijd bereikbaar zonder scrollen */}
       <div
-        className="fixed left-0 right-0 z-30 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5 md:left-[calc(4rem+220px)]"
-        style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+        className={
+          ingebed
+            ? "sticky bottom-0 -mx-4 mt-5 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5"
+            : "fixed left-0 right-0 z-30 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5 md:left-[calc(4rem+220px)]"
+        }
+        style={ingebed ? undefined : { bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
       >
         <div className="max-w-2xl flex gap-2">
           {meekijken ? (

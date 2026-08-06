@@ -263,6 +263,10 @@ export interface ReportSummary {
   category_counts: Record<Category, number>;
   priority_counts: Record<Priority, number>;
   avg_resolution_hours: number | null;
+  /** Gemiddelde doorlooptijd per afdeling — de vraag die er echt is. */
+  avg_resolution_by_category?: Partial<Record<Category, { hours: number; count: number }>>;
+  /** Open tickets ouder dan zeven dagen. */
+  open_older_than_7d?: number;
   total_tickets: number;
 }
 
