@@ -130,6 +130,13 @@ const DEPT_LABELS: Record<Category, string> = {
   technical: "TD", housekeeping: "Huishouding", reception: "Receptie",
   service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin",
 };
+const MODULE_KEUZES = [
+  { id: "taken", label: "Taken" },
+  { id: "zwembaden", label: "Zwembaden" },
+  { id: "fietsen", label: "Fietsen" },
+  { id: "kennis", label: "Kennisbot" },
+];
+
 const DEPT_FULL_LABELS: Record<Category, string> = {
   technical: "Technische dienst", housekeeping: "Huishouding", reception: "Receptie",
   service: "Bediening", kitchen: "Keuken", sales: "Sales", garden: "Tuin",
@@ -254,7 +261,7 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   const [users, setUsers] = useState<UserRole[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
-  const [editForm, setEditForm] = useState<Partial<UserRole>>({});
+  const [editForm, setEditForm] = useState<Partial<UserRole> & { extra_departments?: Category[] }>({});
   const [showNew, setShowNew] = useState(false);
   const [newForm, setNewForm] = useState({ ha_user_id: "", display_name: "", ha_username: "", password: "", role: "employee" as Role, department: "" as Category | "", email: "", ha_notify_service: "", ha_device_tracker: "", notify_new_ticket: false, notify_direct_message: false });
   // Foutmeldingen nooit stil inslikken — toon ze in de betreffende sectie
@@ -447,6 +454,88 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                       <span>Push bij een nieuw direct bericht van een collega</span>
                     </label>
                   </div>
+
+                  {/* Uitzonderingen — inrichtingswerk, dus alleen voor admins en
+                      alleen op een groot scherm. */}
+                  {isAdmin && (
+                    <div className="hidden md:block space-y-3 rounded-[10px] border border-ink-12 p-3">
+                      <p className="font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+                        Uitzonderingen
+                      </p>
+
+                      <div>
+                        <p className="text-sm font-medium text-ink">Extra afdelingen</p>
+                        <p className="meta mb-1.5">Waarin deze medewerker óók tickets mag pakken en wijzigen</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {(Object.keys(DEPT_FULL_LABELS) as Category[])
+                            .filter((d) => d !== (editForm.department ?? user.department))
+                            .map((d) => {
+                              const aan = (editForm.extra_departments ?? []).includes(d);
+                              return (
+                                <button
+                                  key={d}
+                                  type="button"
+                                  onClick={() => setEditForm({
+                                    ...editForm,
+                                    extra_departments: aan
+                                      ? (editForm.extra_departments ?? []).filter((x) => x !== d)
+                                      : [...(editForm.extra_departments ?? []), d],
+                                  })}
+                                  className={`h-9 px-3 rounded-full text-meta transition-colors ${
+                                    aan ? "bg-ink text-paper font-semibold" : "border border-ink-12 text-ink-70"
+                                  }`}
+                                >
+                                  {DEPT_FULL_LABELS[d]}
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-ink">Modules</p>
+                        <p className="meta mb-1.5">Wat er in het Meer-scherm staat. Niets aangevinkt = alles.</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {MODULE_KEUZES.map((m) => {
+                            const aan = (editForm.modules ?? []).includes(m.id);
+                            return (
+                              <button
+                                key={m.id}
+                                type="button"
+                                onClick={() => setEditForm({
+                                  ...editForm,
+                                  modules: aan
+                                    ? (editForm.modules ?? []).filter((x) => x !== m.id)
+                                    : [...(editForm.modules ?? []), m.id],
+                                })}
+                                className={`h-9 px-3 rounded-full text-meta transition-colors ${
+                                  aan ? "bg-ink text-paper font-semibold" : "border border-ink-12 text-ink-70"
+                                }`}
+                              >
+                                {m.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-ink">Rapportage</p>
+                        <select
+                          value={editForm.can_reports === undefined || editForm.can_reports === null ? "auto" : editForm.can_reports ? "aan" : "uit"}
+                          onChange={(e) => setEditForm({
+                            ...editForm,
+                            can_reports: e.target.value === "auto" ? null : e.target.value === "aan",
+                          })}
+                          className="mt-1 h-tap rounded-[10px] border border-ink-12 px-2 text-meta bg-paper-raised"
+                        >
+                          <option value="auto">Volgt de rol</option>
+                          <option value="aan">Altijd toegang</option>
+                          <option value="uit">Nooit toegang</option>
+                        </select>
+                      </div>
+                    </div>
+                  )}
                   <div className="flex gap-2">
                     <button onClick={() => saveEdit(user.ha_user_id)} className="bg-brand text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
                     <button onClick={() => setEditing(null)} className="border px-3 py-1.5 rounded-lg text-sm text-ink-70">Annuleren</button>
@@ -459,12 +548,35 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                     <p className="text-xs text-ink-45 break-all">{user.ha_user_id}{user.ha_username ? ` · login: ${user.ha_username}` : ""}</p>
                     <div className="flex flex-wrap gap-1.5 mt-1">
                       <span className="text-xs bg-ink-6 text-brand px-2 py-0.5 rounded-full font-medium">{ROLE_LABELS[user.role]}</span>
-                      {user.department && <span className="text-xs bg-ink-6 text-ink-70 px-2 py-0.5 rounded-full">{DEPT_LABELS[user.department]}</span>}
+                      {(user.departments?.length ? user.departments : user.department ? [user.department] : []).map((d) => (
+                        <span key={d} className="text-xs bg-ink-6 text-ink-70 px-2 py-0.5 rounded-full">{DEPT_LABELS[d]}</span>
+                      ))}
+                      {user.modules?.length ? (
+                        <span className="text-xs bg-ink-6 text-ink-70 px-2 py-0.5 rounded-full">
+                          {user.modules.length} modules
+                        </span>
+                      ) : null}
+                      {user.can_reports != null && (
+                        <span className="text-xs bg-ink-6 text-ink-70 px-2 py-0.5 rounded-full">
+                          rapportage {user.can_reports ? "aan" : "uit"}
+                        </span>
+                      )}
                       {user.has_password && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">App-account</span>}
                     </div>
                   </div>
                   <div className="flex gap-3 text-sm shrink-0">
-                    <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }} className="text-brand hover:underline">Bewerken</button>
+                    <button
+                      onClick={() => {
+                        setEditing(user.ha_user_id);
+                        setEditForm({
+                          ...user,
+                          extra_departments: (user.departments ?? []).filter((d) => d !== user.department),
+                        });
+                      }}
+                      className="text-brand hover:underline"
+                    >
+                      Bewerken
+                    </button>
                     {isAdmin && (
                       <button onClick={() => resetPassword(user)} className="text-purple-600 hover:underline">
                         {user.has_password ? "Wachtwoord resetten" : "Wachtwoord instellen"}

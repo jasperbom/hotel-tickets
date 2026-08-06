@@ -166,7 +166,8 @@ def _require_edit_access(user: CurrentUser, ticket: Ticket) -> None:
         return
     if ticket.assigned_to == user.ha_user_id or ticket.created_by == user.ha_user_id:
         return
-    if user.department and ticket.category == user.department:
+    # Meerdere afdelingen: de klusjesman die TD én Tuin doet mag in beide.
+    if ticket.category in user.departments:
         return
     raise HTTPException(
         status_code=403,

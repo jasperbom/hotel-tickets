@@ -15,16 +15,17 @@ import { useOngelezen } from "../ongelezen";
  */
 
 export default function Meer({
-  gebruiker, kanBikes, kanInstellingen,
+  gebruiker, modules, magRapportage, kanInstellingen,
 }: {
   gebruiker: UserRole | null;
-  kanBikes: boolean;
+  /** Module-ids die deze medewerker mag zien — de gereedschapskast. */
+  modules: string[];
+  magRapportage: boolean;
   kanInstellingen: boolean;
 }) {
   const navigate = useNavigate();
   const ongelezen = useOngelezen();
   const [accountOpen, setAccountOpen] = useState(false);
-  const isLeiding = gebruiker?.role === "admin" || gebruiker?.role === "supervisor";
 
   async function uitloggen() {
     try {
@@ -42,15 +43,15 @@ export default function Meer({
       <div className="grid gap-2">
         <Regel label="Berichten" badge={ongelezen} onClick={() => navigate("/berichten")} />
         <Regel label="Herhalende taken" onClick={() => navigate("/recurring")} />
-        {isLeiding && <Regel label="Rapportage" onClick={() => navigate("/reports")} />}
+        {magRapportage && <Regel label="Rapportage" onClick={() => navigate("/reports")} />}
       </div>
 
       <section>
         <SectieKop>Andere modules</SectieKop>
         <div className="grid gap-2">
-          <Regel label="Zwembaden" onClick={() => navigate("/pools")} />
-          {kanBikes && <Regel label="Fietsen" onClick={() => navigate("/bikes")} />}
-          <Regel label="Kennisbot" merk="Beta" onClick={() => navigate("/kennis")} />
+          {modules.includes("zwembaden") && <Regel label="Zwembaden" onClick={() => navigate("/pools")} />}
+          {modules.includes("fietsen") && <Regel label="Fietsen" onClick={() => navigate("/bikes")} />}
+          {modules.includes("kennis") && <Regel label="Kennisbot" merk="Beta" onClick={() => navigate("/kennis")} />}
         </div>
       </section>
 

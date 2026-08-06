@@ -1,3 +1,4 @@
+import json
 import uuid
 from datetime import datetime, date, timezone
 from enum import Enum as PyEnum
@@ -292,12 +293,55 @@ class UserRole(Base):
     # (standaard aan). Het in-app envelopje (Berichten) blijft altijd bestaan;
     # dit schakelt alleen de pushmelding uit.
     notify_mention: Mapped[bool] = mapped_column(Boolean, default=True)
+    # ── Uitzonderingen op de afdelingsstandaard ───────────────────────────────
+    # De regel blijft: rol bepaalt wat je mág, afdeling waarvoor dat geldt.
+    # Dit zijn de enige uitzonderingen, en ze begrenzen alleen wat je kunt
+    # dóen — nooit wat je kunt zien (behalve modules: dat is de
+    # gereedschapskast, niet andermans werk).
+    #
+    # Extra afdelingen als JSON-lijst: de klusjesman die TD én Tuin doet.
+    extra_departments: Mapped[str | None] = mapped_column(Text)
+    # Zichtbare modules als JSON-lijst; leeg/NULL = alles.
+    modules: Mapped[str | None] = mapped_column(Text)
+    # Rapportage: NULL = volgt de rol, anders een expliciete keuze.
+    can_reports: Mapped[bool | None] = mapped_column(Boolean)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+    @property
+    def departments(self) -> list[Category]:
+        """Alle afdelingen waarin deze medewerker mag handelen."""
+        lijst: list[Category] = [self.department] if self.department else []
+        if self.extra_departments:
+            try:
+                for waarde in json.loads(self.extra_departments):
+                    cat = Category(waarde)
+                    if cat not in lijst:
+                        lijst.append(cat)
+            except (ValueError, TypeError):
+                pass
+        return lijst
 
     @property
     def has_password(self) -> bool:
         """Lokaal app-account (wachtwoord in eigen database, geen HA nodig)."""
         return self.password_hash is not None
+
+
+class PermissionEvent(Base):
+    """
+    Wijzigingen in rechten, append-only. Wie wat mocht en sinds wanneer is bij
+    een incident net zo relevant als wie wat deed — zelfde principe als het
+    gebeurtenissenlogboek bij tickets.
+    """
+    __tablename__ = "permission_events"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    subject_id: Mapped[str] = mapped_column(String(255), nullable=False, index=True)  # over wie het gaat
+    actor_id: Mapped[str] = mapped_column(String(255), nullable=False)                # wie het wijzigde
+    field: Mapped[str] = mapped_column(String(50), nullable=False)                    # role, departments, modules, reports
+    from_value: Mapped[str | None] = mapped_column(Text)
+    to_value: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 
 class LoginBan(Base):

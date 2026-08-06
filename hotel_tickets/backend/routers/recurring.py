@@ -95,7 +95,7 @@ def _validate_cron(expr: str) -> None:
 def _can_manage(user, category: Category) -> bool:
     """Sjablonen beheren/afronden mag als admin/supervisor, of als medewerker
     voor de eigen afdeling."""
-    return user.is_admin or (user.department is not None and category == user.department)
+    return user.is_admin or category in user.departments
 
 
 def _require_manage(user, category: Category, action: str) -> None:

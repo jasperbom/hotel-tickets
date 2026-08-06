@@ -181,12 +181,29 @@ export interface TicketEvent {
   created_at: string;
 }
 
+export interface PermissionEvent {
+  id: string;
+  subject_id: string;
+  actor_id: string;
+  field: string;
+  from_value: string | null;
+  to_value: string | null;
+  created_at: string;
+}
+
 export interface UserRole {
   ha_user_id: string;
   display_name: string;
   ha_username: string | null;
   role: Role;
+  /** Hoofdafdeling — leidend voor "mijn afdeling" in de overzichten. */
   department: Category | null;
+  /** Alle afdelingen waarin gehandeld mag worden (hoofd + uitzonderingen). */
+  departments?: Category[];
+  /** Zichtbare modules; null = alle. */
+  modules?: string[] | null;
+  /** Rapportage: null = volgt de rol. */
+  can_reports?: boolean | null;
   email: string | null;
   notify_push: boolean;
   notify_email: boolean;
@@ -381,7 +398,10 @@ export const userApi = {
   me: () => api.get<UserRole>("/users/me"),
   list: () => api.get<UserRole[]>("/users/"),
   create: (data: Partial<UserRole> & { password?: string }) => api.post<UserRole>("/users/", data),
-  update: (id: string, data: Partial<UserRole>) => api.patch<UserRole>(`/users/${id}`, data),
+  update: (id: string, data: Partial<UserRole> & { extra_departments?: Category[] }) =>
+    api.patch<UserRole>(`/users/${id}`, data),
+  /** Admin: wat er aan de rechten van deze medewerker veranderde, en door wie. */
+  permissionEvents: (id: string) => api.get<PermissionEvent[]>(`/users/${id}/permission-events`),
   remove: (id: string) => api.delete(`/users/${id}`),
   // Admin: wachtwoord van een lokaal app-account instellen/resetten (null = uitschakelen)
   setPassword: (id: string, password: string | null) =>

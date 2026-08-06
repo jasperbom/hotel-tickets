@@ -88,11 +88,15 @@ class CurrentUser:
         email: str | None,
         ha_notify_service: str | None,
         is_admin: bool,
+        departments: list | None = None,
     ):
         self.ha_user_id = ha_user_id
         self.display_name = display_name
         self.role = role
+        # Hoofdafdeling — blijft leidend voor "mijn afdeling" in overzichten.
         self.department = department
+        # Alle afdelingen waarin gehandeld mag worden (hoofd + uitzonderingen).
+        self.departments = departments if departments is not None else ([department] if department else [])
         self.email = email
         self.ha_notify_service = ha_notify_service
         self.is_admin = is_admin
@@ -166,6 +170,7 @@ async def get_current_user(
             display_name=user_role.display_name,
             role=user_role.role,
             department=user_role.department,
+            departments=user_role.departments,
             email=user_role.email,
             ha_notify_service=user_role.ha_notify_service,
             is_admin=user_role.role in (Role.admin, Role.supervisor),
@@ -193,6 +198,7 @@ async def get_current_user(
             display_name=user_role.display_name,
             role=user_role.role,
             department=user_role.department,
+            departments=user_role.departments,
             email=user_role.email,
             ha_notify_service=user_role.ha_notify_service,
             is_admin=user_role.role in (Role.admin, Role.supervisor),

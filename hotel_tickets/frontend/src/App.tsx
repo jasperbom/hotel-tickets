@@ -354,6 +354,18 @@ export default function App() {
   const isAdminOrSupervisor =
     currentUser?.role === "admin" || currentUser?.role === "supervisor";
 
+  // Rapportage volgt standaard de rol; een expliciete schakelaar op het profiel
+  // wint. Zo kan een hoofd huishouding rapportage krijgen zonder supervisor te
+  // worden.
+  const magRapportage = currentUser?.can_reports ?? isAdminOrSupervisor;
+
+  /**
+   * Modules per gebruiker: dat is zichtbaarheid van gereedschap, niet van
+   * andermans werk — daarom mag dit wél verborgen worden. Leeg of niet gezet
+   * betekent alles.
+   */
+  const toegestaneModules = currentUser?.modules ?? null;
+
   // Filter de fietsenmodule op basis van de instelling
   const canSeeBikes =
     bikesModuleRoles === "all" ||
@@ -361,12 +373,16 @@ export default function App() {
       (currentUser?.department === "reception" || isAdminOrSupervisor)) ||
     (bikesModuleRoles === "admin_supervisor" && isAdminOrSupervisor);
 
-  const visibleModules = MODULES.filter((m) => m.id !== "fietsen" || canSeeBikes);
+  const visibleModules = MODULES.filter(
+    (m) =>
+      (m.id !== "fietsen" || canSeeBikes) &&
+      (!toegestaneModules || toegestaneModules.length === 0 || toegestaneModules.includes(m.id))
+  );
   const activeModule = visibleModules.find((m) => m.id === activeModuleId) || null;
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
   const zichtbareSchermen = (activeModule?.schermen ?? []).filter((item) => {
-    if (item.restricted === "adminOrSupervisor") return isAdminOrSupervisor;
+    if (item.restricted === "adminOrSupervisor") return magRapportage;
     if (item.restricted === "admin") return currentUser?.role === "admin";
     return true;
   });
@@ -578,7 +594,12 @@ export default function App() {
               <Route
                 path="/meer"
                 element={
-                  <Meer gebruiker={currentUser} kanBikes={canSeeBikes} kanInstellingen={canSeeInstellingen} />
+                  <Meer
+                    gebruiker={currentUser}
+                    modules={visibleModules.map((m) => m.id)}
+                    magRapportage={magRapportage}
+                    kanInstellingen={canSeeInstellingen}
+                  />
                 }
               />
               <Route path="/berichten" element={<Berichten />} />

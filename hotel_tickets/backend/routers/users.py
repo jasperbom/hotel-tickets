@@ -4,11 +4,11 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, and_, or_, func, case
-from pydantic import BaseModel
+from pydantic import BaseModel, field_validator
 from croniter import croniter
 
 from ..database import get_db
-from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate, TicketComment, TicketPin, new_uuid
+from ..models import UserRole, Role, Category, Ticket, Status, RecurringTemplate, TicketComment, TicketPin, PermissionEvent, new_uuid
 from ..auth import RequireUser
 from ..passwords import MIN_PASSWORD_LENGTH, hash_password
 
@@ -38,6 +38,10 @@ class UserRoleCreate(BaseModel):
 
 class UserRoleUpdate(BaseModel):
     display_name: str | None = None
+    # Uitzonderingen op de afdelingsstandaard (zie models.UserRole)
+    extra_departments: list[Category] | None = None
+    modules: list[str] | None = None
+    can_reports: bool | None = None
     ha_username: str | None = None
     role: Role | None = None
     department: Category | None = None
@@ -57,6 +61,10 @@ class UserRoleOut(BaseModel):
     ha_username: str | None
     role: Role
     department: Category | None
+    # Alle afdelingen waarin gehandeld mag worden (hoofdafdeling + extra's)
+    departments: list[Category] = []
+    modules: list[str] | None = None
+    can_reports: bool | None = None
     email: str | None
     notify_push: bool
     notify_email: bool
@@ -69,6 +77,16 @@ class UserRoleOut(BaseModel):
     has_password: bool = False
 
     model_config = {"from_attributes": True}
+
+    @field_validator("modules", mode="before")
+    @classmethod
+    def parse_modules(cls, v):
+        if isinstance(v, str):
+            try:
+                return json.loads(v)
+            except Exception:
+                return None
+        return v
 
 
 @router.get("/me", response_model=UserRoleOut)
@@ -502,9 +520,72 @@ async def update_user(
         )
         if result.scalars().first():
             raise HTTPException(status_code=409, detail="Deze gebruikersnaam is al in gebruik")
-    for field, value in body.model_dump(exclude_none=True).items():
+    # Rechtenwijzigingen zijn zelf een logboekregel: wie wat mocht en sinds
+    # wanneer is bij een incident net zo relevant als wie wat deed.
+    def _log_recht(veld: str, oud, nieuw):
+        if str(oud) == str(nieuw):
+            return
+        db.add(PermissionEvent(
+            subject_id=ha_user_id,
+            actor_id=user.ha_user_id,
+            field=veld,
+            from_value=None if oud is None else str(oud),
+            to_value=None if nieuw is None else str(nieuw),
+        ))
+
+    velden = body.model_dump(exclude_none=True)
+    # Voor de drie rechtenvelden kijken we naar wat er meegestuurd is, niet naar
+    # "niet-null": alleen zo kan een admin een uitzondering ook weer wegnemen
+    # (modules terug naar alles, rapportage terug naar "volgt de rol").
+    gezet = body.model_fields_set
+    if "role" in velden:
+        _log_recht("role", target.role.value if target.role else None, velden["role"].value)
+    if "department" in velden:
+        _log_recht("department", target.department.value if target.department else None, velden["department"].value)
+    if "extra_departments" in gezet:
+        nieuw = [c.value for c in body.extra_departments or []]
+        _log_recht("extra_departments", target.extra_departments, json.dumps(nieuw) if nieuw else None)
+        target.extra_departments = json.dumps(nieuw) if nieuw else None
+    if "modules" in gezet:
+        # Lege lijst = geen uitzondering meer, dus alle modules.
+        nieuw_mod = json.dumps(body.modules) if body.modules else None
+        _log_recht("modules", target.modules, nieuw_mod)
+        target.modules = nieuw_mod
+    if "can_reports" in gezet:
+        _log_recht("can_reports", target.can_reports, body.can_reports)
+        target.can_reports = body.can_reports
+    for veld in ("extra_departments", "modules", "can_reports"):
+        velden.pop(veld, None)
+
+    for field, value in velden.items():
         setattr(target, field, value)
     return target
+
+
+class PermissionEventOut(BaseModel):
+    id: str
+    subject_id: str
+    actor_id: str
+    field: str
+    from_value: str | None
+    to_value: str | None
+    created_at: datetime
+
+    model_config = {"from_attributes": True}
+
+
+@router.get("/{ha_user_id}/permission-events", response_model=list[PermissionEventOut])
+async def list_permission_events(ha_user_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Wat er aan de rechten van deze medewerker veranderde, en door wie."""
+    if not user.is_admin:
+        raise HTTPException(status_code=403, detail="Alleen admins kunnen het rechtenlogboek inzien")
+    result = await db.execute(
+        select(PermissionEvent)
+        .where(PermissionEvent.subject_id == ha_user_id)
+        .order_by(PermissionEvent.created_at.desc())
+        .limit(100)
+    )
+    return result.scalars().all()
 
 
 @router.delete("/{ha_user_id}", status_code=status.HTTP_204_NO_CONTENT)
