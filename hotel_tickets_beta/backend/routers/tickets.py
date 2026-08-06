@@ -621,7 +621,14 @@ async def update_ticket(
         ticket.closed_at = datetime.now(timezone.utc)
         ticket.closed_by = user.ha_user_id
         # Hoort dit ticket bij een logboekobject? Dan is afvinken een
-        # onwisbare regel in dat boek.
+        # onwisbare regel in dat boek. Tickets die vóór deze versie door de
+        # scheduler zijn aangemaakt missen de koppeling; die halen we alsnog
+        # bij het sjabloon op, zodat oude exemplaren ook netjes in het boek
+        # belanden.
+        if not ticket.object_id and ticket.recurring_template_id:
+            bron = await db.get(RecurringTemplate, ticket.recurring_template_id)
+            if bron and bron.object_id:
+                ticket.object_id = bron.object_id
         await schrijf_registratie_bij_afronden(db, ticket, user.ha_user_id)
         # Recurring template: volgende uitvoering plannen zodat de taak pas
         # weer opduikt op de dag dat hij echt moet gebeuren.

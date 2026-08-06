@@ -101,6 +101,11 @@ async def _create_ticket_from_template(template_id: str) -> None:
     Idempotent: maakt geen nieuw ticket aan als er al een openstaand ticket is
     voor dit sjabloon, of als ``next_due_at`` nog in de toekomst ligt (bv.
     omdat de taak vroeg via NFC is afgevinkt).
+
+    Het ticket erft ``object_id`` van het sjabloon. Zonder die koppeling telde
+    een te late controle niet mee in "Aandacht nodig" bij de logboeken, en
+    schreef afronden vanuit het scherm Tickets géén regel in het boek —
+    terwijl afvinken op Vandaag dat wél deed. Dezelfde taak, twee uitkomsten.
     """
     import json
     from .database import AsyncSessionLocal
@@ -145,6 +150,7 @@ async def _create_ticket_from_template(template_id: str) -> None:
                     created_by="system",
                     recurring_template_id=template.id,
                     notify_when_free=template.notify_when_free,
+                    object_id=template.object_id,
                 )
                 db.add(ticket)
             logger.info(f"Recurring tickets aangemaakt voor {len(room_ids)} kamers: {template.title}")
@@ -165,6 +171,7 @@ async def _create_ticket_from_template(template_id: str) -> None:
                 created_by="system",
                 recurring_template_id=template.id,
                 notify_when_free=template.notify_when_free,
+                object_id=template.object_id,
                 subtasks=subtasks_json,
             )
             db.add(ticket)
@@ -180,6 +187,7 @@ async def _create_ticket_from_template(template_id: str) -> None:
                 created_by="system",
                 recurring_template_id=template.id,
                 notify_when_free=template.notify_when_free,
+                object_id=template.object_id,
             )
             db.add(ticket)
             logger.info(f"Recurring ticket aangemaakt: {template.title}")

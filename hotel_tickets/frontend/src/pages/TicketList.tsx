@@ -22,8 +22,10 @@ import {
  * gesorteerd, dus filteren voegt niets toe.
  */
 
-const AFDELINGEN: { value: Category | ""; label: string }[] = [
-  { value: "", label: "Alle afdelingen" },
+/** "all" is een echte keuze, geen lege waarde: zonder parameter val je terug
+ *  op je eigen afdeling, en dan moet "alles" ook expliciet in de URL staan. */
+const AFDELINGEN: { value: Category | "all"; label: string }[] = [
+  { value: "all", label: "Alle afdelingen" },
   { value: "technical", label: AFDELING_LABELS.technical },
   { value: "housekeeping", label: AFDELING_LABELS.housekeeping },
   { value: "reception", label: AFDELING_LABELS.reception },
@@ -62,12 +64,19 @@ export default function TicketList() {
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<Record<string, string>>({});
   const [mij, setMij] = useState<{ id: string; department: Category | null }>({ id: "", department: null });
+  // Pas laden als we weten bij welke afdeling je hoort — anders zie je eerst
+  // een tel lang alle afdelingen voorbijkomen.
+  const [mijGeladen, setMijGeladen] = useState(false);
   const [loading, setLoading] = useState(true);
 
   // Filters. Twee statuspillen in plaats van drie: of iets nog loopt of niet
   // is de enige statusvraag die iemand stelt.
   const klaar = searchParams.get("klaar") === "1" || searchParams.get("status") === "closed";
-  const afdeling = ((searchParams.get("afd") || searchParams.get("category") || "") as Category | "");
+  // Zonder afdeling in de URL kijk je naar je eigen afdeling — net als op
+  // Vandaag. "all" is de expliciete keuze om over de schutting te kijken.
+  const afdelingParam = searchParams.get("afd") || searchParams.get("category") || "";
+  const afdeling: Category | "" =
+    afdelingParam === "all" ? "" : ((afdelingParam || mij.department || "") as Category | "");
   const alleenMijne = searchParams.get("mijn") === "1" || searchParams.get("assigned") === "me";
   const kamer = searchParams.get("kamer") ?? "";
   const zoekterm = searchParams.get("q") ?? "";
@@ -127,6 +136,7 @@ export default function TicketList() {
       if (me.status === "fulfilled") {
         setMij({ id: me.value.data.ha_user_id, department: me.value.data.department ?? null });
       }
+      setMijGeladen(true);
     });
   }, []);
 
@@ -140,11 +150,12 @@ export default function TicketList() {
   }, [klaar, afdeling, alleenMijne, kamer, zoekterm]);
 
   const herlaad = useCallback(() => {
+    if (!mijGeladen) return Promise.resolve();
     setLoading(true);
     return ticketApi.list(params)
       .then((r) => setTickets(r.data))
       .finally(() => setLoading(false));
-  }, [params]);
+  }, [params, mijGeladen]);
 
   useEffect(() => { herlaad(); }, [herlaad]);
 
@@ -321,13 +332,13 @@ export default function TicketList() {
                 {AFDELINGEN.map((a) => (
                   <button
                     key={a.value}
-                    onClick={() => { zetFilter({ afd: a.value || null }); setAfdelingOpen(false); }}
+                    onClick={() => { zetFilter({ afd: a.value }); setAfdelingOpen(false); }}
                     className={`flex w-full items-center px-4 min-h-tap text-meta text-left hover:bg-ink-6 ${
-                      afdeling === a.value ? "font-semibold text-ink" : "text-ink-70"
+                      (afdeling || "all") === a.value ? "font-semibold text-ink" : "text-ink-70"
                     }`}
                   >
                     {a.label}
-                    {afdeling === a.value && <span className="ml-auto text-ink-45">✓</span>}
+                    {(afdeling || "all") === a.value && <span className="ml-auto text-ink-45">✓</span>}
                   </button>
                 ))}
               </div>
@@ -347,7 +358,7 @@ export default function TicketList() {
           klaar={klaar}
           afdeling={afdeling}
           onOokAfgerond={() => zetFilter({ klaar: "1" })}
-          onAlleAfdelingen={() => zetFilter({ afd: null, mijn: null, kamer: null })}
+          onAlleAfdelingen={() => zetFilter({ afd: "all", mijn: null, kamer: null })}
           onMelden={() => navigate("/tickets/new")}
         />
       ) : (

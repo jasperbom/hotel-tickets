@@ -291,6 +291,7 @@ async def start_template(template_id: str, user: RequireUser, db: AsyncSession =
                 location_id=room_id, created_by=user.ha_user_id,
                 recurring_template_id=template.id,
                 notify_when_free=template.notify_when_free,
+                object_id=template.object_id,
             )
             db.add(ticket)
             created_ids.append(ticket.id)
@@ -303,6 +304,7 @@ async def start_template(template_id: str, user: RequireUser, db: AsyncSession =
             location_id=template.location_id, created_by=user.ha_user_id,
             recurring_template_id=template.id,
             subtasks=subtasks_json, notify_when_free=template.notify_when_free,
+            object_id=template.object_id,
         )
         db.add(ticket)
         created_ids.append(ticket.id)
@@ -313,6 +315,7 @@ async def start_template(template_id: str, user: RequireUser, db: AsyncSession =
             location_id=template.location_id, created_by=user.ha_user_id,
             recurring_template_id=template.id,
             notify_when_free=template.notify_when_free,
+            object_id=template.object_id,
         )
         db.add(ticket)
         created_ids.append(ticket.id)
