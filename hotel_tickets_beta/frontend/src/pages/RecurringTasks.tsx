@@ -53,10 +53,13 @@ function folderKey(t: RecurringTemplate): string {
  * gegroepeerd op herhaalpatroon ("elke wo", "elke 30 dagen"); dat zei niets
  * over waar een taak thuishoorde en maakte het scherm dubbel zo lang.
  *
- * Eén lijst dus, twee gezichten. Een medewerker leest hem alleen — afvinken
- * doe je op Vandaag. Een leidinggevende krijgt "Wijzig" erbij, en het signaal
- * "overgeslagen": een sjabloon waarvan exemplaren blijven openstaan is óf
- * onnodig óf er is te weinig personeel.
+ * Eén lijst dus. Beheren mag je binnen je eigen afdeling: het hoofd
+ * huishouding richt haar schoonmaakschema's zelf in, zonder dat er een admin
+ * tussen hoeft te zitten. Afvinken blijft op Vandaag.
+ *
+ * Wat een leidinggevende extra ziet is het signaal "overgeslagen": een
+ * sjabloon waarvan exemplaren blijven openstaan is óf onnodig óf er is te
+ * weinig personeel.
  */
 export default function RecurringTasks() {
   const [templates, setTemplates] = useState<RecurringTemplate[]>([]);
@@ -108,15 +111,26 @@ export default function RecurringTasks() {
   }, []);
 
   const isManager = me?.role === "admin" || me?.role === "supervisor";
-  // Medewerkers beheren alleen sjablonen van hun eigen afdeling
-  const canManage = (category: Category) => isManager || me?.department === category;
-  const categoryOptions = isManager || !me?.department
+
+  /**
+   * Wie mag welk schema beheren. Een hoofd huishouding hoort haar eigen
+   * schoonmaakschema's zelf te kunnen inrichten — daar hoeft niemand tussen te
+   * zitten. De server stond dat altijd al toe; alleen dit scherm liet de
+   * knoppen niet zien.
+   *
+   * Alle afdelingen tellen mee, niet alleen de hoofdafdeling: wie er Tuin bij
+   * heeft mag ook de tuintaken beheren.
+   */
+  const mijnAfdelingen = me?.departments ?? (me?.department ? [me.department] : []);
+  const canManage = (category: Category) => isManager || mijnAfdelingen.includes(category);
+  const magBeheren = isManager || mijnAfdelingen.length > 0;
+  const categoryOptions = isManager
     ? CATEGORY_OPTIONS
-    : CATEGORY_OPTIONS.filter((c) => c.value === me.department);
+    : CATEGORY_OPTIONS.filter((c) => mijnAfdelingen.includes(c.value));
 
   function openNewForm() {
     // Medewerkers kunnen alleen voor hun eigen afdeling aanmaken — vul die vast in
-    const category = !isManager && me?.department ? me.department : EMPTY_FORM.category;
+    const category = !isManager && mijnAfdelingen[0] ? mijnAfdelingen[0] : EMPTY_FORM.category;
     setForm({ ...EMPTY_FORM, category });
     setEditId(null);
     setFormError("");
@@ -295,7 +309,7 @@ export default function RecurringTasks() {
               )}
             </span>
           </span>
-          {isManager && canManage(t.category) && (
+          {canManage(t.category) && (
             <button
               onClick={() => startEdit(t)}
               className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"
@@ -396,8 +410,8 @@ export default function RecurringTasks() {
     </div>
   );
 
-  // Een medewerker ziet alleen wat er terugkomt; instellen is beheerwerk.
-  if (!isManager) {
+  // Wie geen enkele afdeling heeft, ziet alleen wat er terugkomt.
+  if (!magBeheren) {
     return (
       <div className="space-y-4">
         <h1 className="hidden md:block text-2xl font-bold text-ink">Herhalend</h1>
@@ -481,8 +495,12 @@ export default function RecurringTasks() {
                   <option key={c.value} value={c.value}>{c.label}</option>
                 ))}
               </select>
-              {!isManager && me?.department && (
-                <p className="text-xs text-ink-45 mt-1">Je kunt alleen taken voor je eigen afdeling aanmaken.</p>
+              {!isManager && mijnAfdelingen.length > 0 && (
+                <p className="text-xs text-ink-45 mt-1">
+                  {mijnAfdelingen.length === 1
+                    ? "Je kunt alleen taken voor je eigen afdeling aanmaken."
+                    : "Je kunt taken aanmaken voor de afdelingen waarin je werkt."}
+                </p>
               )}
             </div>
             <div>

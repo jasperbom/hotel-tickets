@@ -165,8 +165,24 @@ body.undo-open {
     top: 0;
     left: 0;
     right: 0;
+    /* min-height: 100dvh staat als utility op dit element en wint van `height`.
+       Zonder deze regel bleef de shell dus de volle schermhoogte houden in
+       plaats van de zichtbare hoogte — precies het verschil waar de onderbalk
+       op verschoof. */
+    min-height: 0;
     height: var(--app-vh, 100dvh);
     overflow: hidden;
+  }
+
+  /* De onderbalk hangt op zo'n pagina aan diezelfde gemeten hoogte. Met
+     `bottom: 0` rekent hij met de layout-viewport, en die is op iOS groter dan
+     wat je ziet zodra de pagina niet kan scrollen — de balk stond dan net
+     ergens anders dan de pagina eronder, en verschoof bij het wisselen van
+     scherm. Nu delen balk en pagina dezelfde onderrand. */
+  body.kb-fit [data-onderbalk] {
+    top: var(--app-vh, 100dvh);
+    bottom: auto;
+    transform: translateY(-100%);
   }
 }
 

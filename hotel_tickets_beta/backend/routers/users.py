@@ -105,9 +105,11 @@ async def get_my_overview(
 ):
     """Gepersonaliseerd overzicht voor de ingelogde medewerker."""
     uid = user.ha_user_id
-    # Iedereen kan filteren op afdeling via de query param. De waarde "all"
-    # betekent expliciet alle afdelingen. Zonder param: admins zien alles,
-    # medewerkers vallen terug op hun eigen afdeling (oud gedrag).
+    # Iedereen kan filteren op afdeling via de query param; "all" betekent
+    # expliciet alle afdelingen. Zonder param valt iedereen terug op de eigen
+    # afdeling — ook een admin. Die zag eerst standaard alles, en dan staat er
+    # op zijn startscherm werk van de keuken tussen dat hij nooit oppakt. Wie
+    # geen afdeling op zijn profiel heeft ziet nog steeds alles.
     if department == "all":
         dept = None
     elif department:
@@ -115,8 +117,6 @@ async def get_my_overview(
             dept = Category(department)
         except ValueError:
             raise HTTPException(status_code=422, detail=f"Onbekende afdeling: {department}")
-    elif user.is_admin:
-        dept = None
     else:
         dept = user.department
 

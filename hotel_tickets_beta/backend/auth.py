@@ -218,8 +218,23 @@ async def get_current_user(
         if ok:
             return _system_user()
 
-    # 5. Dev mode fallback
+    # 5. Dev mode fallback. Bestaat er een profiel "dev-user", dan gebruiken we
+    #    dat — inclusief rol en afdeling. Anders gedraagt de app zich lokaal als
+    #    een admin zonder afdeling, en dat is precies het geval dat in productie
+    #    niet voorkomt: afdelingsfilters lijken dan kapot terwijl ze werken.
     if DEV_MODE:
+        row = await db.get(UserRole, "dev-user")
+        if row:
+            return CurrentUser(
+                ha_user_id=row.ha_user_id,
+                display_name=row.display_name,
+                role=row.role,
+                department=row.department,
+                departments=row.departments,
+                email=row.email,
+                ha_notify_service=row.ha_notify_service,
+                is_admin=row.role in (Role.admin, Role.supervisor),
+            )
         return CurrentUser(
             ha_user_id="dev-user",
             display_name="Dev User",

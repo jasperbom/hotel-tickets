@@ -29,7 +29,16 @@ const STATUS_OPTIONS: { value: Status; label: string }[] = [
  * de rechterkolom van de ticketlijst; dan komt het id als prop binnen en plakt
  * de actiebalk onderin de kolom in plaats van onderin het venster.
  */
-export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?: string; ingebed?: boolean } = {}) {
+export default function TicketDetail({
+  ticketId,
+  ingebed = false,
+  onGewijzigd,
+}: {
+  ticketId?: string;
+  ingebed?: boolean;
+  /** Ingebed naast de ticketlijst: laat die lijst weten dat er iets veranderd is. */
+  onGewijzigd?: () => void;
+} = {}) {
   const { id: paramId } = useParams<{ id: string }>();
   const id = ticketId ?? paramId;
   const navigate = useNavigate();
@@ -120,6 +129,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
     if (!id) return;
     const r = await ticketApi.update(id, data);
     setTicket(r.data);
+    onGewijzigd?.();
     // Het verloop is de neerslag van precies deze handeling; zonder dit stond
     // "nam dit in behandeling" er pas na een verversing bij.
     ticketApi.getEvents(id).then((ev) => setEvents(ev.data)).catch(() => {});
@@ -129,6 +139,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
     if (!id) return;
     const r = await ticketApi.updateSubtask(id, index, !currentDone);
     setTicket((prev) => prev ? { ...prev, subtasks: r.data.subtasks } : prev);
+    onGewijzigd?.();
   }
 
   async function addSubtask(e: React.FormEvent) {
@@ -141,6 +152,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
       const r = await ticketApi.addSubtask(id, label);
       setTicket((prev) => prev ? { ...prev, subtasks: r.data.subtasks } : prev);
       setNewSubtaskLabel("");
+      onGewijzigd?.();
     } finally {
       setAddingSubtask(false);
     }
@@ -150,6 +162,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
     if (!id) return;
     const r = await ticketApi.claim(id);
     setTicket(r.data);
+    onGewijzigd?.();
   }
 
   async function submitComment(e: React.FormEvent) {
@@ -204,7 +217,8 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
   async function deleteTicket() {
     if (!id) return;
     await ticketApi.remove(id);
-    navigate("/tickets");
+    onGewijzigd?.();
+    if (!ingebed) navigate("/tickets");
   }
 
   async function addToKnowledgeBase() {
@@ -226,6 +240,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
       await ticketApi.pin(id);
     }
     setTicket((prev) => prev ? { ...prev, pinned: !prev.pinned } : prev);
+    onGewijzigd?.();
   }
 
   if (!ticket) {
