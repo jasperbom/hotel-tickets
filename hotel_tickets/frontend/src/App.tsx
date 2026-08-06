@@ -585,7 +585,10 @@ export default function App() {
           </nav>
         )}
 
-        <div className="flex-1 flex flex-col min-w-0">
+        {/* min-h-0: zonder die regel weigert een flexkolom te krimpen onder de
+            hoogte van zijn inhoud, en dan loopt de kennisbot alsnog voorbij de
+            onderrand zodra het zichtbare venster kleiner is dan het scherm. */}
+        <div className="flex-1 flex flex-col min-w-0 min-h-0">
           {/* ── Mobiel: topbalk van 44 px — logo en schermtitel, geen navigatie ── */}
           <header
             className="md:hidden flex items-center gap-2 h-11 px-4 shrink-0 sticky top-0 z-40"

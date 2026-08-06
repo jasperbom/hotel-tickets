@@ -149,17 +149,38 @@ export default function TicketList() {
   useEffect(() => { herlaad(); }, [herlaad]);
 
   // Tellers voor de twee pillen, binnen de overige filters.
-  useEffect(() => {
+  const herlaadTellers = useCallback(() => {
     const p: Record<string, string> = {};
     if (afdeling) p.category = afdeling;
     if (alleenMijne) p.assigned_to = "me";
-    ticketApi.counts(p)
+    return ticketApi.counts(p)
       .then((r) => setAantallen({
         open: (r.data.open ?? 0) + (r.data.in_progress ?? 0),
         klaar: r.data.closed ?? 0,
       }))
       .catch(() => setAantallen(null));
   }, [afdeling, alleenMijne]);
+
+  useEffect(() => { herlaadTellers(); }, [herlaadTellers]);
+
+  /**
+   * Het detail ernaast wijzigt hetzelfde ticket dat links in de lijst staat.
+   * Zonder dit bleef die rij staan zoals hij was: afronden in de rechterkolom
+   * en de lijst toonde het ticket nog gewoon als open.
+   */
+  const naWijziging = useCallback(async () => {
+    const verse = await ticketApi.list(params).then((r) => r.data).catch(() => null);
+    if (verse) setTickets(verse);
+    herlaadTellers();
+    // Verwijderd ticket: de rechterkolom wijst dan naar iets dat niet meer
+    // bestaat. Alleen sluiten als het echt weg is — een ticket dat door een
+    // filter uit de lijst valt (afgerond bij "Open") blijft gewoon open staan,
+    // zodat je nog kunt heropenen.
+    const open = searchParams.get("open");
+    if (open && verse && !verse.some((t) => t.id === open)) {
+      ticketApi.get(open).catch(() => zetFilter({ open: null }));
+    }
+  }, [params, herlaadTellers, searchParams, zetFilter]);
 
   /**
    * Sortering: prioriteit eerst, gepind daarná. Voorheen won een pin van
@@ -424,7 +445,7 @@ export default function TicketList() {
             {breed && (
               <div className="sticky top-4 max-h-[calc(100dvh-2rem)] overflow-auto rounded-[10px] border border-ink-12 bg-paper-raised px-4 py-4">
                 {geopend ? (
-                  <TicketDetail key={geopend} ticketId={geopend} ingebed />
+                  <TicketDetail key={geopend} ticketId={geopend} ingebed onGewijzigd={naWijziging} />
                 ) : (
                   <p className="meta py-8 text-center">Kies links een ticket.</p>
                 )}

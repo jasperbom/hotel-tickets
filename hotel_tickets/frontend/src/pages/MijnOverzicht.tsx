@@ -42,6 +42,8 @@ interface Overview {
 
 const PRIORITEIT_RANG: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
+const ALLE_AFDELINGEN_KEY = "hts.vandaag_alle_afdelingen";
+
 const TE_PAKKEN_ZICHTBAAR = 3;
 
 type NuItem =
@@ -55,6 +57,12 @@ export default function Vandaag() {
   const [users, setUsers] = useState<Record<string, string>>({});
   const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
   const [allesTonen, setAllesTonen] = useState(false);
+  // Vandaag toont standaard je eigen afdeling — ook als admin. Wie er bewust
+  // overheen kijkt houdt die keuze; het is een werkinstelling, geen filter dat
+  // je elke ochtend opnieuw wil zetten.
+  const [alleAfdelingen, setAlleAfdelingen] = useState(
+    () => localStorage.getItem(ALLE_AFDELINGEN_KEY) === "1",
+  );
   // De twee getallen bovenaan zetten een filter, ze navigeren niet.
   const [focus, setFocus] = useState<"nu" | "pakken" | null>(null);
   const tePakkenRef = useRef<HTMLElement>(null);
@@ -63,7 +71,9 @@ export default function Vandaag() {
     // Het werk zelf is het enige dat moet lukken. Kamernamen en collega-namen
     // komen uit Home Assistant; hapert dat, dan hoort het startscherm niet leeg
     // te blijven — dan staat er een kamer-id in plaats van "214".
-    const ov = await api.get<Overview>("/users/me/overview");
+    const ov = await api.get<Overview>("/users/me/overview", {
+      params: alleAfdelingen ? { department: "all" } : undefined,
+    });
     setOverview(ov.data);
 
     const [locs, usrs] = await Promise.allSettled([locationApi.list(), userApi.list()]);
@@ -87,7 +97,7 @@ export default function Vandaag() {
     const map: Record<string, boolean | null> = {};
     results.forEach((r) => { if (r.status === "fulfilled") map[r.value.id] = r.value.occupied; });
     setKeycards(map);
-  }, []);
+  }, [alleAfdelingen]);
 
   // Afvinken gaat optimistisch: de rij is meteen klaar en de API-aanroep
   // vertrekt pas na het ongedaan-maken-venster.
@@ -245,11 +255,14 @@ export default function Vandaag() {
     };
   }
 
-  // De kop moet zeggen waarop de lijst écht gefilterd is: admins en
-  // supervisors krijgen van de server alle afdelingen, ook als ze zelf bij een
-  // afdeling horen.
+  // De kop moet zeggen waarop de lijst écht gefilterd is.
   const afdelingNaam =
-    !isManager && user.department ? AFDELING_LABELS[user.department].toLowerCase() : "alle afdelingen";
+    !alleAfdelingen && user.department
+      ? AFDELING_LABELS[user.department].toLowerCase()
+      : "alle afdelingen";
+  // Buiten je eigen afdeling kijken heeft alleen zin als je er ook iets mee
+  // kunt; een medewerker kan andermans tickets niet oppakken.
+  const magSchakelen = isManager && !!user.department;
 
   return (
     <div className="space-y-6 max-w-3xl">
@@ -317,7 +330,21 @@ export default function Vandaag() {
 
       {focus !== "nu" && (
         <section ref={tePakkenRef}>
-          <SectieKop>Te pakken · {afdelingNaam}</SectieKop>
+          <div className="flex items-baseline gap-3">
+            <SectieKop>Te pakken · {afdelingNaam}</SectieKop>
+            {magSchakelen && (
+              <button
+                onClick={() => {
+                  const nieuw = !alleAfdelingen;
+                  setAlleAfdelingen(nieuw);
+                  localStorage.setItem(ALLE_AFDELINGEN_KEY, nieuw ? "1" : "0");
+                }}
+                className="ml-auto meta underline underline-offset-2 hover:text-ink whitespace-nowrap"
+              >
+                {alleAfdelingen ? "Alleen mijn afdeling" : "Alles tonen"}
+              </button>
+            )}
+          </div>
           {tePakken.length === 0 ? (
             <p className="meta">Niets zonder eigenaar in {afdelingNaam}.</p>
           ) : (
