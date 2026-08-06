@@ -122,12 +122,12 @@ function BikePopup({
   const statusLabel = bike.status === "maintenance" ? "In onderhoud" :
     todayReservation ? "Verhuurd vandaag" : "Beschikbaar";
   const statusColor = bike.status === "maintenance" ? "text-orange-600" :
-    todayReservation ? "text-green-600" : "text-blue-600";
+    todayReservation ? "text-green-600" : "text-brand";
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-white rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4"
+        className="bg-paper-raised rounded-2xl shadow-xl max-w-sm w-full p-6 space-y-4"
         onClick={(e) => e.stopPropagation()}
       >
         {view === "main" && (
@@ -136,25 +136,25 @@ function BikePopup({
             <div className="flex items-start justify-between">
               <div>
                 <h2 className="text-lg font-bold">Fiets #{bike.number}</h2>
-                <p className="text-sm text-gray-500">{bike.name}</p>
+                <p className="text-sm text-ink-45">{bike.name}</p>
                 <p className={`text-sm font-medium mt-0.5 ${statusColor}`}>{statusLabel}</p>
               </div>
-              <button onClick={onClose} className="text-gray-400 hover:text-gray-600 text-xl leading-none">×</button>
+              <button onClick={onClose} className="text-ink-45 hover:text-ink-70 text-xl leading-none">×</button>
             </div>
 
-            <div className="border-t pt-3 text-sm text-gray-500 space-y-1">
+            <div className="border-t pt-3 text-sm text-ink-45 space-y-1">
               <div className="flex justify-between">
                 <span>Type</span>
-                <span className="font-medium text-gray-700">{bike.type_name || "—"}</span>
+                <span className="font-medium text-ink-70">{bike.type_name || "—"}</span>
               </div>
               <div className="flex justify-between">
                 <span>Verhuurdagen totaal</span>
-                <span className="font-medium text-gray-700">{bike.total_rental_days}d</span>
+                <span className="font-medium text-ink-70">{bike.total_rental_days}d</span>
               </div>
               {bike.is_reserve && (
                 <div className="flex justify-between">
                   <span>Reserve fiets</span>
-                  <span className="font-medium text-gray-700">Ja</span>
+                  <span className="font-medium text-ink-70">Ja</span>
                 </div>
               )}
             </div>
@@ -171,14 +171,14 @@ function BikePopup({
                 </div>
 
                 <div className="space-y-2">
-                  <p className="text-xs font-semibold text-gray-600 uppercase tracking-wide">Sleutelbeheer</p>
+                  <p className="text-xs font-semibold text-ink-70 uppercase tracking-wide">Sleutelbeheer</p>
                   <button
                     onClick={toggleKeyGiven}
                     disabled={updating}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       keyGiven
                         ? "bg-green-600 text-white hover:bg-green-700"
-                        : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"
+                        : "bg-paper-raised border border-ink-12 text-ink-70 hover:bg-ink-6"
                     }`}
                   >
                     <span>{keyGiven ? "✓" : "○"}</span>
@@ -194,8 +194,8 @@ function BikePopup({
                     disabled={updating}
                     className={`w-full flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition-colors ${
                       keyReturned
-                        ? "bg-blue-600 text-white hover:bg-blue-700"
-                        : "bg-white border border-gray-300 text-gray-600 hover:bg-gray-50"
+                        ? "bg-brand text-white hover:opacity-90"
+                        : "bg-paper-raised border border-ink-12 text-ink-70 hover:bg-ink-6"
                     }`}
                   >
                     <span>{keyReturned ? "✓" : "○"}</span>
@@ -234,13 +234,13 @@ function BikePopup({
         {view === "maintenance" && (
           <>
             <div className="flex items-center gap-3">
-              <button onClick={() => setView("main")} className="text-gray-400 hover:text-gray-600 text-sm">← Terug</button>
+              <button onClick={() => setView("main")} className="text-ink-45 hover:text-ink-70 text-sm">← Terug</button>
               <h2 className="text-lg font-bold">🔧 Onderhoud starten</h2>
             </div>
 
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Startdatum</label>
+                <label className="block text-xs font-medium text-ink-70 mb-1">Startdatum</label>
                 <input
                   type="date"
                   value={maintForm.start_date}
@@ -252,7 +252,7 @@ function BikePopup({
                 />
               </div>
               <div>
-                <label className="block text-xs font-medium text-gray-700 mb-1">Terugkomst</label>
+                <label className="block text-xs font-medium text-ink-70 mb-1">Terugkomst</label>
                 <input
                   type="date"
                   value={maintForm.expected_end_date}
@@ -273,7 +273,7 @@ function BikePopup({
               className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-orange-300"
             />
 
-            {loadingConflicts && <p className="text-xs text-gray-400">Reserveringen controleren...</p>}
+            {loadingConflicts && <p className="text-xs text-ink-45">Reserveringen controleren...</p>}
             {!loadingConflicts && conflicts.length > 0 && (
               <div className="bg-orange-50 rounded-lg p-3 space-y-2">
                 <p className="text-xs font-medium text-orange-800">{conflicts.length} reservering(en) geraakt:</p>
@@ -299,7 +299,7 @@ function BikePopup({
             {error && <p className="text-red-600 text-sm">{error}</p>}
 
             <div className="flex gap-3">
-              <button onClick={() => setView("main")} className="flex-1 border rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50">
+              <button onClick={() => setView("main")} className="flex-1 border rounded-lg px-4 py-2 text-sm font-medium text-ink-70 hover:bg-ink-6">
                 Annuleren
               </button>
               <button
@@ -335,13 +335,13 @@ function BikeCard({
     badgeClass = "bg-orange-100 text-orange-800";
     badgeLabel = "Onderhoud";
   } else if (bike.status === "retired") {
-    badgeClass = "bg-gray-100 text-gray-500";
+    badgeClass = "bg-ink-6 text-ink-45";
     badgeLabel = "Buiten gebruik";
   } else if (todayReservation) {
     badgeClass = "bg-green-100 text-green-800";
     badgeLabel = "Verhuurd";
   } else {
-    badgeClass = "bg-blue-50 text-blue-700";
+    badgeClass = "bg-ink-6 text-brand";
     badgeLabel = "Beschikbaar";
   }
 
@@ -358,7 +358,7 @@ function BikeCard({
           ? "border-red-200 bg-red-50"
           : todayReservation
           ? "border-green-200 bg-green-50"
-          : "border-gray-200 bg-white hover:border-gray-300"
+          : "border-ink-12 bg-paper-raised hover:border-ink-12"
       }`}
     >
       <div className="flex items-center justify-between mb-1">
@@ -372,16 +372,16 @@ function BikeCard({
       {todayReservation ? (
         <p className={`text-xs font-medium truncate ${keyGiven && !keyReturned ? "text-red-800" : "text-green-800"}`}>{todayReservation.guest_name}</p>
       ) : (
-        <p className="text-xs text-gray-600 truncate">{bike.name}</p>
+        <p className="text-xs text-ink-70 truncate">{bike.name}</p>
       )}
 
       {/* Sleutel status indicatoren */}
       {todayReservation && (
         <div className="flex gap-1 mt-1">
-          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${keyGiven ? "bg-green-200 text-green-800" : "bg-gray-100 text-gray-500"}`}>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${keyGiven ? "bg-green-200 text-green-800" : "bg-ink-6 text-ink-45"}`}>
             {keyGiven ? "🔑 Uit" : "🔑 —"}
           </span>
-          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${keyReturned ? "bg-blue-200 text-blue-800" : "bg-gray-100 text-gray-500"}`}>
+          <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${keyReturned ? "bg-blue-200 text-brand" : "bg-ink-6 text-ink-45"}`}>
             {keyReturned ? "↩ Terug" : "↩ —"}
           </span>
         </div>
@@ -444,7 +444,7 @@ export default function BikesDashboard() {
     return [...groups.values()];
   }, [bikes]);
 
-  if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
+  if (loading) return <p className="p-4 text-ink-45">Laden...</p>;
 
   const selectedReservation = selectedBike ? (reservationByBikeId.get(selectedBike.id) ?? null) : null;
 
@@ -454,7 +454,7 @@ export default function BikesDashboard() {
         <h1 className="text-2xl font-bold">Fietsen dashboard</h1>
         <button
           onClick={() => navigate("/bikes/reserveringen/nieuw")}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-colors"
         >
           + Nieuwe reservering
         </button>
@@ -462,36 +462,36 @@ export default function BikesDashboard() {
 
       {/* Statuscijfers */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
-        <div className="bg-white rounded-2xl shadow p-4 text-center">
-          <p className="text-3xl font-bold text-blue-600">{available.length}</p>
-          <p className="text-sm text-gray-500 mt-1">Beschikbaar</p>
+        <div className="bg-paper-raised rounded-2xl shadow p-4 text-center">
+          <p className="text-3xl font-bold text-brand">{available.length}</p>
+          <p className="text-sm text-ink-45 mt-1">Beschikbaar</p>
         </div>
-        <div className="bg-white rounded-2xl shadow p-4 text-center">
+        <div className="bg-paper-raised rounded-2xl shadow p-4 text-center">
           <p className="text-3xl font-bold text-green-600">{rentedToday.length}</p>
-          <p className="text-sm text-gray-500 mt-1">Verhuurd vandaag</p>
+          <p className="text-sm text-ink-45 mt-1">Verhuurd vandaag</p>
         </div>
-        <div className="bg-white rounded-2xl shadow p-4 text-center">
+        <div className="bg-paper-raised rounded-2xl shadow p-4 text-center">
           <p className="text-3xl font-bold text-orange-600">{inMaintenance.length}</p>
-          <p className="text-sm text-gray-500 mt-1">In onderhoud</p>
+          <p className="text-sm text-ink-45 mt-1">In onderhoud</p>
         </div>
-        <div className="bg-white rounded-2xl shadow p-4 text-center">
+        <div className="bg-paper-raised rounded-2xl shadow p-4 text-center">
           <p className="text-3xl font-bold text-purple-600">{upcomingRes.length}</p>
-          <p className="text-sm text-gray-500 mt-1">Aankomend</p>
+          <p className="text-sm text-ink-45 mt-1">Aankomend</p>
         </div>
       </div>
 
       {/* Fietsstatus per type — nu bovenaan */}
-      <div className="bg-white rounded-2xl shadow p-5 mb-6">
+      <div className="bg-paper-raised rounded-2xl shadow p-5 mb-6">
         <div className="flex items-center justify-between mb-4">
           <h2 className="text-lg font-bold">Fietsen status</h2>
-          <button onClick={() => navigate("/bikes/reserveringen")} className="text-sm text-blue-600 hover:underline">
+          <button onClick={() => navigate("/bikes/reserveringen")} className="text-sm text-brand hover:underline">
             Reserveringen →
           </button>
         </div>
         <div className="space-y-5">
           {bikeGroups.map((group) => (
             <div key={group.typeName}>
-              <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-2">{group.typeName}</p>
+              <p className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-2">{group.typeName}</p>
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2">
                 {group.bikes.map((b) => (
                   <BikeCard
@@ -505,15 +505,15 @@ export default function BikesDashboard() {
             </div>
           ))}
         </div>
-        <p className="text-xs text-gray-400 mt-4">Klik op een fiets voor details en sleutelbeheer</p>
+        <p className="text-xs text-ink-45 mt-4">Klik op een fiets voor details en sleutelbeheer</p>
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6">
         {/* Vandaag actieve reserveringen */}
-        <div className="bg-white rounded-2xl shadow p-5">
+        <div className="bg-paper-raised rounded-2xl shadow p-5">
           <h2 className="text-lg font-bold mb-4">Vandaag verhuurd</h2>
           {activeRes.length === 0 ? (
-            <p className="text-gray-400 italic text-sm">Geen actieve verhuur vandaag</p>
+            <p className="text-ink-45 italic text-sm">Geen actieve verhuur vandaag</p>
           ) : (
             <div className="space-y-2">
               {activeRes.map((r) => (
@@ -524,15 +524,15 @@ export default function BikesDashboard() {
                 >
                   <div>
                     <p className="font-medium text-sm">{r.guest_name}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-ink-45">
                       {r.guest_room ? `Kamer ${r.guest_room} · ` : ""}
                       {r.bikes.map(b => `#${b.number}`).join(", ")} · t/m {formatDateNL(r.end_date)}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {r.key_given_at && <span className="text-xs text-green-600 font-medium">🔑</span>}
-                    {r.key_returned_at && <span className="text-xs text-blue-600 font-medium">↩</span>}
-                    <span className="text-xs text-gray-400">#{r.id}</span>
+                    {r.key_returned_at && <span className="text-xs text-brand font-medium">↩</span>}
+                    <span className="text-xs text-ink-45">#{r.id}</span>
                   </div>
                 </div>
               ))}
@@ -541,30 +541,30 @@ export default function BikesDashboard() {
         </div>
 
         {/* Aankomende reserveringen */}
-        <div className="bg-white rounded-2xl shadow p-5">
+        <div className="bg-paper-raised rounded-2xl shadow p-5">
           <h2 className="text-lg font-bold mb-4">Aankomend</h2>
           {upcomingRes.length === 0 ? (
-            <p className="text-gray-400 italic text-sm">Geen geplande reserveringen</p>
+            <p className="text-ink-45 italic text-sm">Geen geplande reserveringen</p>
           ) : (
             <div className="space-y-2">
               {upcomingRes.map((r) => (
                 <div
                   key={r.id}
-                  className="flex items-center justify-between p-3 bg-gray-50 rounded-lg cursor-pointer hover:bg-gray-100 transition-colors"
+                  className="flex items-center justify-between p-3 bg-ink-6 rounded-lg cursor-pointer hover:bg-ink-6 transition-colors"
                   onClick={() => navigate(`/bikes/reserveringen/${r.id}`)}
                 >
                   <div>
                     <p className="font-medium text-sm">{r.guest_name}</p>
-                    <p className="text-xs text-gray-500">
+                    <p className="text-xs text-ink-45">
                       {formatDateNL(r.start_date)} → {formatDateNL(r.end_date)} · {r.num_bikes}× {r.bike_type_name}
                     </p>
                   </div>
-                  <span className="text-xs text-gray-400">#{r.id}</span>
+                  <span className="text-xs text-ink-45">#{r.id}</span>
                 </div>
               ))}
             </div>
           )}
-          <button onClick={() => navigate("/bikes/reserveringen")} className="mt-4 text-sm text-blue-600 hover:underline">
+          <button onClick={() => navigate("/bikes/reserveringen")} className="mt-4 text-sm text-brand hover:underline">
             Alle reserveringen →
           </button>
         </div>

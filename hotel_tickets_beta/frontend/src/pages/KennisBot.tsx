@@ -230,16 +230,16 @@ export default function KennisBot() {
       style={{ height: "calc(var(--app-vh, 100dvh) - 7rem)" }}
     >
       <div className="flex items-center gap-2 mb-3 shrink-0">
-        <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
+        <h1 className="text-xl font-bold text-ink flex items-center gap-2">
           Jaisper
-          <span className="text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded">
+          <span className="text-[10px] font-bold uppercase tracking-wide bg-high-soft text-high px-1.5 py-0.5 rounded">
             Beta
           </span>
         </h1>
       </div>
 
       {/* Privacy-waarschuwing — altijd zichtbaar boven het gesprek */}
-      <div className="shrink-0 mb-2 flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+      <div className="shrink-0 mb-2 flex items-start gap-2 text-xs text-high bg-high-soft border border-high rounded-lg px-3 py-2">
         <span aria-hidden>⚠️</span>
         <span>
           Deel hier <strong>geen persoonsgegevens, gebruikersnamen of wachtwoorden</strong>. Berichten
@@ -250,13 +250,13 @@ export default function KennisBot() {
       {/* Gespreksvenster */}
       <div ref={listRef} className="flex-1 overflow-y-auto space-y-3 pr-1">
         <BotBubble>
-          <p className="text-sm text-gray-700">{WELCOME}</p>
+          <p className="text-sm text-ink-70">{WELCOME}</p>
         </BotBubble>
 
         {messages.map((m, i) =>
           m.role === "user" ? (
             <div key={i} className="flex justify-end">
-              <div className="bg-blue-600 text-white rounded-2xl rounded-br-sm px-4 py-2 max-w-[85%] whitespace-pre-wrap text-sm">
+              <div className="bg-brand text-white rounded-2xl rounded-br-sm px-4 py-2 max-w-[85%] whitespace-pre-wrap text-sm">
                 {m.content}
               </div>
             </div>
@@ -264,17 +264,17 @@ export default function KennisBot() {
             <BotBubble key={i}>
               {m.kind === "no_answer" ? (
                 <div className="space-y-2">
-                  <p className="text-sm text-gray-700">{m.content}</p>
+                  <p className="text-sm text-ink-70">{m.content}</p>
                   <div className="flex flex-wrap gap-2">
                     <button
                       onClick={() => startSolution(m.questionId)}
-                      className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+                      className="bg-brand text-white px-3 py-1.5 rounded-lg text-xs hover:opacity-90"
                     >
                       Ik heb het zelf opgelost
                     </button>
                     <button
                       onClick={() => makeTicket(m.question)}
-                      className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50"
+                      className="border border-ink-12 text-ink-70 px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6"
                     >
                       Maak hier een ticket van
                     </button>
@@ -282,7 +282,7 @@ export default function KennisBot() {
                 </div>
               ) : (
                 <div className="space-y-1.5">
-                  <div className="prose prose-sm max-w-none text-gray-700 break-words">
+                  <div className="prose prose-sm max-w-none text-ink-70 break-words">
                     <ReactMarkdown>{m.content}</ReactMarkdown>
                   </div>
                   {!!m.images?.length && (
@@ -299,7 +299,7 @@ export default function KennisBot() {
                             src={img.url}
                             alt={img.alt}
                             loading="lazy"
-                            className="h-20 w-20 object-cover rounded-lg border border-gray-200 hover:opacity-90"
+                            className="h-20 w-20 object-cover rounded-lg border border-ink-12 hover:opacity-90"
                           />
                         </button>
                       ))}
@@ -308,7 +308,7 @@ export default function KennisBot() {
                   {m.kind === "answer" && m.questionId && (
                     <button
                       onClick={() => startSolution(m.questionId)}
-                      className="text-xs text-blue-600 hover:underline"
+                      className="text-xs text-brand hover:underline"
                     >
                       Ik loste het anders op
                     </button>
@@ -331,14 +331,14 @@ export default function KennisBot() {
       {/* Invoer */}
       <div className="shrink-0 pt-3">
         {solutionFor && (
-          <div className="flex items-center justify-between text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-1.5 mb-2">
+          <div className="flex items-center justify-between text-xs text-high bg-high-soft border border-high rounded-lg px-3 py-1.5 mb-2">
             <span>Je beschrijft nu de oplossing voor het beheer.</span>
             <button onClick={() => setSolutionFor(null)} className="underline">
               Annuleren
             </button>
           </div>
         )}
-        <div className="flex items-end gap-2 bg-white rounded-2xl border border-gray-300 p-2 shadow-sm">
+        <div className="flex items-end gap-2 bg-paper-raised rounded-2xl border border-ink-12 p-2 shadow-sm">
           <textarea
             ref={taRef}
             value={input}
@@ -351,12 +351,12 @@ export default function KennisBot() {
           <button
             onClick={send}
             disabled={sending || !input.trim()}
-            className="bg-blue-600 text-white rounded-xl px-4 py-2 text-sm hover:bg-blue-700 disabled:opacity-40 shrink-0"
+            className="bg-brand text-white rounded-xl px-4 py-2 text-sm hover:opacity-90 disabled:opacity-40 shrink-0"
           >
             Stuur
           </button>
         </div>
-        <p className="text-[11px] text-gray-400 text-center mt-1.5">
+        <p className="text-[11px] text-ink-45 text-center mt-1.5">
           Jaisper antwoordt alleen op basis van onze eigen kennis.
         </p>
       </div>
@@ -390,10 +390,10 @@ function BotBubble({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex justify-start">
       <div className="flex gap-2 max-w-[90%]">
-        <div className="shrink-0 w-7 h-7 rounded-full bg-amber-100 flex items-center justify-center text-sm">
+        <div className="shrink-0 w-7 h-7 rounded-full bg-high-soft flex items-center justify-center text-sm">
           🤖
         </div>
-        <div className="bg-white border border-gray-200 rounded-2xl rounded-bl-sm px-4 py-2.5 shadow-sm">
+        <div className="bg-paper-raised border border-ink-12 rounded-2xl rounded-bl-sm px-4 py-2.5 shadow-sm">
           {children}
         </div>
       </div>

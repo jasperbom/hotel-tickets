@@ -19,6 +19,9 @@
     /* Interactiekleur (tokenlaag `brand`). Volgt de instelbare knopkleur;
        applyButtonPalette() overschrijft hem bij een eigen huisstijl. */
     --brand: #2563eb;
+    /* Leesbare tekstkleur óp de merkkleur; branding.ts rekent hem uit zodra
+       er een eigen knopkleur is ingesteld. */
+    --on-brand: #ffffff;
   }
 
   /* Reserveer onderaan ruimte waar het virtuele toetsenbord opkomt: iOS
@@ -52,7 +55,7 @@
   }
 
   body {
-    @apply text-gray-900 font-sans;
+    @apply text-ink font-sans;
     background-color: var(--app-bg, #FBFAF7);
     position: relative;
   }
@@ -127,14 +130,18 @@ body.undo-open {
 }
 
 @layer components {
+  /* Actieknoppen zijn zwart-op-wit: groen is de kleur van "het is klaar",
+     niet van "maak het klaar". De merkkleur blijft voor de meldknop. */
   .btn-primary {
-    @apply bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors font-medium whitespace-nowrap;
+    @apply bg-ink text-paper px-4 min-h-tap inline-flex items-center rounded-[10px]
+           hover:bg-ink-70 transition-colors text-meta font-semibold whitespace-nowrap;
   }
   .btn-secondary {
-    @apply bg-white text-gray-700 px-4 py-2 rounded-lg border border-gray-300 hover:bg-gray-50 transition-colors font-medium whitespace-nowrap;
+    @apply bg-paper-raised text-ink-70 px-4 min-h-tap inline-flex items-center rounded-[10px]
+           border border-ink-12 hover:bg-ink-6 transition-colors text-meta font-semibold whitespace-nowrap;
   }
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 p-4;
+    @apply bg-paper-raised rounded-[10px] border border-ink-12 p-4;
   }
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap;

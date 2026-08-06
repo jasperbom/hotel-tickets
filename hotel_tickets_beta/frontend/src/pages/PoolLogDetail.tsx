@@ -1,17 +1,18 @@
 import { useEffect, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { poolApi, userApi, formatDateNL, type PoolLog, type UserRole } from "../api/client";
+import { BevestigKnop } from "../components/BevestigKnop";
 
 function valClass(val: number | null, low: number, high: number): string {
-  if (val === null) return "text-gray-400";
+  if (val === null) return "text-ink-45";
   if (val < low || val > high) return "text-red-600 font-bold";
   return "text-green-700";
 }
 
 function Row({ label, value, className = "" }: { label: string; value: any; className?: string }) {
   return (
-    <div className="flex justify-between py-2 border-b border-gray-100">
-      <span className="text-gray-500">{label}</span>
+    <div className="flex justify-between py-2 border-b border-ink-6">
+      <span className="text-ink-45">{label}</span>
       <span className={`font-medium ${className}`}>{value ?? "-"}</span>
     </div>
   );
@@ -114,7 +115,6 @@ export default function PoolLogDetail() {
 
   async function handleDelete() {
     if (!id) return;
-    if (!confirm("Weet je zeker dat je deze logregel wilt verwijderen? Dit kan niet ongedaan gemaakt worden.")) return;
     setDeleting(true);
     setError("");
     try {
@@ -126,15 +126,15 @@ export default function PoolLogDetail() {
     }
   }
 
-  if (!log) return <p className="text-gray-400 p-4">Laden...</p>;
+  if (!log) return <p className="text-ink-45 p-4">Laden...</p>;
 
   return (
     <div className="max-w-xl">
-      <button onClick={() => navigate(-1)} className="text-blue-600 text-sm mb-4 hover:underline">
+      <button onClick={() => navigate(-1)} className="text-brand text-sm mb-4 hover:underline">
         &larr; Terug
       </button>
 
-      <div className="bg-white rounded-2xl shadow p-6">
+      <div className="bg-paper-raised rounded-2xl shadow p-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-4">
           <h1 className="text-xl font-bold capitalize">{log.pool_id}</h1>
@@ -156,7 +156,7 @@ export default function PoolLogDetail() {
                 />
               </div>
             ) : (
-              <span className="text-gray-500 text-sm">{formatDateNL(log.datum)} {log.tijd}</span>
+              <span className="text-ink-45 text-sm">{formatDateNL(log.datum)} {log.tijd}</span>
             )}
           </div>
         </div>
@@ -165,8 +165,8 @@ export default function PoolLogDetail() {
           /* Bewerkformulier */
           <div className="space-y-2">
             {/* Water temp */}
-            <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-              <label className="text-gray-500 text-sm">{EDITABLE_FIELDS[0].label}</label>
+            <div className="flex items-center justify-between py-1.5 border-b border-ink-6">
+              <label className="text-ink-45 text-sm">{EDITABLE_FIELDS[0].label}</label>
               <input
                 type={EDITABLE_FIELDS[0].type}
                 step={EDITABLE_FIELDS[0].step}
@@ -176,8 +176,8 @@ export default function PoolLogDetail() {
               />
             </div>
             {/* Doorzicht selector */}
-            <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-              <label className="text-gray-500 text-sm">Doorzicht</label>
+            <div className="flex items-center justify-between py-1.5 border-b border-ink-6">
+              <label className="text-ink-45 text-sm">Doorzicht</label>
               <select
                 className="border rounded-lg px-2 py-1 text-sm w-40 text-right"
                 value={editValues.doorzicht || ""}
@@ -190,8 +190,8 @@ export default function PoolLogDetail() {
               </select>
             </div>
             {EDITABLE_FIELDS.slice(1).map((f) => (
-              <div key={f.key} className="flex items-center justify-between py-1.5 border-b border-gray-100">
-                <label className="text-gray-500 text-sm">{f.label}</label>
+              <div key={f.key} className="flex items-center justify-between py-1.5 border-b border-ink-6">
+                <label className="text-ink-45 text-sm">{f.label}</label>
                 <input
                   type={f.type}
                   step={f.step}
@@ -202,8 +202,8 @@ export default function PoolLogDetail() {
               </div>
             ))}
 
-            <div className="flex items-center justify-between py-1.5 border-b border-gray-100">
-              <label className="text-gray-500 text-sm">Filterspoeling</label>
+            <div className="flex items-center justify-between py-1.5 border-b border-ink-6">
+              <label className="text-ink-45 text-sm">Filterspoeling</label>
               <select
                 className="border rounded-lg px-2 py-1 text-sm w-40 text-right"
                 value={editValues.filterspoeling || ""}
@@ -227,25 +227,27 @@ export default function PoolLogDetail() {
               <button
                 onClick={handleSave}
                 disabled={saving || deleting}
-                className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+                className="bg-brand text-white px-5 py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50"
               >
                 {saving ? "Opslaan..." : "Opslaan"}
               </button>
               <button
                 onClick={() => setEditing(false)}
                 disabled={saving || deleting}
-                className="border px-5 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+                className="border px-5 py-2 rounded-lg text-sm hover:bg-ink-6 disabled:opacity-50"
               >
                 Annuleren
               </button>
               {isAdmin && (
-                <button
-                  onClick={handleDelete}
-                  disabled={saving || deleting}
-                  className="ml-auto bg-red-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
-                >
-                  {deleting ? "Verwijderen..." : "Verwijderen"}
-                </button>
+                <span className="ml-auto">
+                  <BevestigKnop
+                    label={deleting ? "Verwijderen..." : "Verwijderen"}
+                    vraag="Deze logregel verwijderen? Dat kan niet ongedaan gemaakt worden."
+                    onBevestig={handleDelete}
+                    disabled={saving || deleting}
+                    className="bg-red-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+                  />
+                </span>
               )}
             </div>
           </div>
@@ -275,10 +277,10 @@ export default function PoolLogDetail() {
             )}
 
             {isAdmin && (
-              <div className="mt-4 pt-3 border-t border-gray-100">
+              <div className="mt-4 pt-3 border-t border-ink-6">
                 <button
                   onClick={startEdit}
-                  className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700"
+                  className="bg-brand text-white px-5 py-2 rounded-lg text-sm hover:opacity-90"
                 >
                   Aanpassen
                 </button>

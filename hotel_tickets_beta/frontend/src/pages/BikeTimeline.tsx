@@ -110,9 +110,9 @@ export default function BikeTimeline() {
   }
 
   function blockColor(r: BikeReservation): string {
-    if (r.status === "completed") return "bg-gray-300 text-gray-600 border-gray-400";
+    if (r.status === "completed") return "bg-ink-25 text-ink-70 border-ink-25";
     if (r.start_date <= todayStr && r.end_date >= todayStr) return "bg-green-500 text-white border-green-600";
-    if (r.start_date > todayStr) return "bg-blue-500 text-white border-blue-600";
+    if (r.start_date > todayStr) return "bg-ink-60 text-white border-brand";
     return "bg-gray-400 text-white border-gray-500";
   }
 
@@ -120,7 +120,7 @@ export default function BikeTimeline() {
   const todayInWindow = todayOffset >= 0 && todayOffset < WINDOW_DAYS;
   const totalW = WINDOW_DAYS * DAY_W;
 
-  if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
+  if (loading) return <p className="p-4 text-ink-45">Laden...</p>;
 
   return (
     <div className="max-w-full">
@@ -128,7 +128,7 @@ export default function BikeTimeline() {
       <div className="flex flex-wrap items-center justify-between gap-3 mb-5">
         <h1 className="text-2xl font-bold">Tijdlijn</h1>
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+          <label className="flex items-center gap-1.5 text-sm text-ink-70 cursor-pointer select-none">
             <input
               type="checkbox"
               checked={showCompleted}
@@ -140,7 +140,7 @@ export default function BikeTimeline() {
           <div className="flex gap-1">
             <button
               onClick={() => setWindowStart(p => addDays(p, -7))}
-              className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-100 transition-colors"
+              className="px-3 py-1.5 rounded-lg border text-sm hover:bg-ink-6 transition-colors"
             >‹ -7d</button>
             <button
               onClick={() => {
@@ -149,28 +149,28 @@ export default function BikeTimeline() {
                 d.setHours(0, 0, 0, 0);
                 setWindowStart(d);
               }}
-              className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-gray-100 transition-colors"
+              className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-ink-6 transition-colors"
             >Vandaag</button>
             <button
               onClick={() => setWindowStart(p => addDays(p, 7))}
-              className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-100 transition-colors"
+              className="px-3 py-1.5 rounded-lg border text-sm hover:bg-ink-6 transition-colors"
             >+7d ›</button>
           </div>
         </div>
       </div>
 
       {/* Gantt */}
-      <div className="bg-white rounded-2xl shadow overflow-hidden">
+      <div className="bg-paper-raised rounded-2xl shadow overflow-hidden">
         <div className="overflow-x-auto">
           <div style={{ minWidth: LABEL_W + totalW }}>
 
             {/* Maandkoppenrij */}
             <div className="flex sticky top-0 z-10">
               <div
-                className="shrink-0 bg-gray-800 border-r border-white/10"
+                className="shrink-0 bg-ink border-r border-white/10"
                 style={{ width: LABEL_W }}
               />
-              <div className="flex bg-gray-800 text-white text-xs font-semibold">
+              <div className="flex bg-ink text-white text-xs font-semibold">
                 {monthGroups.map((mg, i) => (
                   <div
                     key={i}
@@ -198,7 +198,7 @@ export default function BikeTimeline() {
                       key={i}
                       style={{ width: DAY_W }}
                       className={`flex flex-col items-center justify-center py-1 border-r border-white/10 ${
-                        isToday ? "bg-blue-600 font-bold" : isWeekend ? "bg-gray-600" : ""
+                        isToday ? "bg-brand font-bold" : isWeekend ? "bg-gray-600" : ""
                       }`}
                     >
                       <span>{d.getDate()}</span>
@@ -215,10 +215,10 @@ export default function BikeTimeline() {
             {bikeGroups.map((group) => (
               <div key={group.typeName}>
                 {/* Typekop */}
-                <div className="flex border-b border-gray-200 bg-gray-50">
+                <div className="flex border-b border-ink-12 bg-ink-6">
                   <div
                     style={{ width: LABEL_W }}
-                    className="shrink-0 px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide border-r border-gray-200 flex items-center"
+                    className="shrink-0 px-3 py-1.5 text-[10px] font-semibold text-ink-45 uppercase tracking-wide border-r border-ink-12 flex items-center"
                   >
                     <span className="truncate">{group.typeName}</span>
                   </div>
@@ -234,21 +234,21 @@ export default function BikeTimeline() {
                   return (
                     <div
                       key={bike.id}
-                      className="flex border-b border-gray-100 hover:bg-gray-50 group"
+                      className="flex border-b border-ink-6 hover:bg-ink-6 group"
                       style={{ height: ROW_H }}
                     >
                       {/* Label */}
                       <div
                         style={{ width: LABEL_W }}
-                        className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3"
+                        className="shrink-0 border-r border-ink-12 flex items-center gap-2 px-3"
                       >
                         <span className={`w-2 h-2 rounded-full shrink-0 ${
                           bike.status === "maintenance" ? "bg-orange-400" :
-                          isRentedToday ? "bg-green-500" : "bg-gray-300"
+                          isRentedToday ? "bg-green-500" : "bg-ink-25"
                         }`} />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">#{bike.number}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{bike.total_rental_days}d</p>
+                          <p className="text-[10px] text-ink-45 truncate">{bike.total_rental_days}d</p>
                         </div>
                       </div>
 
@@ -259,7 +259,7 @@ export default function BikeTimeline() {
                           (d.getDay() === 0 || d.getDay() === 6) ? (
                             <div
                               key={i}
-                              className="absolute top-0 bottom-0 bg-gray-50 pointer-events-none"
+                              className="absolute top-0 bottom-0 bg-ink-6 pointer-events-none"
                               style={{ left: i * DAY_W, width: DAY_W }}
                             />
                           ) : null
@@ -268,7 +268,7 @@ export default function BikeTimeline() {
                         {/* Vandaag highlight */}
                         {todayInWindow && (
                           <div
-                            className="absolute top-0 bottom-0 bg-blue-100 opacity-50 pointer-events-none"
+                            className="absolute top-0 bottom-0 bg-ink-6 opacity-50 pointer-events-none"
                             style={{ left: todayOffset * DAY_W, width: DAY_W }}
                           />
                         )}
@@ -297,7 +297,7 @@ export default function BikeTimeline() {
             ))}
 
             {bikes.length === 0 && (
-              <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+              <div className="flex items-center justify-center h-32 text-ink-45 text-sm">
                 Geen fietsen gevonden
               </div>
             )}
@@ -305,13 +305,13 @@ export default function BikeTimeline() {
         </div>
 
         {/* Legenda */}
-        <div className="flex flex-wrap items-center gap-4 px-4 py-3 bg-gray-50 border-t text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-4 px-4 py-3 bg-ink-6 border-t text-xs text-ink-45">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-500" /> Actief vandaag</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-500" /> Toekomstig</div>
-          {showCompleted && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300" /> Afgerond</div>}
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-ink-60" /> Toekomstig</div>
+          {showCompleted && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-ink-25" /> Afgerond</div>}
           <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-green-500" /> Verhuurd nu</div>
-          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-gray-300" /> Vrij</div>
-          <span className="ml-auto text-gray-400">Klik op een blok om de reservering te openen</span>
+          <div className="flex items-center gap-1.5"><div className="w-2 h-2 rounded-full bg-ink-25" /> Vrij</div>
+          <span className="ml-auto text-ink-45">Klik op een blok om de reservering te openen</span>
         </div>
       </div>
     </div>

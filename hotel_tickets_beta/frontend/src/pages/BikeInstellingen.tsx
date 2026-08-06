@@ -73,17 +73,17 @@ export default function BikeInstellingen() {
 
   // resetImport is verwijderd — import werkt altijd met deduplicatie
 
-  if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
+  if (loading) return <p className="p-4 text-ink-45">Laden...</p>;
 
   return (
     <div className="max-w-lg">
       <h1 className="text-2xl font-bold mb-6">Fietsen instellingen</h1>
 
-      <div className="bg-white rounded-2xl shadow p-6 space-y-6">
+      <div className="bg-paper-raised rounded-2xl shadow p-6 space-y-6">
         {/* Zichtbaarheid */}
         <div>
           <h2 className="font-bold text-base mb-1">Module-zichtbaarheid</h2>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-ink-45 mb-4">
             Bepaal welke medewerkers de fietsenmodule in het menu kunnen zien.
           </p>
           <div className="space-y-3">
@@ -92,8 +92,8 @@ export default function BikeInstellingen() {
                 key={opt.value}
                 className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
                   currentRoles === opt.value
-                    ? "border-blue-500 bg-blue-50"
-                    : "border-gray-200 hover:border-gray-300"
+                    ? "border-blue-500 bg-ink-6"
+                    : "border-ink-12 hover:border-ink-12"
                 }`}
               >
                 <input
@@ -107,19 +107,19 @@ export default function BikeInstellingen() {
                 />
                 <div>
                   <p className="font-medium text-sm">{opt.label}</p>
-                  <p className="text-xs text-gray-500">{opt.description}</p>
+                  <p className="text-xs text-ink-45">{opt.description}</p>
                 </div>
               </label>
             ))}
           </div>
-          {saving && <p className="text-sm text-gray-400 mt-2">Opslaan...</p>}
+          {saving && <p className="text-sm text-ink-45 mt-2">Opslaan...</p>}
           {saved && <p className="text-sm text-green-600 mt-2">✓ Instelling opgeslagen</p>}
         </div>
 
         {/* Excel import */}
         <div className="border-t pt-5">
           <h2 className="font-bold text-base mb-1">Historische data importeren</h2>
-          <p className="text-sm text-gray-500 mb-4">
+          <p className="text-sm text-ink-45 mb-4">
             Upload een Excel-bestand in het Fietsverhuur-formaat om historische reserveringen te importeren.
             Dit kan slechts één keer; gebruik de reset-knop om opnieuw te importeren.
           </p>
@@ -134,7 +134,7 @@ export default function BikeInstellingen() {
             />
             <label
               htmlFor="excel-upload"
-              className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${importing ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
+              className={`cursor-pointer bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-colors ${importing ? "opacity-50 cursor-not-allowed pointer-events-none" : ""}`}
             >
               {importing ? "Importeren..." : "📂 Excel uploaden"}
             </label>
@@ -159,7 +159,7 @@ export default function BikeInstellingen() {
         {/* Info */}
         <div className="border-t pt-5">
           <h2 className="font-bold text-base mb-2">Over de fietsenmodule</h2>
-          <div className="text-sm text-gray-600 space-y-2">
+          <div className="text-sm text-ink-70 space-y-2">
             <p>
               De fietsenmodule is geïntegreerd in het hotel-ticket systeem. Reserveringen,
               fietsbeheer en onderhoud worden vanuit één plek beheerd.

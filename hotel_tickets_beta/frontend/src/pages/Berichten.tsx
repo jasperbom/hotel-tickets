@@ -90,7 +90,7 @@ export default function Berichten() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
       </div>
     );
   }
@@ -124,21 +124,21 @@ export default function Berichten() {
 
   return (
     <div className="max-w-2xl mx-auto space-y-4">
-      <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
+      <h1 className="text-2xl font-bold text-ink flex items-center gap-2">
         ✉️ Berichten
       </h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 bg-gray-100 rounded-lg p-1">
+      <div className="flex gap-1 bg-ink-6 rounded-lg p-1">
         <button
           onClick={() => setTab("gesprekken")}
           className={`flex-1 flex items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium transition-colors ${
-            tab === "gesprekken" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+            tab === "gesprekken" ? "bg-paper-raised shadow text-ink" : "text-ink-45 hover:text-ink-70"
           }`}
         >
           💬 Gesprekken
           {unreadMsgTotal > 0 && (
-            <span className="bg-red-500 text-white rounded-full px-2 py-0.5 text-[11px] font-bold">
+            <span className="bg-urgent-soft0 text-white rounded-full px-2 py-0.5 text-[11px] font-bold">
               {unreadMsgTotal}
             </span>
           )}
@@ -146,12 +146,12 @@ export default function Berichten() {
         <button
           onClick={() => setTab("meldingen")}
           className={`flex-1 flex items-center justify-center gap-2 rounded-md py-1.5 text-sm font-medium transition-colors ${
-            tab === "meldingen" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+            tab === "meldingen" ? "bg-paper-raised shadow text-ink" : "text-ink-45 hover:text-ink-70"
           }`}
         >
           🔔 Meldingen
           {unread.length > 0 && (
-            <span className="bg-red-500 text-white rounded-full px-2 py-0.5 text-[11px] font-bold">
+            <span className="bg-urgent-soft0 text-white rounded-full px-2 py-0.5 text-[11px] font-bold">
               {unread.length}
             </span>
           )}
@@ -167,10 +167,10 @@ export default function Berichten() {
           </div>
 
           {conversations.length === 0 ? (
-            <div className="card text-center py-12 text-gray-400">
+            <div className="card text-center py-12 text-ink-45">
               <div className="text-4xl mb-3">📭</div>
               <p className="text-sm">
-                Nog geen gesprekken. Klik op <span className="font-semibold text-gray-500">Nieuw bericht</span>{" "}
+                Nog geen gesprekken. Klik op <span className="font-semibold text-ink-45">Nieuw bericht</span>{" "}
                 om een collega een bericht te sturen.
               </p>
             </div>
@@ -180,27 +180,27 @@ export default function Berichten() {
                 <button
                   key={c.user_id}
                   onClick={() => setOpenWith({ id: c.user_id, name: c.display_name })}
-                  className={`w-full card text-left flex items-center gap-3 hover:bg-gray-50 transition-colors ${
-                    c.unread > 0 ? "border-blue-300 bg-blue-50/50" : ""
+                  className={`w-full card text-left flex items-center gap-3 hover:bg-ink-6 transition-colors ${
+                    c.unread > 0 ? "border-brand bg-ink-6/50" : ""
                   }`}
                 >
-                  <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold shrink-0">
+                  <div className="w-10 h-10 rounded-full bg-ink-6 text-brand flex items-center justify-center font-bold shrink-0">
                     {c.display_name.charAt(0).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
-                      <span className="font-semibold text-gray-900 truncate">{c.display_name}</span>
-                      <span className="text-xs text-gray-400 shrink-0">
+                      <span className="font-semibold text-ink truncate">{c.display_name}</span>
+                      <span className="text-xs text-ink-45 shrink-0">
                         {format(parseUTC(c.last_created_at), "dd-MM HH:mm", { locale: nl })}
                       </span>
                     </div>
                     <div className="flex items-center justify-between gap-2">
-                      <span className={`text-sm truncate ${c.unread > 0 ? "text-gray-900 font-medium" : "text-gray-500"}`}>
-                        {c.last_from_me && <span className="text-gray-400">Jij: </span>}
+                      <span className={`text-sm truncate ${c.unread > 0 ? "text-ink font-medium" : "text-ink-45"}`}>
+                        {c.last_from_me && <span className="text-ink-45">Jij: </span>}
                         {c.last_body}
                       </span>
                       {c.unread > 0 && (
-                        <span className="bg-red-500 text-white rounded-full min-w-[18px] h-[18px] px-1 text-[10px] font-bold flex items-center justify-center shrink-0">
+                        <span className="bg-urgent-soft0 text-white rounded-full min-w-[18px] h-[18px] px-1 text-[10px] font-bold flex items-center justify-center shrink-0">
                           {c.unread}
                         </span>
                       )}
@@ -215,18 +215,18 @@ export default function Berichten() {
         <>
           {unread.length > 0 && (
             <div className="flex justify-end">
-              <button onClick={markAllRead} className="text-sm text-blue-600 hover:underline">
+              <button onClick={markAllRead} className="text-sm text-brand hover:underline">
                 Alles als gelezen markeren
               </button>
             </div>
           )}
 
           {notifications.length === 0 && (
-            <div className="card text-center py-12 text-gray-400">
+            <div className="card text-center py-12 text-ink-45">
               <div className="text-4xl mb-3">📭</div>
               <p className="text-sm">
                 Geen meldingen. Je krijgt hier een melding wanneer een collega je met{" "}
-                <span className="font-semibold text-gray-500">@naam</span> noemt in een commentaar,
+                <span className="font-semibold text-ink-45">@naam</span> noemt in een commentaar,
                 of wanneer er commentaar komt op een ticket dat aan jou is toegewezen.
               </p>
             </div>
@@ -236,18 +236,18 @@ export default function Berichten() {
             {notifications.map((n) => (
               <div
                 key={n.id}
-                className={`card space-y-2 ${!n.read ? "border-blue-300 bg-blue-50/50" : ""}`}
+                className={`card space-y-2 ${!n.read ? "border-brand bg-ink-6/50" : ""}`}
               >
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-center gap-2 text-sm min-w-0">
-                    {!n.read && <span className="w-2 h-2 rounded-full bg-blue-600 shrink-0" title="Ongelezen" />}
+                    {!n.read && <span className="w-2 h-2 rounded-full bg-brand shrink-0" title="Ongelezen" />}
                     <span className="shrink-0">{n.type === "mention" ? "👋" : "💬"}</span>
-                    <span className="text-gray-700 min-w-0">
+                    <span className="text-ink-70 min-w-0">
                       <span className="font-semibold">{n.actor_name || n.actor_id}</span>{" "}
                       {n.type === "mention" ? "noemde je in" : "reageerde op je ticket"}
                     </span>
                   </div>
-                  <span className="text-xs text-gray-400 shrink-0">
+                  <span className="text-xs text-ink-45 shrink-0">
                     {format(parseUTC(n.created_at), "dd-MM HH:mm", { locale: nl })}
                   </span>
                 </div>
@@ -255,13 +255,13 @@ export default function Berichten() {
                 <Link
                   to={`/tickets/${n.ticket_id}`}
                   onClick={() => markRead(n)}
-                  className="block font-semibold text-blue-700 hover:underline text-sm"
+                  className="block font-semibold text-brand hover:underline text-sm"
                 >
                   🎫 {n.ticket_title || "Ticket"}
                 </Link>
 
                 {n.comment_body && (
-                  <p className="text-sm text-gray-800 whitespace-pre-wrap bg-white border border-gray-100 rounded-lg px-3 py-2">
+                  <p className="text-sm text-ink whitespace-pre-wrap bg-paper-raised border border-ink-6 rounded-lg px-3 py-2">
                     {renderWithMentions(n.comment_body, userNames)}
                   </p>
                 )}
@@ -271,17 +271,17 @@ export default function Berichten() {
                     <>
                       <button
                         onClick={() => { setReplyingTo(n.id); setReplyBody(""); }}
-                        className="text-sm text-blue-600 hover:underline font-medium"
+                        className="text-sm text-brand hover:underline font-medium"
                       >
                         ↩︎ Reageren
                       </button>
                       {!n.read && (
-                        <button onClick={() => markRead(n)} className="text-sm text-gray-500 hover:underline">
+                        <button onClick={() => markRead(n)} className="text-sm text-ink-45 hover:underline">
                           Als gelezen markeren
                         </button>
                       )}
                       {sentFor.has(n.id) && (
-                        <span className="text-xs text-green-600 font-medium">✓ Reactie geplaatst</span>
+                        <span className="text-xs text-done font-medium">✓ Reactie geplaatst</span>
                       )}
                     </>
                   ) : (
@@ -294,7 +294,7 @@ export default function Berichten() {
                           placeholder="Schrijf een reactie... (@naam om iemand te noemen)"
                           rows={2}
                           autoFocus
-                          className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+                          className="w-full border border-ink-12 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand"
                         />
                       </div>
                       <div className="flex gap-2">
@@ -357,19 +357,19 @@ function ComposeView({
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div className="flex items-center gap-2">
-        <button onClick={onCancel} className="text-blue-600 hover:underline text-sm">
+        <button onClick={onCancel} className="text-brand hover:underline text-sm">
           ← Terug
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Nieuw bericht</h1>
+        <h1 className="text-xl font-bold text-ink">Nieuw bericht</h1>
       </div>
 
       <div className="card space-y-3">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Aan</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Aan</label>
           <select
             value={recipientId}
             onChange={(e) => setRecipientId(e.target.value)}
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border border-ink-12 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
           >
             <option value="">Kies een collega…</option>
             {[...users]
@@ -383,18 +383,18 @@ function ComposeView({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Bericht</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Bericht</label>
           <textarea
             value={body}
             onChange={(e) => setBody(e.target.value)}
             placeholder="Schrijf je bericht…"
             rows={4}
             autoFocus
-            className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border border-ink-12 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand"
           />
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-urgent">{error}</p>}
 
         <div className="flex gap-2">
           <button
@@ -457,22 +457,22 @@ function ThreadView({
   return (
     <div className="max-w-2xl mx-auto space-y-4">
       <div className="flex items-center gap-2">
-        <button onClick={onBack} className="text-blue-600 hover:underline text-sm">
+        <button onClick={onBack} className="text-brand hover:underline text-sm">
           ← Terug
         </button>
-        <div className="w-9 h-9 rounded-full bg-blue-100 text-blue-700 flex items-center justify-center font-bold">
+        <div className="w-9 h-9 rounded-full bg-ink-6 text-brand flex items-center justify-center font-bold">
           {other.name.charAt(0).toUpperCase()}
         </div>
-        <h1 className="text-xl font-bold text-gray-900">{other.name}</h1>
+        <h1 className="text-xl font-bold text-ink">{other.name}</h1>
       </div>
 
       <div className="card space-y-2 max-h-[60vh] overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center h-24">
-            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600" />
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-brand" />
           </div>
         ) : messages.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-6">
+          <p className="text-sm text-ink-45 text-center py-6">
             Nog geen berichten. Stuur het eerste bericht hieronder.
           </p>
         ) : (
@@ -481,12 +481,12 @@ function ThreadView({
               <div
                 className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${
                   m.from_me
-                    ? "bg-blue-600 text-white rounded-br-sm"
-                    : "bg-gray-100 text-gray-900 rounded-bl-sm"
+                    ? "bg-brand text-white rounded-br-sm"
+                    : "bg-ink-6 text-ink rounded-bl-sm"
                 }`}
               >
                 <p className="whitespace-pre-wrap break-words">{m.body}</p>
-                <div className={`text-[10px] mt-1 ${m.from_me ? "text-blue-100" : "text-gray-400"}`}>
+                <div className={`text-[10px] mt-1 ${m.from_me ? "text-blue-100" : "text-ink-45"}`}>
                   {format(parseUTC(m.created_at), "dd-MM HH:mm", { locale: nl })}
                 </div>
               </div>
@@ -508,7 +508,7 @@ function ThreadView({
           }}
           placeholder="Schrijf een bericht… (Enter = versturen)"
           rows={2}
-          className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="flex-1 border border-ink-12 rounded-lg px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-brand"
         />
         <button
           onClick={send}

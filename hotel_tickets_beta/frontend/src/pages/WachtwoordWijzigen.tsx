@@ -47,8 +47,8 @@ export default function WachtwoordWijzigen() {
       <div className="max-w-lg mx-auto">
         <div className="card text-center py-10">
           <p className="text-4xl mb-3">✅</p>
-          <h1 className="text-lg font-bold text-gray-900">Wachtwoord gewijzigd</h1>
-          <p className="text-sm text-gray-600 mt-2">
+          <h1 className="text-lg font-bold text-ink">Wachtwoord gewijzigd</h1>
+          <p className="text-sm text-ink-70 mt-2">
             {isLocalAccount
               ? "Gebruik voortaan je nieuwe wachtwoord om in de app in te loggen."
               : "Gebruik voortaan je nieuwe wachtwoord — ook wanneer je in Home Assistant zelf inlogt."}
@@ -64,31 +64,31 @@ export default function WachtwoordWijzigen() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700">←</button>
-        <h1 className="text-xl font-bold text-gray-900">Wachtwoord wijzigen</h1>
+        <button onClick={() => navigate(-1)} className="text-ink-45 hover:text-ink-70">←</button>
+        <h1 className="text-xl font-bold text-ink">Wachtwoord wijzigen</h1>
       </div>
 
       <form onSubmit={submit} className="card space-y-4">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-ink-70">
           {isLocalAccount
             ? "Dit wijzigt het wachtwoord waarmee je in deze app inlogt."
             : "Dit wijzigt het wachtwoord van je Home Assistant-account, dus ook voor het inloggen in Home Assistant zelf."}
         </p>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Huidig wachtwoord</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Huidig wachtwoord</label>
           <input
             type="password"
             value={current}
             onChange={(e) => setCurrent(e.target.value)}
             autoComplete="current-password"
             required
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm"
           />
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Nieuw wachtwoord</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Nieuw wachtwoord</label>
           <input
             type="password"
             value={nieuw}
@@ -96,24 +96,24 @@ export default function WachtwoordWijzigen() {
             autoComplete="new-password"
             required
             minLength={MIN_LENGTH}
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm"
           />
-          <p className="text-xs text-gray-400 mt-1">Minimaal {MIN_LENGTH} tekens</p>
+          <p className="text-xs text-ink-45 mt-1">Minimaal {MIN_LENGTH} tekens</p>
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Herhaal nieuw wachtwoord</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Herhaal nieuw wachtwoord</label>
           <input
             type="password"
             value={herhaal}
             onChange={(e) => setHerhaal(e.target.value)}
             autoComplete="new-password"
             required
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm"
           />
         </div>
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-urgent">{error}</p>}
 
         <div className="flex flex-wrap gap-2 pt-2">
           <button type="submit" disabled={saving} className="btn-primary flex-1 whitespace-nowrap">

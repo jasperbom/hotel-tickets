@@ -153,7 +153,7 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
 
       {/* Frequentie */}
       <div>
-        <p className="text-sm font-medium text-gray-700 mb-2">Hoe vaak?</p>
+        <p className="text-sm font-medium text-ink-70 mb-2">Hoe vaak?</p>
         <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
           {FREQ_OPTIONS.map(opt => (
             <button
@@ -162,8 +162,8 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
               onClick={() => handleFreq(opt.key)}
               className={`flex flex-col items-center gap-1 py-3 px-2 rounded-xl border-2 text-sm font-medium transition-all ${
                 freq === opt.key
-                  ? "border-blue-600 bg-blue-50 text-blue-700"
-                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                  ? "border-brand bg-ink-6 text-brand"
+                  : "border-ink-12 bg-paper-raised text-ink-70 hover:border-ink-12 hover:bg-ink-6"
               }`}
             >
               <span className="text-xl">{opt.icon}</span>
@@ -176,7 +176,7 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
       {/* Dag-selectie wekelijks */}
       {freq === "weekly" && (
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Op welke dag(en)?</p>
+          <p className="text-sm font-medium text-ink-70 mb-2">Op welke dag(en)?</p>
           <div className="flex flex-wrap gap-2">
             {WEEK_DAYS.map(day => (
               <button
@@ -186,8 +186,8 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
                 title={day.label}
                 className={`w-10 h-10 rounded-xl text-sm font-semibold transition-all ${
                   weekDays.includes(day.idx)
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-brand text-white shadow-sm"
+                    : "bg-ink-6 text-ink-70 hover:bg-ink-12"
                 }`}
               >
                 {day.short}
@@ -200,7 +200,7 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
       {/* Dag van de maand (maandelijks + elke X maanden) */}
       {(freq === "monthly" || freq === "every_x_months") && (
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Op welke dag van de maand?</p>
+          <p className="text-sm font-medium text-ink-70 mb-2">Op welke dag van de maand?</p>
           <div className="flex flex-wrap gap-1.5">
             {MONTH_DAYS.map(d => (
               <button
@@ -209,8 +209,8 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
                 onClick={() => handleMonthDay(d)}
                 className={`w-9 h-9 rounded-lg text-sm font-medium transition-all ${
                   monthDay === d
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                    ? "bg-brand text-white shadow-sm"
+                    : "bg-ink-6 text-ink-70 hover:bg-ink-12"
                 }`}
               >
                 {d}
@@ -223,7 +223,7 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
       {/* Interval voor elke X maanden */}
       {freq === "every_x_months" && (
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Elke hoeveel maanden?</p>
+          <p className="text-sm font-medium text-ink-70 mb-2">Elke hoeveel maanden?</p>
           <div className="flex items-center gap-3">
             <input
               type="number"
@@ -231,9 +231,9 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
               max={12}
               value={everyXMonths}
               onChange={e => handleEveryXMonths(parseInt(e.target.value) || 1)}
-              className="w-20 border border-gray-300 rounded-lg px-3 py-2 text-sm text-center font-mono"
+              className="w-20 border border-ink-12 rounded-lg px-3 py-2 text-sm text-center font-mono"
             />
-            <span className="text-sm text-gray-500">maanden</span>
+            <span className="text-sm text-ink-45">maanden</span>
           </div>
         </div>
       )}
@@ -241,7 +241,7 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
       {/* Interval na laatste uitvoering */}
       {freq === "interval" && (
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-2">Elke hoeveel dagen na de laatste uitvoering?</p>
+          <p className="text-sm font-medium text-ink-70 mb-2">Elke hoeveel dagen na de laatste uitvoering?</p>
           <div className="flex items-center gap-3">
             <input
               type="number"
@@ -249,11 +249,11 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
               max={365}
               value={interval}
               onChange={e => handleInterval(parseInt(e.target.value) || 1)}
-              className="w-24 border border-gray-300 rounded-lg px-3 py-2 text-sm text-center font-mono"
+              className="w-24 border border-ink-12 rounded-lg px-3 py-2 text-sm text-center font-mono"
             />
-            <span className="text-sm text-gray-500">dagen</span>
+            <span className="text-sm text-ink-45">dagen</span>
           </div>
-          <p className="text-xs text-gray-500 mt-2 leading-relaxed">
+          <p className="text-xs text-ink-45 mt-2 leading-relaxed">
             🔁 De taak verschijnt pas weer X dagen <em>nadat</em> je hem hebt afgevinkt
             (bv. via NFC-scan). Vinkt je 'm vroeger af? Dan schuift de volgende ook
             mee. Ideaal voor filterspoeling: geen lege of stale tickets.
@@ -262,9 +262,9 @@ export default function RecurrenceEditor({ value, intervalDays, onChange }: Prop
       )}
 
       {/* Samenvatting */}
-      <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-        <span className="text-blue-500">🔁</span>
-        <p className="text-sm font-medium text-blue-800">{summary}</p>
+      <div className="flex items-center gap-2 bg-ink-6 border border-ink-12 rounded-xl px-4 py-3">
+        <span className="text-brand">🔁</span>
+        <p className="text-sm font-medium text-brand">{summary}</p>
       </div>
     </div>
   );

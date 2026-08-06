@@ -91,7 +91,7 @@ function InfoBallon({ text }: { text: string }) {
           e.preventDefault();
           setOpen((o) => !o);
         }}
-        className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-700 text-[11px] font-bold hover:bg-blue-200"
+        className="ml-1 inline-flex items-center justify-center w-5 h-5 rounded-full bg-ink-6 text-brand text-[11px] font-bold hover:bg-blue-200"
         aria-label={text}
         aria-expanded={open}
       >
@@ -100,7 +100,7 @@ function InfoBallon({ text }: { text: string }) {
       {open && (
         <span
           role="tooltip"
-          className="absolute left-0 top-full mt-1 z-20 w-56 bg-gray-900 text-white text-xs rounded-lg shadow-lg p-2 whitespace-pre-line"
+          className="absolute left-0 top-full mt-1 z-20 w-56 bg-ink text-white text-xs rounded-lg shadow-lg p-2 whitespace-pre-line"
           onClick={(e) => e.stopPropagation()}
         >
           {text}
@@ -299,7 +299,7 @@ export default function PoolNieuweMeting() {
     const fout = bewakingFouten[f.key];
     return (
       <div key={f.key}>
-        <label className="block text-xs font-medium text-gray-600 mb-0.5">
+        <label className="block text-xs font-medium text-ink-70 mb-0.5">
           {f.label}
           {f.required && <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>}
           {f.advies && <InfoBallon text={f.advies} />}
@@ -322,11 +322,11 @@ export default function PoolNieuweMeting() {
   return (
     <div className="max-w-2xl space-y-4">
       <h1 className="text-xl font-bold">Nieuwe meting</h1>
-      <p className="text-xs text-gray-500">Velden met <span className="text-red-500 font-bold">*</span> zijn verplicht.</p>
+      <p className="text-xs text-ink-45">Velden met <span className="text-red-500 font-bold">*</span> zijn verplicht.</p>
 
       {/* Bad-kiezer bovenaan — altijd zichtbaar zodat duidelijk is voor welk bad de meting is */}
-      <div className="bg-white rounded-2xl shadow p-4">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+      <div className="bg-paper-raised rounded-2xl shadow p-4">
+        <p className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-2">
           Kies een bad
         </p>
         <div className="grid grid-cols-2 gap-2">
@@ -337,8 +337,8 @@ export default function PoolNieuweMeting() {
               onClick={() => setPoolId(p.id)}
               className={`px-4 py-2.5 rounded-xl text-sm font-medium border transition-colors ${
                 poolId === p.id
-                  ? "bg-blue-600 text-white border-blue-600"
-                  : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                  ? "bg-brand text-white border-brand"
+                  : "bg-paper-raised text-ink-70 border-ink-12 hover:bg-ink-6"
               }`}
             >
               {p.label}
@@ -347,13 +347,13 @@ export default function PoolNieuweMeting() {
         </div>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-4 bg-white rounded-2xl shadow p-5">
+      <form onSubmit={handleSubmit} className="space-y-4 bg-paper-raised rounded-2xl shadow p-5">
         {/* Algemeen */}
         <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Algemeen</h2>
+          <h2 className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-1">Algemeen</h2>
           <div className="grid grid-cols-2 gap-2">
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">
                 Datum
                 <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
               </label>
@@ -366,7 +366,7 @@ export default function PoolNieuweMeting() {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">
                 Tijd
                 <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
               </label>
@@ -383,11 +383,11 @@ export default function PoolNieuweMeting() {
 
         {/* Waardes */}
         <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Waardes</h2>
+          <h2 className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-1">Waardes</h2>
           <div className="grid grid-cols-3 gap-x-3 gap-y-2">
             {renderField(WAARDES[0])}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">
                 Doorzicht
                 <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
               </label>
@@ -405,12 +405,12 @@ export default function PoolNieuweMeting() {
             {WAARDES.slice(1).map(renderField)}
             {/* Gebonden chloor – berekend */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">
                 Gebonden chloor
                 <InfoBallon text="Streefwaarde: onder 0,6 mg/l" />
               </label>
-              <div className="w-full border rounded-lg px-2 py-1.5 text-sm bg-gray-50 text-gray-700">
-                {gebondenChloor !== null ? gebondenChloor : <span className="text-gray-400">TBC − VBC uit</span>}
+              <div className="w-full border rounded-lg px-2 py-1.5 text-sm bg-ink-6 text-ink-70">
+                {gebondenChloor !== null ? gebondenChloor : <span className="text-ink-45">TBC − VBC uit</span>}
               </div>
             </div>
           </div>
@@ -418,18 +418,18 @@ export default function PoolNieuweMeting() {
 
         {/* Automaten */}
         <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Automaten</h2>
+          <h2 className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-1">Automaten</h2>
           <div className="grid grid-cols-3 gap-x-3 gap-y-2">
             {AUTOMATEN.map(renderField)}
             {/* Verbruik – berekend */}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Verbruik</label>
-              <div className="w-full border rounded-lg px-2 py-1.5 text-sm bg-gray-50 text-gray-700">
-                {verbruik !== null ? verbruik : <span className="text-gray-400">vorige − huidige</span>}
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">Verbruik</label>
+              <div className="w-full border rounded-lg px-2 py-1.5 text-sm bg-ink-6 text-ink-70">
+                {verbruik !== null ? verbruik : <span className="text-ink-45">vorige − huidige</span>}
               </div>
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Filterspoeling</label>
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">Filterspoeling</label>
               <select
                 className="w-full border rounded-lg px-2 py-1.5 text-sm"
                 value={values.filterspoeling || ""}
@@ -451,11 +451,11 @@ export default function PoolNieuweMeting() {
 
         {/* Administratie */}
         <section>
-          <h2 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-1">Administratie</h2>
+          <h2 className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-1">Administratie</h2>
           <div className="grid grid-cols-3 gap-x-3 gap-y-2">
             {isAfter17 && (
               <div>
-                <label className="block text-xs font-medium text-gray-600 mb-0.5">
+                <label className="block text-xs font-medium text-ink-70 mb-0.5">
                   Aantal zwemmers
                   <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
                 </label>
@@ -470,7 +470,7 @@ export default function PoolNieuweMeting() {
               </div>
             )}
             <div>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">
                 Gemeten door
                 <span className="text-red-500 ml-0.5" aria-hidden="true">*</span>
               </label>
@@ -483,7 +483,7 @@ export default function PoolNieuweMeting() {
               />
             </div>
             <div className={isAfter17 ? "" : "col-span-2"}>
-              <label className="block text-xs font-medium text-gray-600 mb-0.5">Notitie</label>
+              <label className="block text-xs font-medium text-ink-70 mb-0.5">Notitie</label>
               <input
                 type="text"
                 className="w-full border rounded-lg px-2 py-1.5 text-sm"
@@ -501,7 +501,7 @@ export default function PoolNieuweMeting() {
           <button
             type="submit"
             disabled={saving || !isFormComplete}
-            className="bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+            className="bg-brand text-white px-6 py-2 rounded-lg hover:opacity-90 disabled:opacity-50"
           >
             {saving ? "Opslaan..." : "Opslaan"}
           </button>
@@ -511,7 +511,7 @@ export default function PoolNieuweMeting() {
               clearDraft();
               navigate(-1);
             }}
-            className="border px-6 py-2 rounded-lg hover:bg-gray-50"
+            className="border px-6 py-2 rounded-lg hover:bg-ink-6"
           >
             Annuleren
           </button>

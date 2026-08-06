@@ -32,12 +32,12 @@ export function InboxEnvelope() {
       title="Berichten"
       aria-label={count > 0 ? `Berichten (${count} ongelezen)` : "Berichten"}
       className={`relative flex items-center justify-center w-9 h-9 rounded-lg transition-colors shrink-0 ${
-        location.pathname === "/berichten" ? "bg-white/20" : "hover:bg-white/10"
+        location.pathname === "/berichten" ? "bg-paper-raised/20" : "hover:bg-paper-raised/10"
       }`}
     >
       <span className="text-lg">✉️</span>
       {count > 0 && (
-        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold flex items-center justify-center leading-none shadow">
+        <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] px-1 rounded-full bg-urgent-soft0 text-white text-[10px] font-bold flex items-center justify-center leading-none shadow">
           {count > 99 ? "99+" : count}
         </span>
       )}

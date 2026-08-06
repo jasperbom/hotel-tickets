@@ -48,11 +48,11 @@ function Toggle({
       disabled={disabled}
       onClick={() => onChange(!checked)}
       className={`relative w-11 h-6 rounded-full transition-colors shrink-0 disabled:opacity-40 disabled:cursor-not-allowed ${
-        checked ? "bg-blue-600" : "bg-gray-300"
+        checked ? "bg-brand" : "bg-ink-25"
       }`}
     >
       <span
-        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${
+        className={`absolute top-0.5 left-0.5 w-5 h-5 bg-paper-raised rounded-full shadow transition-transform ${
           checked ? "translate-x-5" : "translate-x-0"
         }`}
       />
@@ -91,7 +91,7 @@ export default function Meldingen() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
       </div>
     );
   }
@@ -99,7 +99,7 @@ export default function Meldingen() {
   if (!me) {
     return (
       <div className="max-w-lg mx-auto">
-        <div className="card text-center py-10 text-gray-500">
+        <div className="card text-center py-10 text-ink-45">
           Kon je profiel niet laden. Probeer de pagina te vernieuwen.
         </div>
       </div>
@@ -111,12 +111,12 @@ export default function Meldingen() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700">←</button>
-        <h1 className="text-xl font-bold text-gray-900">Meldingen</h1>
+        <button onClick={() => navigate(-1)} className="text-ink-45 hover:text-ink-70">←</button>
+        <h1 className="text-xl font-bold text-ink">Meldingen</h1>
       </div>
 
       {!me.ha_notify_service && (
-        <div className="mb-4 flex items-start gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 text-sm text-amber-800">
+        <div className="mb-4 flex items-start gap-2 bg-high-soft border border-high rounded-xl px-4 py-3 text-sm text-high">
           <span>ℹ️</span>
           <p>
             Er is nog geen pushkanaal aan je account gekoppeld, dus je ontvangt nu geen pushberichten op je
@@ -128,8 +128,8 @@ export default function Meldingen() {
       {/* Hoofdschakelaar: alle pushberichten aan/uit */}
       <div className="card flex items-center justify-between gap-4">
         <div className="min-w-0">
-          <p className="font-semibold text-gray-900">Pushberichten op mijn telefoon</p>
-          <p className="text-sm text-gray-500">
+          <p className="font-semibold text-ink">Pushberichten op mijn telefoon</p>
+          <p className="text-sm text-ink-45">
             Zet dit uit om helemaal geen pushberichten meer te ontvangen. Je blijft alles terugzien in de app.
           </p>
         </div>
@@ -142,20 +142,20 @@ export default function Meldingen() {
 
       {/* Waar wil je een pushbericht van krijgen */}
       <div className="card mt-4 space-y-1">
-        <p className="text-sm font-medium text-gray-700 mb-2">Waarvan wil je een pushbericht krijgen?</p>
+        <p className="text-sm font-medium text-ink-70 mb-2">Waarvan wil je een pushbericht krijgen?</p>
         {OPTIONS.map((opt) => (
           <div
             key={opt.field}
-            className={`flex items-center justify-between gap-4 py-3 border-t border-gray-100 first:border-t-0 ${
+            className={`flex items-center justify-between gap-4 py-3 border-t border-ink-6 first:border-t-0 ${
               pushOff ? "opacity-50" : ""
             }`}
           >
             <div className="min-w-0">
-              <p className="font-medium text-gray-900 flex items-center gap-2">
+              <p className="font-medium text-ink flex items-center gap-2">
                 <span>{opt.icon}</span>
                 <span>{opt.label}</span>
               </p>
-              <p className="text-sm text-gray-500">{opt.description}</p>
+              <p className="text-sm text-ink-45">{opt.description}</p>
             </div>
             <Toggle
               checked={me[opt.field]}
@@ -167,15 +167,15 @@ export default function Meldingen() {
         ))}
       </div>
 
-      <p className="text-xs text-gray-400 mt-3">
+      <p className="text-xs text-ink-45 mt-3">
         @-vermeldingen en directe berichten blijf je altijd terugzien onder <strong>Berichten</strong> — deze
         instellingen bepalen alleen of je er ook een pushbericht van krijgt.
       </p>
 
       <div className="h-6 mt-3 text-sm">
-        {status === "saving" && <span className="text-gray-400">Opslaan…</span>}
-        {status === "saved" && <span className="text-green-600">✓ Opgeslagen</span>}
-        {status === "error" && <span className="text-red-600">Opslaan mislukt — probeer het opnieuw.</span>}
+        {status === "saving" && <span className="text-ink-45">Opslaan…</span>}
+        {status === "saved" && <span className="text-done">✓ Opgeslagen</span>}
+        {status === "error" && <span className="text-urgent">Opslaan mislukt — probeer het opnieuw.</span>}
       </div>
     </div>
   );

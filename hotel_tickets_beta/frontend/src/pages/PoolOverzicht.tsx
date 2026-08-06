@@ -16,7 +16,7 @@ function StatusCard({ pool, logs }: { pool: PoolStatus; logs: PoolLog[] }) {
 
   return (
     <div
-      className="bg-white rounded-2xl shadow p-5 cursor-pointer hover:shadow-lg transition-shadow"
+      className="bg-paper-raised rounded-2xl shadow p-5 cursor-pointer hover:shadow-lg transition-shadow"
       onClick={() => navigate(`/pools/logboek?pool=${pool.pool_id}`)}
     >
       {/* Header */}
@@ -36,49 +36,49 @@ function StatusCard({ pool, logs }: { pool: PoolStatus; logs: PoolLog[] }) {
       {l ? (
         <div className="grid grid-cols-3 gap-3 text-sm">
           <div>
-            <span className="text-gray-500 block">Datum</span>
+            <span className="text-ink-45 block">Datum</span>
             <span className="font-medium">{formatDateNL(l.datum)} {l.tijd}</span>
           </div>
           <div>
-            <span className="text-gray-500 block">Water temp</span>
+            <span className="text-ink-45 block">Water temp</span>
             <span className="font-medium">{l.water_temp ?? "-"} °C</span>
           </div>
           <div>
-            <span className="text-gray-500 block">Doorzicht</span>
+            <span className="text-ink-45 block">Doorzicht</span>
             <span className="font-medium">{l.doorzicht ?? "-"}</span>
           </div>
           <div>
-            <span className="text-gray-500 block">pH</span>
+            <span className="text-ink-45 block">pH</span>
             <span className={`font-medium ${valueClass("ph", l.ph)}`}>{l.ph ?? "-"}</span>
           </div>
           <div>
-            <span className="text-gray-500 block">VBC in</span>
+            <span className="text-ink-45 block">VBC in</span>
             <span className={`font-medium ${valueClass("vbc_in", l.vbc_in)}`}>{l.vbc_in ?? "-"}</span>
           </div>
           <div>
-            <span className="text-gray-500 block">VBC uit</span>
+            <span className="text-ink-45 block">VBC uit</span>
             <span className={`font-medium ${valueClass("vbc_uit", l.vbc_uit)}`}>{l.vbc_uit ?? "-"}</span>
           </div>
           <div>
-            <span className="text-gray-500 block">GBC</span>
+            <span className="text-ink-45 block">GBC</span>
             <span className={`font-medium ${valueClass("gbc", l.gbc)}`}>{l.gbc ?? "-"}</span>
           </div>
           <div>
-            <span className="text-gray-500 block">Flow</span>
+            <span className="text-ink-45 block">Flow</span>
             <span className="font-medium">{l.flow ?? "-"}</span>
           </div>
           <div>
-            <span className="text-gray-500 block">Gemeten door</span>
+            <span className="text-ink-45 block">Gemeten door</span>
             <span className="font-medium">{l.gemeten_door}</span>
           </div>
         </div>
       ) : (
-        <p className="text-gray-400 italic">Nog geen metingen</p>
+        <p className="text-ink-45 italic">Nog geen metingen</p>
       )}
 
       {/* Chemicaliën: wanneer voor het laatst vervangen/bijgevuld */}
-      <div className="mt-4 pt-3 border-t border-gray-100">
-        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+      <div className="mt-4 pt-3 border-t border-ink-6">
+        <p className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-2">
           🧪 Chemicaliën laatst vervangen
         </p>
         <div className="grid grid-cols-3 gap-3 text-sm">
@@ -86,14 +86,14 @@ function StatusCard({ pool, logs }: { pool: PoolStatus; logs: PoolLog[] }) {
             const c = pool.chemicalien_vervangen?.[key];
             return (
               <div key={key}>
-                <span className="text-gray-500 block">{label}</span>
+                <span className="text-ink-45 block">{label}</span>
                 {c ? (
                   <>
                     <span className="font-medium">{formatDateNL(c.datum)}</span>
-                    {c.door && <span className="block text-xs text-gray-400 truncate">{c.door}</span>}
+                    {c.door && <span className="block text-xs text-ink-45 truncate">{c.door}</span>}
                   </>
                 ) : (
-                  <span className="text-gray-400">—</span>
+                  <span className="text-ink-45">—</span>
                 )}
               </div>
             );
@@ -105,13 +105,13 @@ function StatusCard({ pool, logs }: { pool: PoolStatus; logs: PoolLog[] }) {
       <PoolValueVisualization logs={logs} />
 
       {/* Nieuwe meting knop */}
-      <div className="mt-4 pt-3 border-t border-gray-100">
+      <div className="mt-4 pt-3 border-t border-ink-6">
         <button
           onClick={(e) => {
             e.stopPropagation();
             navigate(`/pools/nieuw?pool=${pool.pool_id}`);
           }}
-          className="w-full bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="w-full bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-colors"
         >
           + Nieuwe meting
         </button>
@@ -182,13 +182,13 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow p-5 space-y-4">
+    <div className="bg-paper-raised rounded-2xl shadow p-5 space-y-4">
       <div className="flex items-start justify-between gap-3">
         <div>
           <h2 className="text-xl font-bold flex items-center gap-2">
             ⚠️ Ongewoon voorval registreren
           </h2>
-          <p className="text-sm text-gray-500 mt-1">
+          <p className="text-sm text-ink-45 mt-1">
             Leg verdrinkingen of ernstig letsel vast. Admins krijgen direct een
             notificatie.
           </p>
@@ -196,7 +196,7 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
         <button
           type="button"
           onClick={() => setShowInfo((s) => !s)}
-          className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold hover:bg-blue-200"
+          className="shrink-0 inline-flex items-center justify-center w-6 h-6 rounded-full bg-ink-6 text-brand text-xs font-bold hover:bg-blue-200"
           aria-label="Informatie over ongewone voorvallen"
           title="Wat is een ongewoon voorval?"
         >
@@ -205,14 +205,14 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
       </div>
 
       {showInfo && (
-        <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-gray-700 whitespace-pre-line">
+        <div className="bg-ink-6 border border-ink-12 rounded-xl p-4 text-sm text-ink-70 whitespace-pre-line">
           {VOORVAL_INFO}
         </div>
       )}
 
       <form onSubmit={handleSubmit} className="space-y-3">
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-1">Bad</label>
+          <label className="block text-xs font-medium text-ink-70 mb-1">Bad</label>
           <div className="grid grid-cols-2 gap-2">
             {pools.map((p) => (
               <button
@@ -221,8 +221,8 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
                 onClick={() => setPoolId(p.pool_id as PoolId)}
                 className={`px-4 py-2 rounded-xl text-sm font-medium border transition-colors ${
                   poolId === p.pool_id
-                    ? "bg-blue-600 text-white border-blue-600"
-                    : "bg-white text-gray-700 border-gray-300 hover:bg-gray-50"
+                    ? "bg-brand text-white border-brand"
+                    : "bg-paper-raised text-ink-70 border-ink-12 hover:bg-ink-6"
                 }`}
               >
                 {p.label}
@@ -233,7 +233,7 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
 
         <div className="grid grid-cols-2 gap-2">
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-0.5">Datum</label>
+            <label className="block text-xs font-medium text-ink-70 mb-0.5">Datum</label>
             <input
               type="date"
               className="w-full border rounded-lg px-2 py-1.5 text-sm"
@@ -243,7 +243,7 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
             />
           </div>
           <div>
-            <label className="block text-xs font-medium text-gray-600 mb-0.5">Tijd</label>
+            <label className="block text-xs font-medium text-ink-70 mb-0.5">Tijd</label>
             <input
               type="time"
               className="w-full border rounded-lg px-2 py-1.5 text-sm"
@@ -255,7 +255,7 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-0.5">
+          <label className="block text-xs font-medium text-ink-70 mb-0.5">
             Beschrijving van het voorval *
           </label>
           <textarea
@@ -268,7 +268,7 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
         </div>
 
         <div>
-          <label className="block text-xs font-medium text-gray-600 mb-0.5">
+          <label className="block text-xs font-medium text-ink-70 mb-0.5">
             Genomen maatregelen
           </label>
           <textarea
@@ -292,26 +292,26 @@ function IncidentSection({ pools }: { pools: PoolStatus[] }) {
       </form>
 
       {incidents.length > 0 && (
-        <div className="pt-3 border-t border-gray-100">
-          <h3 className="text-sm font-semibold text-gray-700 mb-2">
+        <div className="pt-3 border-t border-ink-6">
+          <h3 className="text-sm font-semibold text-ink-70 mb-2">
             Logboek ongewone voorvallen
           </h3>
-          <ul className="divide-y divide-gray-100">
+          <ul className="divide-y divide-ink-6">
             {incidents.map((i) => (
               <li key={i.id} className="py-2 text-sm">
                 <div className="flex justify-between items-start gap-2">
                   <span className="font-medium capitalize">{i.pool_id}</span>
-                  <span className="text-xs text-gray-500 shrink-0">
+                  <span className="text-xs text-ink-45 shrink-0">
                     {formatDateNL(i.datum)} {i.tijd}
                   </span>
                 </div>
-                <p className="text-gray-700 whitespace-pre-line">{i.beschrijving}</p>
+                <p className="text-ink-70 whitespace-pre-line">{i.beschrijving}</p>
                 {i.maatregelen && (
-                  <p className="text-gray-500 text-xs mt-1">
+                  <p className="text-ink-45 text-xs mt-1">
                     <span className="font-medium">Maatregelen:</span> {i.maatregelen}
                   </p>
                 )}
-                <p className="text-xs text-gray-400 mt-1">Gemeld door {i.gemeld_door}</p>
+                <p className="text-xs text-ink-45 mt-1">Gemeld door {i.gemeld_door}</p>
               </li>
             ))}
           </ul>
@@ -350,7 +350,7 @@ export default function PoolOverzicht() {
     loadAll().catch(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
+  if (loading) return <p className="p-4 text-ink-45">Laden...</p>;
 
   return (
     <div className="space-y-6">

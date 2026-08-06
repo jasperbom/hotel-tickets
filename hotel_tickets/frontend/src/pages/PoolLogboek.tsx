@@ -57,13 +57,13 @@ export default function PoolLogboek() {
           <button
             onClick={handleExport}
             disabled={exporting}
-            className="bg-white border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+            className="bg-paper-raised border border-ink-12 text-ink-70 px-4 py-2 rounded-lg text-sm hover:bg-ink-6 disabled:opacity-50"
           >
             {exporting ? "Exporteren..." : "Export CSV"}
           </button>
           <button
             onClick={() => navigate(`/pools/nieuw${pool ? `?pool=${pool}` : ""}`)}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+            className="bg-brand text-white px-4 py-2 rounded-lg text-sm hover:opacity-90"
           >
             + Nieuwe meting
           </button>
@@ -98,31 +98,31 @@ export default function PoolLogboek() {
       </div>
 
       {loading ? (
-        <p className="text-gray-400">Laden...</p>
+        <p className="text-ink-45">Laden...</p>
       ) : logs.length === 0 ? (
-        <p className="text-gray-400">Geen metingen gevonden.</p>
+        <p className="text-ink-45">Geen metingen gevonden.</p>
       ) : (
         <div className="overflow-x-auto">
-          <table className="w-full text-sm bg-white rounded-xl shadow border-separate border-spacing-0">
+          <table className="w-full text-sm bg-paper-raised rounded-xl shadow border-separate border-spacing-0">
             <thead>
-              <tr className="bg-gray-100 text-left text-xs text-gray-500 uppercase tracking-wide">
+              <tr className="bg-ink-6 text-left text-xs text-ink-45 uppercase tracking-wide">
                 <th className="px-3 py-2.5 rounded-tl-xl">Bad</th>
                 <th className="px-3 py-2.5">Datum</th>
                 <th className="px-3 py-2.5">Tijd</th>
-                <th className="px-3 py-2.5 border-l border-gray-200">Temp</th>
+                <th className="px-3 py-2.5 border-l border-ink-12">Temp</th>
                 <th className="px-3 py-2.5">Doorzicht</th>
                 <th className="px-3 py-2.5">pH</th>
                 <th className="px-3 py-2.5">VBC in</th>
                 <th className="px-3 py-2.5">VBC uit</th>
                 <th className="px-3 py-2.5">TBC</th>
                 <th className="px-3 py-2.5">Geb. chloor</th>
-                <th className="px-3 py-2.5 border-l border-gray-200">pH aut.</th>
+                <th className="px-3 py-2.5 border-l border-ink-12">pH aut.</th>
                 <th className="px-3 py-2.5">VBC aut.</th>
                 <th className="px-3 py-2.5">Watermeter</th>
                 <th className="px-3 py-2.5">Verbruik</th>
                 <th className="px-3 py-2.5">Flow</th>
                 <th className="px-3 py-2.5">Filterspoeling</th>
-                <th className="px-3 py-2.5 border-l border-gray-200">Bezoekers</th>
+                <th className="px-3 py-2.5 border-l border-ink-12">Bezoekers</th>
                 <th className="px-3 py-2.5">Chemicaliën</th>
                 <th className="px-3 py-2.5">Gemeten door</th>
                 <th className="px-3 py-2.5 rounded-tr-xl">Notitie</th>
@@ -132,26 +132,26 @@ export default function PoolLogboek() {
               {logs.map((l, i) => (
                 <tr
                   key={l.id}
-                  className={`border-t border-gray-100 cursor-pointer hover:bg-blue-50 transition-colors ${i % 2 === 1 ? "bg-gray-50" : ""}`}
+                  className={`border-t border-ink-6 cursor-pointer hover:bg-ink-6 transition-colors ${i % 2 === 1 ? "bg-ink-6" : ""}`}
                   onClick={() => navigate(`/pools/log/${l.id}`)}
                 >
                   <td className="px-3 py-2 capitalize font-medium">{l.pool_id}</td>
                   <td className="px-3 py-2 whitespace-nowrap">{formatDateNL(l.datum)}</td>
                   <td className="px-3 py-2">{l.tijd}</td>
-                  <td className="px-3 py-2 border-l border-gray-100">{l.water_temp ?? "-"}</td>
+                  <td className="px-3 py-2 border-l border-ink-6">{l.water_temp ?? "-"}</td>
                   <td className="px-3 py-2">{l.doorzicht ?? "-"}</td>
                   <td className={`px-3 py-2 ${valueClass("ph", l.ph, "table")}`}>{l.ph ?? "-"}</td>
                   <td className={`px-3 py-2 ${valueClass("vbc_in", l.vbc_in, "table")}`}>{l.vbc_in ?? "-"}</td>
                   <td className={`px-3 py-2 ${valueClass("vbc_uit", l.vbc_uit, "table")}`}>{l.vbc_uit ?? "-"}</td>
                   <td className="px-3 py-2">{l.tbc ?? "-"}</td>
                   <td className={`px-3 py-2 ${valueClass("gbc", l.gbc, "table")}`}>{l.gbc ?? "-"}</td>
-                  <td className={`px-3 py-2 border-l border-gray-100 ${valueClass("ph", l.ph_automaat, "table")}`}>{l.ph_automaat ?? "-"}</td>
+                  <td className={`px-3 py-2 border-l border-ink-6 ${valueClass("ph", l.ph_automaat, "table")}`}>{l.ph_automaat ?? "-"}</td>
                   <td className={`px-3 py-2 ${valueClass("vbc_in", l.vbc_automaat, "table")}`}>{l.vbc_automaat ?? "-"}</td>
                   <td className="px-3 py-2">{l.watermeter ?? "-"}</td>
                   <td className="px-3 py-2">{l.verbruik ?? "-"}</td>
                   <td className="px-3 py-2">{l.flow ?? "-"}</td>
                   <td className="px-3 py-2">{l.filterspoeling || "-"}</td>
-                  <td className="px-3 py-2 border-l border-gray-100">{l.bezoekers ?? "-"}</td>
+                  <td className="px-3 py-2 border-l border-ink-6">{l.bezoekers ?? "-"}</td>
                   <td className="px-3 py-2 max-w-[220px] truncate">{l.chemicalien || "-"}</td>
                   <td className="px-3 py-2">{l.gemeten_door}</td>
                   <td className="px-3 py-2 max-w-[200px] truncate">{l.notitie || "-"}</td>

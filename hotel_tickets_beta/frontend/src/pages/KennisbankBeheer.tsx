@@ -14,6 +14,7 @@ import {
   type KnowledgeVisibility,
   type KnowledgeImportResult,
 } from "../api/client";
+import { BevestigKnop } from "../components/BevestigKnop";
 
 const ALL_VISIBILITIES = Object.keys(VISIBILITY_LABELS) as KnowledgeVisibility[];
 
@@ -72,9 +73,9 @@ const ALL_CATEGORIES = Object.keys(CATEGORY_LABELS) as Category[];
 
 // Gedeelde veld-stijlen zodat alle formuliervelden er hetzelfde (en niet "los") uitzien.
 const FLD =
-  "block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400";
+  "block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm mt-1 focus:outline-none focus:ring-2 focus:ring-brand/30 focus:border-brand";
 const FLD_AREA = FLD + " resize-none";
-const FLD_SEL = FLD + " bg-white";
+const FLD_SEL = FLD + " bg-paper-raised";
 
 export default function KennisbankBeheer() {
   const [tab, setTab] = useState<Tab>("overzicht");
@@ -279,7 +280,6 @@ export default function KennisbankBeheer() {
   }
 
   async function removeDoc(id: string) {
-    if (!confirm("Dit document verwijderen?")) return;
     await knowledgeApi.removeDocument(id);
     loadDocuments();
   }
@@ -446,7 +446,6 @@ export default function KennisbankBeheer() {
   }
 
   async function dismissQuestion(id: string) {
-    if (!confirm("Deze vraag afwijzen?")) return;
     await knowledgeApi.dismissQueue(id);
     loadQueue();
   }
@@ -530,7 +529,6 @@ export default function KennisbankBeheer() {
   }
 
   async function removeEntry(id: string) {
-    if (!confirm("Dit kennis-item verwijderen?")) return;
     await knowledgeApi.removeEntry(id);
     loadEntries();
   }
@@ -595,7 +593,7 @@ export default function KennisbankBeheer() {
         ))}
       </datalist>
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-bold text-gray-900">Kennisbank beheer</h1>
+        <h1 className="text-xl font-bold text-ink">Kennisbank beheer</h1>
         {tab === "entries" && (
           <div className="flex items-center gap-2">
             <input
@@ -611,13 +609,13 @@ export default function KennisbankBeheer() {
             <button
               onClick={() => importInputRef.current?.click()}
               disabled={importing}
-              className="border border-gray-300 text-gray-700 px-4 py-2 rounded-lg text-sm hover:bg-gray-50 disabled:opacity-50"
+              className="border border-ink-12 text-ink-70 px-4 py-2 rounded-lg text-sm hover:bg-ink-6 disabled:opacity-50"
             >
               {importing ? "Importeren..." : "Importeren"}
             </button>
             <button
               onClick={newEntry}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+              className="bg-brand text-white px-4 py-2 rounded-lg text-sm hover:opacity-90"
             >
               + Nieuw item
             </button>
@@ -626,7 +624,7 @@ export default function KennisbankBeheer() {
         {tab === "documents" && (
           <button
             onClick={openDocForm}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-blue-700"
+            className="bg-brand text-white px-4 py-2 rounded-lg text-sm hover:opacity-90"
           >
             + Nieuw document
           </button>
@@ -639,13 +637,13 @@ export default function KennisbankBeheer() {
           value={searchQ}
           onChange={(e) => setSearchQ(e.target.value)}
           placeholder="🔍 Zoek in alle kennis (items + documenten)…"
-          className="block w-full border border-gray-300 rounded-lg px-4 py-2.5 text-sm"
+          className="block w-full border border-ink-12 rounded-lg px-4 py-2.5 text-sm"
         />
         {searchActive && (
           <button
             type="button"
             onClick={() => setSearchQ("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 text-xl leading-none"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-ink-45 hover:text-ink-70 text-xl leading-none"
             title="Zoekopdracht wissen"
           >
             ×
@@ -663,25 +661,25 @@ export default function KennisbankBeheer() {
       ) : (
       <>
       {tab === "entries" && importMsg && (
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 text-sm rounded-lg px-4 py-2">
+        <div className="bg-ink-6 border border-ink-12 text-brand text-sm rounded-lg px-4 py-2">
           {importMsg}
         </div>
       )}
       {tab === "entries" && (
-        <p className="text-xs text-gray-400 -mt-2">
+        <p className="text-xs text-ink-45 -mt-2">
           Import: een <code>.md</code>-bestand of een <code>.zip</code> (Markdown + afbeeldingen).
           Zet elke vraag als een kop (#, ## of ###) met het antwoord eronder. Duplicaten worden overgeslagen.
         </p>
       )}
 
       {/* Tabs */}
-      <div className="flex gap-1 border-b border-gray-200">
+      <div className="flex gap-1 border-b border-ink-12">
         <TabButton active={tab === "overzicht"} onClick={() => setTab("overzicht")}>
           Overzicht
         </TabButton>
         <TabButton active={tab === "queue"} onClick={() => setTab("queue")}>
           Wachtrij{queue.length > 0 && (
-            <span className="ml-1.5 text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5">
+            <span className="ml-1.5 text-xs bg-urgent-soft0 text-white rounded-full px-1.5 py-0.5">
               {queue.length}
             </span>
           )}
@@ -696,16 +694,16 @@ export default function KennisbankBeheer() {
 
       {/* AI-schakelaar */}
       {aiSettings && (
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3">
+        <div className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4 flex items-start justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-sm font-medium text-gray-800">🤖 AI-modus (Claude)</p>
+            <p className="text-sm font-medium text-ink">🤖 AI-modus (Claude)</p>
             {aiSettings.ai_available ? (
-              <p className="text-xs text-gray-500 mt-0.5">
+              <p className="text-xs text-ink-45 mt-0.5">
                 Model: {aiSettings.model}. Met AI aan beantwoordt de bot vragen uit je documenten
                 (vrije tekst); zonder AI zoekt hij op trefwoord in de kennis-items.
               </p>
             ) : (
-              <p className="text-xs text-amber-700 mt-0.5">
+              <p className="text-xs text-high mt-0.5">
                 Geen API-sleutel ingesteld. Stel de Claude API-sleutel in onder
                 <strong> Instellingen → AI / Kennisbot</strong> om AI te kunnen gebruiken.
               </p>
@@ -719,7 +717,7 @@ export default function KennisbankBeheer() {
               onChange={(e) => toggleAi(e.target.checked)}
               className="w-4 h-4"
             />
-            <span className="text-sm text-gray-700">{aiSettings.ai_enabled ? "Aan" : "Uit"}</span>
+            <span className="text-sm text-ink-70">{aiSettings.ai_enabled ? "Aan" : "Uit"}</span>
           </label>
         </div>
       )}
@@ -741,54 +739,54 @@ export default function KennisbankBeheer() {
           const proposals = queue.filter((q) => q.proposed_answer);
           const openQuestions = queue.filter((q) => !q.proposed_answer);
           if (queue.length === 0) {
-            return <p className="text-sm text-gray-400">Geen openstaande items 🎉</p>;
+            return <p className="text-sm text-ink-45">Geen openstaande items 🎉</p>;
           }
           return (
             <div className="space-y-6">
               {/* Aangedragen oplossingen (te beoordelen) */}
               {proposals.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-ink-70 flex items-center gap-2">
                     💡 Aangedragen oplossingen
-                    <span className="text-xs bg-green-100 text-green-700 rounded-full px-2 py-0.5">
+                    <span className="text-xs bg-done-soft text-done rounded-full px-2 py-0.5">
                       {proposals.length}
                     </span>
                   </h3>
-                  <p className="text-xs text-gray-500 -mt-1">
+                  <p className="text-xs text-ink-45 -mt-1">
                     Een medewerker loste dit zelf op via de chat. Controleer de oplossing en voeg
                     'm toe aan de kennisbank.
                   </p>
                   {proposals.map((q) => (
                     <div
                       key={q.id}
-                      className="bg-white rounded-xl shadow-sm border border-green-200 p-4 space-y-2"
+                      className="bg-paper-raised rounded-xl shadow-sm border border-done p-4 space-y-2"
                     >
-                      <div className="text-xs text-gray-400 flex flex-wrap gap-x-2">
+                      <div className="text-xs text-ink-45 flex flex-wrap gap-x-2">
                         <span>🗨️ uit de chat</span>
                         <span>· {q.proposed_by || "onbekend"}</span>
                         {q.category && <span>· {CATEGORY_LABELS[q.category]}</span>}
                         {q.created_at && <span>· {fmtWhen(q.created_at)}</span>}
                       </div>
                       <div>
-                        <p className="text-[11px] font-semibold text-gray-400 uppercase">Vraag</p>
-                        <p className="text-sm font-medium text-gray-900 whitespace-pre-wrap">
+                        <p className="text-[11px] font-semibold text-ink-45 uppercase">Vraag</p>
+                        <p className="text-sm font-medium text-ink whitespace-pre-wrap">
                           {q.question_text}
                         </p>
                       </div>
-                      <div className="bg-green-50 border border-green-200 rounded-lg p-2.5">
-                        <p className="text-[11px] font-semibold text-green-700 uppercase">
+                      <div className="bg-done-soft border border-done rounded-lg p-2.5">
+                        <p className="text-[11px] font-semibold text-done uppercase">
                           Voorgestelde oplossing
                         </p>
-                        <p className="text-sm text-gray-700 whitespace-pre-wrap mt-0.5">
+                        <p className="text-sm text-ink-70 whitespace-pre-wrap mt-0.5">
                           {q.proposed_answer}
                         </p>
                       </div>
                       {q.conversation && (
                         <details className="text-xs">
-                          <summary className="cursor-pointer text-gray-500 hover:text-gray-700">
+                          <summary className="cursor-pointer text-ink-45 hover:text-ink-70">
                             Toon het hele gesprek
                           </summary>
-                          <div className="mt-1.5 bg-gray-50 border border-gray-200 rounded-lg p-2.5 max-h-60 overflow-y-auto whitespace-pre-wrap text-gray-600">
+                          <div className="mt-1.5 bg-ink-6 border border-ink-12 rounded-lg p-2.5 max-h-60 overflow-y-auto whitespace-pre-wrap text-ink-70">
                             {q.conversation}
                           </div>
                         </details>
@@ -796,16 +794,11 @@ export default function KennisbankBeheer() {
                       <div className="flex gap-2 pt-1">
                         <button
                           onClick={() => answerQuestion(q)}
-                          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+                          className="bg-brand text-white px-3 py-1.5 rounded-lg text-xs hover:opacity-90"
                         >
                           Beoordelen & toevoegen
                         </button>
-                        <button
-                          onClick={() => dismissQuestion(q.id)}
-                          className="text-gray-500 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-100"
-                        >
-                          Afwijzen
-                        </button>
+                        <BevestigKnop label={"Afwijzen"} vraag="Deze vraag afwijzen?" bevestigLabel="Ja, afwijzen" onBevestig={() => dismissQuestion(q.id)} className="text-ink-45 px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6" />
                       </div>
                     </div>
                   ))}
@@ -815,26 +808,26 @@ export default function KennisbankBeheer() {
               {/* Onbeantwoorde vragen */}
               {openQuestions.length > 0 && (
                 <div className="space-y-2">
-                  <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+                  <h3 className="text-sm font-semibold text-ink-70 flex items-center gap-2">
                     ❓ Onbeantwoorde vragen
-                    <span className="text-xs bg-amber-100 text-amber-700 rounded-full px-2 py-0.5">
+                    <span className="text-xs bg-high-soft text-high rounded-full px-2 py-0.5">
                       {openQuestions.length}
                     </span>
                   </h3>
-                  <p className="text-xs text-gray-500 -mt-1">
+                  <p className="text-xs text-ink-45 -mt-1">
                     Hier had de bot geen antwoord op. Voeg een antwoord toe zodat het voortaan wél
                     beantwoord wordt.
                   </p>
                   {openQuestions.map((q) => (
                     <div
                       key={q.id}
-                      className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+                      className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4 flex items-start justify-between gap-3"
                     >
                       <div className="min-w-0">
-                        <p className="font-medium text-gray-900 whitespace-pre-wrap">
+                        <p className="font-medium text-ink whitespace-pre-wrap">
                           {q.question_text}
                         </p>
-                        <p className="text-xs text-gray-400 mt-1 flex flex-wrap gap-x-2">
+                        <p className="text-xs text-ink-45 mt-1 flex flex-wrap gap-x-2">
                           <span>{q.asked_by_name || q.asked_by}</span>
                           {q.category && <span>· {CATEGORY_LABELS[q.category]}</span>}
                           {q.created_at && <span>· {fmtWhen(q.created_at)}</span>}
@@ -843,16 +836,11 @@ export default function KennisbankBeheer() {
                       <div className="flex flex-col gap-1.5 shrink-0">
                         <button
                           onClick={() => answerQuestion(q)}
-                          className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-xs hover:bg-blue-700"
+                          className="bg-brand text-white px-3 py-1.5 rounded-lg text-xs hover:opacity-90"
                         >
                           Beantwoorden
                         </button>
-                        <button
-                          onClick={() => dismissQuestion(q.id)}
-                          className="text-gray-500 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-100"
-                        >
-                          Afwijzen
-                        </button>
+                        <BevestigKnop label={"Afwijzen"} vraag="Deze vraag afwijzen?" bevestigLabel="Ja, afwijzen" onBevestig={() => dismissQuestion(q.id)} className="text-ink-45 px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6" />
                       </div>
                     </div>
                   ))}
@@ -866,7 +854,7 @@ export default function KennisbankBeheer() {
       {tab === "entries" && (
         <div className="space-y-3">
           {entries.length === 0 ? (
-            <p className="text-sm text-gray-400">Nog geen kennis-items.</p>
+            <p className="text-sm text-ink-45">Nog geen kennis-items.</p>
           ) : (
             <>
               <div className="flex justify-end">
@@ -877,18 +865,18 @@ export default function KennisbankBeheer() {
                 renderItem={(e) => (
                   <div
                     key={e.id}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+                    className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4 flex items-start justify-between gap-3"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900">{e.title}</span>
+                        <span className="font-semibold text-ink">{e.title}</span>
                         {!e.is_published && (
-                          <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                          <span className="text-[10px] font-medium bg-high-soft text-high px-2 py-0.5 rounded-full">
                             concept
                           </span>
                         )}
                         {e.source_ticket_id && (
-                          <span className="text-[10px] text-gray-400">uit ticket</span>
+                          <span className="text-[10px] text-ink-45">uit ticket</span>
                         )}
                         {e.visibility !== "all" && (
                           <span className="text-[10px] font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
@@ -896,10 +884,10 @@ export default function KennisbankBeheer() {
                           </span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">
+                      <p className="text-sm text-ink-70 mt-1 line-clamp-2 whitespace-pre-wrap">
                         {stripImages(e.answer)}
                       </p>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-ink-45 mt-1">
                         {e.ask_count}× gevraagd
                         {e.images.length > 0 &&
                           ` · ${e.images.length} afbeelding${e.images.length > 1 ? "en" : ""}`}
@@ -908,16 +896,11 @@ export default function KennisbankBeheer() {
                     <div className="flex flex-col gap-1.5 shrink-0">
                       <button
                         onClick={() => editEntry(e)}
-                        className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50"
+                        className="text-brand px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6"
                       >
                         Bewerken
                       </button>
-                      <button
-                        onClick={() => removeEntry(e.id)}
-                        className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50"
-                      >
-                        Verwijderen
-                      </button>
+                      <BevestigKnop label={"Verwijderen"} vraag="Dit kennis-item verwijderen?" bevestigLabel="Ja, verwijder" onBevestig={() => removeEntry(e.id)} className="text-urgent px-3 py-1.5 rounded-lg text-xs hover:bg-urgent-soft" />
                     </div>
                   </div>
                 )}
@@ -930,16 +913,16 @@ export default function KennisbankBeheer() {
       {/* Documenten (RAG-bron voor AI) */}
       {tab === "documents" && (
         <div className="space-y-4">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-ink-45">
             Documenten zijn vrije tekst die de AI doorzoekt om antwoorden uit te formuleren.
             Voeg er een toe via <strong>+ Nieuw document</strong> — plak tekst óf kies een bestand
             (.md, .txt, .pdf of .zip). Werkt alleen als AI aanstaat.
           </p>
-          {docMsg && <p className="text-sm text-blue-700">{docMsg}</p>}
+          {docMsg && <p className="text-sm text-brand">{docMsg}</p>}
 
           {/* Lijst — gegroepeerd per afdeling → onderwerp */}
           {documents.length === 0 ? (
-            <p className="text-sm text-gray-400">Nog geen documenten.</p>
+            <p className="text-sm text-ink-45">Nog geen documenten.</p>
           ) : (
             <>
               <div className="flex justify-end">
@@ -950,18 +933,18 @@ export default function KennisbankBeheer() {
                 renderItem={(d) => (
                   <div
                     key={d.id}
-                    className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+                    className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4 flex items-start justify-between gap-3"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <p className="font-semibold text-gray-900">{d.title}</p>
+                        <p className="font-semibold text-ink">{d.title}</p>
                         {d.visibility !== "all" && (
                           <span className="text-[10px] font-medium bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
                             {VISIBILITY_LABELS[d.visibility]}
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-gray-400 mt-1">
+                      <p className="text-xs text-ink-45 mt-1">
                         {d.chunk_count} fragment{d.chunk_count === 1 ? "" : "en"}
                         {d.source_filename && ` · ${d.source_filename}`}
                         {d.context && " · 📝 context"}
@@ -970,16 +953,11 @@ export default function KennisbankBeheer() {
                     <div className="flex flex-col gap-1.5 shrink-0">
                       <button
                         onClick={() => openDocEdit(d.id)}
-                        className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50"
+                        className="text-brand px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6"
                       >
                         Bewerken
                       </button>
-                      <button
-                        onClick={() => removeDoc(d.id)}
-                        className="text-red-600 px-3 py-1.5 rounded-lg text-xs hover:bg-red-50"
-                      >
-                        Verwijderen
-                      </button>
+                      <BevestigKnop label={"Verwijderen"} vraag="Dit document verwijderen?" bevestigLabel="Ja, verwijder" onBevestig={() => removeDoc(d.id)} className="text-urgent px-3 py-1.5 rounded-lg text-xs hover:bg-urgent-soft" />
                     </div>
                   </div>
                 )}
@@ -1158,13 +1136,13 @@ function OverviewTab({
       </div>
 
       {/* Verdeling per afdeling */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <h3 className="text-sm font-bold text-gray-800 mb-3">Verdeling per afdeling</h3>
+      <div className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4">
+        <h3 className="text-sm font-bold text-ink mb-3">Verdeling per afdeling</h3>
         {deptRows.length === 0 ? (
-          <p className="text-sm text-gray-400">Nog niets in de kennisbank.</p>
+          <p className="text-sm text-ink-45">Nog niets in de kennisbank.</p>
         ) : (
           <div className="space-y-1.5">
-            <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-[11px] font-semibold text-gray-400 uppercase">
+            <div className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-[11px] font-semibold text-ink-45 uppercase">
               <span>Afdeling</span>
               <span className="text-right w-16">Items</span>
               <span className="text-right w-20">Documenten</span>
@@ -1172,7 +1150,7 @@ function OverviewTab({
             {deptRows.map(([label, c]) => (
               <div
                 key={label}
-                className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-sm text-gray-700 py-0.5"
+                className="grid grid-cols-[1fr_auto_auto] gap-x-4 text-sm text-ink-70 py-0.5"
               >
                 <span className="font-medium">{label}</span>
                 <span className="text-right w-16">{c.entries}</span>
@@ -1184,16 +1162,16 @@ function OverviewTab({
       </div>
 
       {/* Meest gestelde vragen */}
-      <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
-        <h3 className="text-sm font-bold text-gray-800 mb-3">Meest gevraagd</h3>
+      <div className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4">
+        <h3 className="text-sm font-bold text-ink mb-3">Meest gevraagd</h3>
         {topAsked.length === 0 ? (
-          <p className="text-sm text-gray-400">Nog geen vragen beantwoord door de bot.</p>
+          <p className="text-sm text-ink-45">Nog geen vragen beantwoord door de bot.</p>
         ) : (
           <div className="space-y-1.5">
             {topAsked.map((e) => (
               <div key={e.id} className="flex items-center justify-between gap-3 text-sm">
-                <span className="text-gray-700 truncate">{e.title}</span>
-                <span className="text-xs text-gray-400 shrink-0">{e.ask_count}×</span>
+                <span className="text-ink-70 truncate">{e.title}</span>
+                <span className="text-xs text-ink-45 shrink-0">{e.ask_count}×</span>
               </div>
             ))}
           </div>
@@ -1218,22 +1196,22 @@ function StatCard({
 }) {
   const accentCls =
     accent === "amber"
-      ? "text-amber-600"
+      ? "text-high"
       : accent === "green"
-      ? "text-green-600"
-      : "text-gray-900";
+      ? "text-done"
+      : "text-ink";
   return (
     <button
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`bg-white rounded-xl shadow-sm border border-gray-200 p-4 text-left ${
-        onClick ? "hover:border-blue-300 cursor-pointer" : "cursor-default"
+      className={`bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4 text-left ${
+        onClick ? "hover:border-brand cursor-pointer" : "cursor-default"
       }`}
     >
-      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-xs text-ink-45">{label}</p>
       <p className={`text-2xl font-bold mt-0.5 ${accentCls}`}>{value}</p>
-      {hint && <p className="text-[11px] text-gray-400 mt-0.5">{hint}</p>}
+      {hint && <p className="text-[11px] text-ink-45 mt-0.5">{hint}</p>}
     </button>
   );
 }
@@ -1251,14 +1229,14 @@ function SearchResultsPanel({
   onEditDoc: (id: string) => void;
 }) {
   if (loading && !results) {
-    return <p className="text-sm text-gray-400">Zoeken…</p>;
+    return <p className="text-sm text-ink-45">Zoeken…</p>;
   }
   if (!results) return null;
 
   const total = results.entries.length + results.documents.length;
   if (total === 0) {
     return (
-      <p className="text-sm text-gray-400">
+      <p className="text-sm text-ink-45">
         Niets gevonden. Er is hier nog niets over bekend — voeg het toe via{" "}
         <strong>Kennisbank</strong> of <strong>Documenten</strong>.
       </p>
@@ -1274,42 +1252,42 @@ function SearchResultsPanel({
 
   return (
     <div className="space-y-5">
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-ink-45">
         {total} resulta{total === 1 ? "at" : "ten"} gevonden.
       </p>
 
       {results.entries.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-ink flex items-center gap-2">
             Kennis-items
-            <span className="text-xs font-normal bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+            <span className="text-xs font-normal bg-ink-6 text-ink-45 rounded-full px-2 py-0.5">
               {results.entries.length}
             </span>
           </h3>
           {results.entries.map((e) => (
             <div
               key={e.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+              className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4 flex items-start justify-between gap-3"
             >
               <div className="min-w-0">
                 <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-semibold text-gray-900">{e.title}</span>
+                  <span className="font-semibold text-ink">{e.title}</span>
                   {!e.is_published && (
-                    <span className="text-[10px] font-medium bg-amber-100 text-amber-700 px-2 py-0.5 rounded-full">
+                    <span className="text-[10px] font-medium bg-high-soft text-high px-2 py-0.5 rounded-full">
                       concept
                     </span>
                   )}
                 </div>
                 {meta(e.category, e.folder) && (
-                  <p className="text-[11px] text-gray-400 mt-0.5">{meta(e.category, e.folder)}</p>
+                  <p className="text-[11px] text-ink-45 mt-0.5">{meta(e.category, e.folder)}</p>
                 )}
-                <p className="text-sm text-gray-600 mt-1 line-clamp-2 whitespace-pre-wrap">
+                <p className="text-sm text-ink-70 mt-1 line-clamp-2 whitespace-pre-wrap">
                   {stripImages(e.answer)}
                 </p>
               </div>
               <button
                 onClick={() => onEditEntry(e)}
-                className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50 shrink-0"
+                className="text-brand px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6 shrink-0"
               >
                 Bewerken
               </button>
@@ -1320,31 +1298,31 @@ function SearchResultsPanel({
 
       {results.documents.length > 0 && (
         <div className="space-y-2">
-          <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+          <h3 className="text-sm font-bold text-ink flex items-center gap-2">
             Documenten
-            <span className="text-xs font-normal bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+            <span className="text-xs font-normal bg-ink-6 text-ink-45 rounded-full px-2 py-0.5">
               {results.documents.length}
             </span>
           </h3>
           {results.documents.map((d: KnowledgeDocumentMatch) => (
             <div
               key={d.id}
-              className="bg-white rounded-xl shadow-sm border border-gray-200 p-4 flex items-start justify-between gap-3"
+              className="bg-paper-raised rounded-xl shadow-sm border border-ink-12 p-4 flex items-start justify-between gap-3"
             >
               <div className="min-w-0">
-                <p className="font-semibold text-gray-900">{d.title}</p>
+                <p className="font-semibold text-ink">{d.title}</p>
                 {meta(d.category, d.folder) && (
-                  <p className="text-[11px] text-gray-400 mt-0.5">{meta(d.category, d.folder)}</p>
+                  <p className="text-[11px] text-ink-45 mt-0.5">{meta(d.category, d.folder)}</p>
                 )}
                 {d.snippet && (
-                  <p className="text-sm text-gray-600 mt-1 line-clamp-3 whitespace-pre-wrap">
+                  <p className="text-sm text-ink-70 mt-1 line-clamp-3 whitespace-pre-wrap">
                     {d.snippet}
                   </p>
                 )}
               </div>
               <button
                 onClick={() => onEditDoc(d.id)}
-                className="text-blue-600 px-3 py-1.5 rounded-lg text-xs hover:bg-blue-50 shrink-0"
+                className="text-brand px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6 shrink-0"
               >
                 Bewerken
               </button>
@@ -1368,7 +1346,7 @@ function DeptFilter({
     <select
       value={value}
       onChange={(e) => onChange(e.target.value as Category | "")}
-      className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm bg-white"
+      className="border border-ink-12 rounded-lg px-2 py-1.5 text-sm bg-paper-raised"
     >
       <option value="">Alle afdelingen</option>
       {ALL_CATEGORIES.map((c) => (
@@ -1407,16 +1385,16 @@ function GroupedSections<T extends { id: string; category: Category | null; fold
         const total = folderKeys.reduce((n, f) => n + folders.get(f)!.length, 0);
         return (
           <div key={cat} className="space-y-2">
-            <h3 className="text-sm font-bold text-gray-800 flex items-center gap-2">
+            <h3 className="text-sm font-bold text-ink flex items-center gap-2">
               {cat}
-              <span className="text-xs font-normal bg-gray-100 text-gray-500 rounded-full px-2 py-0.5">
+              <span className="text-xs font-normal bg-ink-6 text-ink-45 rounded-full px-2 py-0.5">
                 {total}
               </span>
             </h3>
             {folderKeys.map((f) => (
               <div key={f} className="space-y-2">
                 {!(folderKeys.length === 1 && f === "Overig") && (
-                  <p className="text-xs font-semibold text-gray-500 ml-0.5">{f}</p>
+                  <p className="text-xs font-semibold text-ink-45 ml-0.5">{f}</p>
                 )}
                 {folders.get(f)!.map(renderItem)}
               </div>
@@ -1469,7 +1447,7 @@ function KnowledgeForm({
   return (
     <div className="space-y-3">
       <div>
-        <label className="text-xs font-medium text-gray-600">Titel / onderwerp</label>
+        <label className="text-xs font-medium text-ink-70">Titel / onderwerp</label>
         <input
           value={value.title}
           onChange={(e) => onChange({ title: e.target.value })}
@@ -1479,15 +1457,15 @@ function KnowledgeForm({
       </div>
 
       <div>
-        <label className="text-xs font-medium text-gray-600">{bodyLabel}</label>
+        <label className="text-xs font-medium text-ink-70">{bodyLabel}</label>
         {file ? (
-          <div className="mt-1 flex items-center justify-between gap-2 border border-gray-200 bg-gray-50 rounded-lg px-3 py-2">
-            <span className="text-sm text-gray-700 truncate">📄 {file.name}</span>
+          <div className="mt-1 flex items-center justify-between gap-2 border border-ink-12 bg-ink-6 rounded-lg px-3 py-2">
+            <span className="text-sm text-ink-70 truncate">📄 {file.name}</span>
             {onClearFile && (
               <button
                 type="button"
                 onClick={onClearFile}
-                className="text-gray-400 hover:text-gray-600 text-xl leading-none shrink-0"
+                className="text-ink-45 hover:text-ink-70 text-xl leading-none shrink-0"
                 title="Bestand verwijderen"
               >
                 ×
@@ -1522,7 +1500,7 @@ function KnowledgeForm({
                   <button
                     type="button"
                     onClick={() => fileRef.current?.click()}
-                    className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50"
+                    className="border border-ink-12 text-ink-70 px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6"
                   >
                     Bestand kiezen
                   </button>
@@ -1542,7 +1520,7 @@ function KnowledgeForm({
             )}
           </div>
         )}
-        <p className="text-[11px] text-gray-400 mt-1">
+        <p className="text-[11px] text-ink-45 mt-1">
           {file
             ? "De tekst wordt automatisch uit het bestand gehaald."
             : "Markdown ondersteund (koppen, lijsten, **vet**, afbeeldingen)."}
@@ -1550,7 +1528,7 @@ function KnowledgeForm({
       </div>
 
       <div>
-        <label className="text-xs font-medium text-gray-600">Context / toelichting (optioneel)</label>
+        <label className="text-xs font-medium text-ink-70">Context / toelichting (optioneel)</label>
         <textarea
           value={value.context}
           onChange={(e) => onChange({ context: e.target.value })}
@@ -1561,7 +1539,7 @@ function KnowledgeForm({
       </div>
 
       <div>
-        <label className="text-xs font-medium text-gray-600">Trefwoorden (optioneel, verbetert zoeken)</label>
+        <label className="text-xs font-medium text-ink-70">Trefwoorden (optioneel, verbetert zoeken)</label>
         <input
           value={value.keywords}
           onChange={(e) => onChange({ keywords: e.target.value })}
@@ -1572,7 +1550,7 @@ function KnowledgeForm({
 
       {showImages && (
         <div>
-          <label className="text-xs font-medium text-gray-600">Foto's</label>
+          <label className="text-xs font-medium text-ink-70">Foto's</label>
           <div className="mt-1 space-y-2">
             {!!imageItems?.length && (
               <div className="flex flex-wrap gap-2">
@@ -1581,12 +1559,12 @@ function KnowledgeForm({
                     <img
                       src={img.url}
                       alt=""
-                      className="h-16 w-16 object-cover rounded-lg border border-gray-200"
+                      className="h-16 w-16 object-cover rounded-lg border border-ink-12"
                     />
                     <button
                       type="button"
                       onClick={() => onRemoveImage?.(img.key)}
-                      className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full w-5 h-5 text-xs leading-none"
+                      className="absolute -top-1.5 -right-1.5 bg-urgent-soft0 text-white rounded-full w-5 h-5 text-xs leading-none"
                       title="Verwijderen"
                     >
                       ×
@@ -1596,7 +1574,7 @@ function KnowledgeForm({
               </div>
             )}
             <label className="inline-block">
-              <span className="border border-gray-300 text-gray-700 px-3 py-1.5 rounded-lg text-xs hover:bg-gray-50 cursor-pointer inline-block">
+              <span className="border border-ink-12 text-ink-70 px-3 py-1.5 rounded-lg text-xs hover:bg-ink-6 cursor-pointer inline-block">
                 {uploadingImg ? "Uploaden..." : "+ Foto"}
               </span>
               <input
@@ -1610,7 +1588,7 @@ function KnowledgeForm({
                 }}
               />
             </label>
-            <p className="text-[11px] text-gray-400">
+            <p className="text-[11px] text-ink-45">
               Foto's worden bij dit antwoord getoond in de chat. Bij een nieuw item/document
               worden ze bij Opslaan toegevoegd.
             </p>
@@ -1619,7 +1597,7 @@ function KnowledgeForm({
       )}
 
       <div>
-        <label className="text-xs font-medium text-gray-600">Afdeling (optioneel)</label>
+        <label className="text-xs font-medium text-ink-70">Afdeling (optioneel)</label>
         <select
           value={value.category}
           onChange={(e) => onChange({ category: e.target.value as Category | "" })}
@@ -1635,7 +1613,7 @@ function KnowledgeForm({
       </div>
 
       <div>
-        <label className="text-xs font-medium text-gray-600">Zichtbaar voor</label>
+        <label className="text-xs font-medium text-ink-70">Zichtbaar voor</label>
         <select
           value={value.visibility}
           onChange={(e) => onChange({ visibility: e.target.value as KnowledgeVisibility })}
@@ -1647,14 +1625,14 @@ function KnowledgeForm({
             </option>
           ))}
         </select>
-        <p className="text-[11px] text-gray-400 mt-1">
+        <p className="text-[11px] text-ink-45 mt-1">
           Bepaalt wie dit ziet én via de kennisbot te horen krijgt. "Alleen afdeling" gebruikt de
           afdeling hierboven. Admin & supervisor zien (vrijwel) alles.
         </p>
       </div>
 
       <div>
-        <label className="text-xs font-medium text-gray-600">Onderwerp / map (optioneel)</label>
+        <label className="text-xs font-medium text-ink-70">Onderwerp / map (optioneel)</label>
         <input
           value={value.folder}
           onChange={(e) => onChange({ folder: e.target.value })}
@@ -1691,14 +1669,14 @@ function KnowledgeFormModal({
       <form
         onSubmit={onSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
+        className="bg-paper-raised rounded-xl shadow-xl w-full max-w-lg max-h-[90vh] overflow-y-auto"
       >
-        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-white border-b border-gray-100 px-5 py-3 rounded-t-xl">
-          <h2 className="font-bold text-gray-900">{heading}</h2>
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 bg-paper-raised border-b border-ink-6 px-5 py-3 rounded-t-xl">
+          <h2 className="font-bold text-ink">{heading}</h2>
           <button
             type="button"
             onClick={onCancel}
-            className="text-gray-400 hover:text-gray-600 text-2xl leading-none shrink-0 -mr-1"
+            className="text-ink-45 hover:text-ink-70 text-2xl leading-none shrink-0 -mr-1"
             title="Sluiten"
             aria-label="Sluiten"
           >
@@ -1708,19 +1686,19 @@ function KnowledgeFormModal({
         <div className="p-5 space-y-3">
           <PrivacyNotice />
           {children}
-          {error && <p className="text-sm text-red-600">{error}</p>}
+          {error && <p className="text-sm text-urgent">{error}</p>}
           <div className="flex justify-end gap-2 pt-1">
             <button
               type="button"
               onClick={onCancel}
-              className="px-4 py-2 rounded-lg text-sm text-gray-600 hover:bg-gray-100"
+              className="px-4 py-2 rounded-lg text-sm text-ink-70 hover:bg-ink-6"
             >
               Annuleren
             </button>
             <button
               type="submit"
               disabled={saving}
-              className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+              className="bg-brand text-white px-5 py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50"
             >
               {saving ? "Opslaan..." : "Opslaan"}
             </button>
@@ -1734,7 +1712,7 @@ function KnowledgeFormModal({
 /** Waarschuwing tegen het opslaan van gevoelige gegevens — overal hetzelfde. */
 function PrivacyNotice() {
   return (
-    <div className="flex items-start gap-2 text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
+    <div className="flex items-start gap-2 text-xs text-high bg-high-soft border border-high rounded-lg px-3 py-2">
       <span aria-hidden>⚠️</span>
       <span>
         Zet hier <strong>geen persoonsgegevens, gebruikersnamen of wachtwoorden</strong> in — de
@@ -1758,8 +1736,8 @@ function TabButton({
       onClick={onClick}
       className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors ${
         active
-          ? "border-blue-600 text-blue-600"
-          : "border-transparent text-gray-500 hover:text-gray-700"
+          ? "border-brand text-brand"
+          : "border-transparent text-ink-45 hover:text-ink-70"
       }`}
     >
       {children}

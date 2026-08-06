@@ -19,7 +19,7 @@ export default function MultiAreaSelector({ value, onChange }: Props) {
   }
 
   if (locations.length === 0) {
-    return <p className="text-sm text-gray-400">Geen locaties beschikbaar</p>;
+    return <p className="text-sm text-ink-45">Geen locaties beschikbaar</p>;
   }
 
   return (
@@ -33,8 +33,8 @@ export default function MultiAreaSelector({ value, onChange }: Props) {
             onClick={() => toggle(loc.id)}
             className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-all ${
               selected
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"
+                ? "bg-brand text-white border-brand"
+                : "bg-paper-raised text-ink-70 border-ink-12 hover:border-ink-25"
             }`}
           >
             🚪 {loc.name}

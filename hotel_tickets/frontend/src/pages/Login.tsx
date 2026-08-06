@@ -75,20 +75,20 @@ export default function Login() {
             <span className="font-normal"> — testomgeving, meldingen staan uit (v{beta.version})</span>
           </div>
         )}
-        <div className="bg-white/95 backdrop-blur rounded-2xl shadow-lg p-8 space-y-6">
+        <div className="bg-paper-raised/95 backdrop-blur rounded-2xl shadow-lg p-8 space-y-6">
           <div className="text-center space-y-2">
             {logo ? (
               <img src={logo} alt="Logo" className="h-16 mx-auto object-contain" />
             ) : (
               <div className="text-4xl">⭐</div>
             )}
-            <h1 className="text-xl font-bold text-gray-800">{branding?.title ?? "Sterrenberg App"}</h1>
-            <p className="text-sm text-gray-500">{branding?.subtitle ?? "Log in met je Home Assistant account"}</p>
+            <h1 className="text-xl font-bold text-ink">{branding?.title ?? "Sterrenberg App"}</h1>
+            <p className="text-sm text-ink-45">{branding?.subtitle ?? "Log in met je Home Assistant account"}</p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label htmlFor="login-username" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="login-username" className="block text-sm font-medium text-ink-70 mb-1">
                 Gebruikersnaam
               </label>
               <input
@@ -100,11 +100,11 @@ export default function Login() {
                 autoCapitalize="none"
                 autoCorrect="off"
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-ink-12 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               />
             </div>
             <div>
-              <label htmlFor="login-password" className="block text-sm font-medium text-gray-700 mb-1">
+              <label htmlFor="login-password" className="block text-sm font-medium text-ink-70 mb-1">
                 Wachtwoord
               </label>
               <input
@@ -114,25 +114,25 @@ export default function Login() {
                 onChange={(e) => setPassword(e.target.value)}
                 autoComplete="current-password"
                 required
-                className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="w-full border border-ink-12 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               />
             </div>
 
             {error && (
-              <p className="text-sm text-red-600 bg-red-50 rounded-lg px-3 py-2">{error}</p>
+              <p className="text-sm text-urgent bg-urgent-soft rounded-lg px-3 py-2">{error}</p>
             )}
 
             <button
               type="submit"
               disabled={loading}
               style={btnColor ? { backgroundColor: btnColor } : undefined}
-              className="w-full bg-blue-600 text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
+              className="w-full bg-brand text-white rounded-lg py-2.5 text-sm font-semibold hover:opacity-90 disabled:opacity-50 transition-opacity"
             >
               {loading ? "Inloggen..." : "Inloggen"}
             </button>
           </form>
 
-          <p className="text-xs text-gray-400 text-center">
+          <p className="text-xs text-ink-45 text-center">
             {branding?.footer ?? "Alleen bereikbaar op het bedrijfsnetwerk"}
           </p>
         </div>

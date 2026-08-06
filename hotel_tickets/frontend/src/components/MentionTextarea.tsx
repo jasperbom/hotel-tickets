@@ -147,11 +147,11 @@ export function MentionTextarea({
           title="Sleep om het vak groter of kleiner te maken"
           className="mt-0.5 h-5 flex items-center justify-center cursor-ns-resize touch-none select-none"
         >
-          <span className="h-1 w-10 rounded-full bg-gray-300 hover:bg-gray-400 transition-colors" />
+          <span className="h-1 w-10 rounded-full bg-ink-25 hover:bg-gray-400 transition-colors" />
         </div>
       )}
       {query !== null && suggestions.length > 0 && (
-        <div className="absolute bottom-full left-0 mb-1 w-full max-w-xs bg-white border border-gray-200 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
+        <div className="absolute bottom-full left-0 mb-1 w-full max-w-xs bg-paper-raised border border-ink-12 rounded-xl shadow-lg z-20 py-1 overflow-hidden">
           {suggestions.map((u, i) => (
             <button
               key={u.ha_user_id}
@@ -161,10 +161,10 @@ export function MentionTextarea({
               onMouseDown={(e) => { e.preventDefault(); insertMention(u); }}
               onMouseEnter={() => setHighlighted(i)}
               className={`flex items-center gap-2 w-full px-3 py-2 text-sm text-left ${
-                i === highlighted ? "bg-blue-50 text-blue-800" : "text-gray-700"
+                i === highlighted ? "bg-ink-6 text-brand" : "text-ink-70"
               }`}
             >
-              <span className="w-6 h-6 rounded-full bg-blue-100 text-blue-700 text-xs font-bold flex items-center justify-center shrink-0">
+              <span className="w-6 h-6 rounded-full bg-ink-6 text-brand text-xs font-bold flex items-center justify-center shrink-0">
                 {u.display_name.charAt(0).toUpperCase()}
               </span>
               <span className="truncate">{u.display_name}</span>
@@ -192,7 +192,7 @@ export function renderWithMentions(body: string, userNames: string[]): ReactNode
   while ((m = regex.exec(body)) !== null) {
     if (m.index > last) parts.push(body.slice(last, m.index));
     parts.push(
-      <span key={key++} className="text-blue-700 bg-blue-50 font-semibold rounded px-0.5">
+      <span key={key++} className="text-brand bg-ink-6 font-semibold rounded px-0.5">
         {m[0]}
       </span>
     );

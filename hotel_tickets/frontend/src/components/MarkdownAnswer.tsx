@@ -15,7 +15,7 @@ export default function MarkdownAnswer({
   text: string;
 }) {
   return (
-    <div className="prose prose-sm max-w-none text-gray-700 break-words">
+    <div className="prose prose-sm max-w-none text-ink-70 break-words">
       <ReactMarkdown
         components={{
           img: ({ src, alt }) => {
@@ -26,12 +26,12 @@ export default function MarkdownAnswer({
               <img
                 src={url}
                 alt={alt ?? ""}
-                className="rounded-lg border border-gray-200 my-2 max-h-80"
+                className="rounded-lg border border-ink-12 my-2 max-h-80"
               />
             );
           },
           a: ({ href, children }) => (
-            <a href={href} target="_blank" rel="noreferrer" className="text-blue-600 underline">
+            <a href={href} target="_blank" rel="noreferrer" className="text-brand underline">
               {children}
             </a>
           ),

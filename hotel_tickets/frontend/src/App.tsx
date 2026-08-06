@@ -446,7 +446,7 @@ export default function App() {
                 onClick={() => handleModuleClick(mod)}
                 title={mod.label}
                 className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
-                  activeModuleId === mod.id ? "bg-white/20 opacity-100" : "opacity-60 hover:opacity-100 hover:bg-white/10"
+                  activeModuleId === mod.id ? "bg-paper-raised/20 opacity-100" : "opacity-60 hover:opacity-100 hover:bg-paper-raised/10"
                 }`}
               >
                 <mod.icon size={20} strokeWidth={1.75} aria-hidden="true" />
@@ -463,7 +463,7 @@ export default function App() {
               aria-haspopup="menu"
               aria-expanded={accountOpen}
               className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
-                accountOpen ? "bg-white/20 opacity-100" : "opacity-60 hover:opacity-100 hover:bg-white/10"
+                accountOpen ? "bg-paper-raised/20 opacity-100" : "opacity-60 hover:opacity-100 hover:bg-paper-raised/10"
               }`}
             >
               <CircleUser size={20} strokeWidth={1.75} aria-hidden="true" />
@@ -680,7 +680,7 @@ function AccountKnop({ label, onClick }: { label: string; onClick: () => void })
   return (
     <button
       onClick={onClick}
-      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-paper-raised/10 transition-colors"
     >
       {label}
     </button>

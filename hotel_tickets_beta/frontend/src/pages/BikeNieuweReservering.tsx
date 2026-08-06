@@ -94,57 +94,57 @@ export default function BikeNieuweReservering() {
   return (
     <div className="max-w-xl">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-600 text-xl">←</button>
+        <button onClick={() => navigate(-1)} className="text-ink-45 hover:text-ink-70 text-xl">←</button>
         <h1 className="text-2xl font-bold">Nieuwe reservering</h1>
       </div>
 
-      <form onSubmit={submit} className="bg-white rounded-2xl shadow p-6 space-y-5">
+      <form onSubmit={submit} className="bg-paper-raised rounded-2xl shadow p-6 space-y-5">
         {/* Gast */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Gastnaam *</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Gastnaam *</label>
           <input
             type="text"
             value={form.guest_name}
             onChange={(e) => set("guest_name", e.target.value)}
             placeholder="Bijv. Familie Jansen"
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
           />
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Kamernummer</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Kamernummer</label>
           <input
             type="text"
             value={form.guest_room}
             onChange={(e) => set("guest_room", e.target.value)}
             placeholder="Bijv. 204"
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
           />
         </div>
 
         {/* Datum & duur */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Startdatum *</label>
+            <label className="block text-sm font-medium text-ink-70 mb-1">Startdatum *</label>
             <input
               type="date"
               value={form.start_date}
               onChange={(e) => set("start_date", e.target.value)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Aantal dagen *</label>
+            <label className="block text-sm font-medium text-ink-70 mb-1">Aantal dagen *</label>
             <input
               type="number"
               min={1}
               value={form.num_days}
               onChange={(e) => set("num_days", parseInt(e.target.value) || 1)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
             />
           </div>
         </div>
         {form.num_days >= 1 && (
-          <p className="text-xs text-gray-500 -mt-3">
+          <p className="text-xs text-ink-45 -mt-3">
             Retourdatum: <strong>{formatDateNL(endDate)}</strong>
           </p>
         )}
@@ -152,11 +152,11 @@ export default function BikeNieuweReservering() {
         {/* Fietstype & aantal */}
         <div className="grid grid-cols-2 gap-4">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Fietstype *</label>
+            <label className="block text-sm font-medium text-ink-70 mb-1">Fietstype *</label>
             <select
               value={form.bike_type_id}
               onChange={(e) => set("bike_type_id", parseInt(e.target.value))}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
             >
               {bikeTypes.map((t) => (
                 <option key={t.id} value={t.id}>
@@ -166,20 +166,20 @@ export default function BikeNieuweReservering() {
             </select>
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Aantal fietsen *</label>
+            <label className="block text-sm font-medium text-ink-70 mb-1">Aantal fietsen *</label>
             <input
               type="number"
               min={1}
               value={form.num_bikes}
               onChange={(e) => set("num_bikes", parseInt(e.target.value) || 1)}
-              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
             />
           </div>
         </div>
 
         {/* Beschikbaarheid indicator */}
         {checking && (
-          <p className="text-sm text-gray-400">Beschikbaarheid controleren...</p>
+          <p className="text-sm text-ink-45">Beschikbaarheid controleren...</p>
         )}
         {!checking && availability && (
           <div className={`rounded-lg p-3 text-sm ${availability.available ? "bg-green-50 text-green-800" : "bg-red-50 text-red-800"}`}>
@@ -191,21 +191,21 @@ export default function BikeNieuweReservering() {
 
         {/* Prijs indicatie */}
         {estimatedPrice && (
-          <div className="bg-gray-50 rounded-lg p-3 text-sm">
-            <span className="text-gray-600">Geschatte totaalprijs: </span>
+          <div className="bg-ink-6 rounded-lg p-3 text-sm">
+            <span className="text-ink-70">Geschatte totaalprijs: </span>
             <span className="font-bold">€{estimatedPrice}</span>
           </div>
         )}
 
         {/* Notities */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Notities</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Notities</label>
           <textarea
             value={form.notes}
             onChange={(e) => set("notes", e.target.value)}
             rows={2}
             placeholder="Optionele opmerkingen..."
-            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+            className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand resize-none"
           />
         </div>
 
@@ -215,14 +215,14 @@ export default function BikeNieuweReservering() {
           <button
             type="button"
             onClick={() => navigate(-1)}
-            className="flex-1 border rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 transition-colors"
+            className="flex-1 border rounded-lg px-4 py-2 text-sm font-medium text-ink-70 hover:bg-ink-6 transition-colors"
           >
             Annuleren
           </button>
           <button
             type="submit"
             disabled={submitting || !availability?.available}
-            className="flex-1 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex-1 bg-brand text-white rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {submitting ? "Opslaan..." : "Reservering aanmaken"}
           </button>

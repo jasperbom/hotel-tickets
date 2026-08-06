@@ -5,6 +5,7 @@ import {
   type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding, type LoginBan, type Session,
   type BetaStatus, type BetaCopyResult,
 } from "../api/client";
+import { BevestigKnop } from "../components/BevestigKnop";
 
 type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot" | "beta";
 
@@ -12,7 +13,7 @@ type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot" | "be
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <div className="bg-white rounded-2xl shadow p-5 space-y-4">
+    <div className="bg-paper-raised rounded-2xl shadow p-5 space-y-4">
       <h2 className="font-bold text-base">{title}</h2>
       {children}
     </div>
@@ -53,27 +54,27 @@ function IntegratieWidget() {
   return (
     <Section title="HA Integratie">
       <div className="flex items-center justify-between">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-ink-70">
           Versie addon: <span className="font-mono font-medium">{status.bundled_version}</span>
           {status.installed && (
             <> · geïnstalleerd: <span className="font-mono font-medium">{status.installed_version}</span></>
           )}
         </p>
         <span className={`text-xs font-semibold px-2 py-1 rounded-full ${
-          isUpToDate ? "bg-green-100 text-green-700" :
-          status.installed ? "bg-amber-100 text-amber-700" : "bg-red-100 text-red-700"
+          isUpToDate ? "bg-done-soft text-done" :
+          status.installed ? "bg-high-soft text-high" : "bg-urgent-soft text-urgent"
         }`}>
           {isUpToDate ? "Geïnstalleerd" : status.installed ? "Update beschikbaar" : "Niet geïnstalleerd"}
         </span>
       </div>
       {message && (
-        <div className={`text-sm rounded-lg px-3 py-2 ${message.type === "ok" ? "bg-green-50 text-green-800" : "bg-red-50 text-red-700"}`}>
+        <div className={`text-sm rounded-lg px-3 py-2 ${message.type === "ok" ? "bg-done-soft text-done" : "bg-urgent-soft text-urgent"}`}>
           {message.text}
           {message.type === "ok" && <p className="mt-1 font-medium">Herstart Home Assistant via Instellingen → Systeem → Herstarten.</p>}
         </div>
       )}
       {!isUpToDate && (
-        <button onClick={install} disabled={installing} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50 w-full">
+        <button onClick={install} disabled={installing} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50 w-full">
           {installing ? "Bezig..." : status.installed ? `Bijwerken naar ${status.bundled_version}` : "Integratie installeren"}
         </button>
       )}
@@ -103,20 +104,20 @@ function NotificatieInstellingen() {
   return (
     <Section title="Notificatie-instellingen">
       <div>
-        <label className="block text-sm font-medium text-gray-700 mb-1">Basis-URL voor notificatielinks</label>
+        <label className="block text-sm font-medium text-ink-70 mb-1">Basis-URL voor notificatielinks</label>
         <input
           value={baseUrl}
           onChange={(e) => setBaseUrl(e.target.value)}
-          className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand"
           placeholder="/hassio/ingress/hotel_tickets"
         />
-        <p className="text-xs text-gray-500 mt-1">Standaard: <code>/hassio/ingress/hotel_tickets</code></p>
+        <p className="text-xs text-ink-45 mt-1">Standaard: <code>/hassio/ingress/hotel_tickets</code></p>
       </div>
       <div className="flex items-center gap-3">
-        <button onClick={save} disabled={saving} className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+        <button onClick={save} disabled={saving} className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50">
           {saving ? "Opslaan..." : "Opslaan"}
         </button>
-        {saved && <span className="text-sm text-green-600">✓ Opgeslagen</span>}
+        {saved && <span className="text-sm text-done">✓ Opgeslagen</span>}
       </div>
     </Section>
   );
@@ -164,34 +165,34 @@ function ActieveSessiesPanel() {
 
   return (
     <Section title="Actieve sessies — apparaten">
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-ink-45">
         Alle apparaten die nu via de loginpagina zijn ingelogd. Een sessie schuift mee zolang hij
         gebruikt wordt en verloopt vanzelf bij inactiviteit. Log een apparaat op afstand uit bij een
         verloren of gestolen telefoon — dat toestel moet daarna opnieuw inloggen.
       </p>
       {sessions.length === 0 ? (
-        <p className="text-sm text-gray-500">Geen actieve sessies via de loginpagina.</p>
+        <p className="text-sm text-ink-45">Geen actieve sessies via de loginpagina.</p>
       ) : (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-ink-6">
           {sessions.map((s) => (
             <div key={s.id} className="py-2 flex flex-wrap items-center gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-gray-900 truncate">
+                <p className="text-sm font-medium text-ink truncate">
                   {s.display_name || "Onbekend"}
                   {s.current && (
-                    <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                    <span className="ml-2 text-xs bg-done-soft text-done px-2 py-0.5 rounded-full font-medium">
                       Dit apparaat
                     </span>
                   )}
                 </p>
-                <p className="text-xs text-gray-500 truncate">
+                <p className="text-xs text-ink-45 truncate">
                   {s.device}
                   {s.ip ? ` · ${s.ip}` : ""} · actief {sessieGeleden(s.last_seen_at)}
                 </p>
               </div>
               <button
                 onClick={() => revoke(s.id)}
-                className="text-sm text-red-600 hover:underline shrink-0"
+                className="text-sm text-urgent hover:underline shrink-0"
               >
                 Uitloggen
               </button>
@@ -219,26 +220,26 @@ function BeveiligingPanel() {
 
   return (
     <Section title="Beveiliging — loginpagina">
-      <p className="text-xs text-gray-500">
+      <p className="text-xs text-ink-45">
         Een IP-adres wordt na 25 mislukte inlogpogingen permanent geblokkeerd (je krijgt
         daarvan een pushmelding). Hier hef je blokkades op en zie je lopende tellers.
       </p>
       {bans.length === 0 ? (
-        <p className="text-sm text-gray-500">Geen mislukte inlogpogingen geregistreerd.</p>
+        <p className="text-sm text-ink-45">Geen mislukte inlogpogingen geregistreerd.</p>
       ) : (
-        <div className="divide-y divide-gray-100">
+        <div className="divide-y divide-ink-6">
           {bans.map((b) => (
             <div key={b.ip} className="py-2 flex flex-wrap items-center gap-3">
               <div className="flex-1 min-w-0">
                 <p className="font-mono text-sm">{b.ip}</p>
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-ink-45">
                   {b.failed_count} mislukte poging{b.failed_count === 1 ? "" : "en"}
                   {b.last_username && <> · laatste gebruikersnaam: <span className="font-mono">{b.last_username}</span></>}
                   {" · "}{new Date(b.last_attempt_at).toLocaleString("nl-NL")}
                 </p>
               </div>
-              {b.banned && <span className="text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full font-medium">Geblokkeerd</span>}
-              <button onClick={() => removeBan(b.ip)} className="text-sm text-blue-600 hover:underline shrink-0">
+              {b.banned && <span className="text-xs bg-urgent-soft text-urgent px-2 py-0.5 rounded-full font-medium">Geblokkeerd</span>}
+              <button onClick={() => removeBan(b.ip)} className="text-sm text-brand hover:underline shrink-0">
                 {b.banned ? "Blokkade opheffen" : "Teller wissen"}
               </button>
             </div>
@@ -276,7 +277,6 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   }
 
   async function deleteUser(userId: string) {
-    if (!confirm("Gebruiker verwijderen?")) return;
     setListError(null);
     try {
       await userApi.remove(userId);
@@ -330,11 +330,11 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
   return (
     <Section title="Medewerkers & rollen">
       <div className="flex justify-end">
-        {isAdmin && <button onClick={() => setShowNew(true)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:bg-blue-700">+ Toevoegen</button>}
+        {isAdmin && <button onClick={() => setShowNew(true)} className="bg-brand text-white px-3 py-1.5 rounded-lg text-sm font-medium hover:opacity-90">+ Toevoegen</button>}
       </div>
 
       {showNew && (
-        <div className="bg-blue-50 rounded-lg p-4 space-y-3">
+        <div className="bg-ink-6 rounded-lg p-4 space-y-3">
           <h3 className="text-sm font-semibold">Nieuwe medewerker</h3>
           <div className="grid grid-cols-2 gap-2">
             <input placeholder="Naam" value={newForm.display_name}
@@ -352,11 +352,11 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
               onChange={(e) => setNewForm({ ...newForm, ha_user_id: e.target.value })}
               className="border rounded px-2 py-1 text-sm font-mono" />
             <select value={newForm.role} onChange={(e) => setNewForm({ ...newForm, role: e.target.value as Role })}
-              className="border rounded px-2 py-1 text-sm bg-white">
+              className="border rounded px-2 py-1 text-sm bg-paper-raised">
               {(Object.keys(ROLE_LABELS) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
             </select>
             <select value={newForm.department} onChange={(e) => setNewForm({ ...newForm, department: e.target.value as Category | "" })}
-              className="border rounded px-2 py-1 text-sm bg-white">
+              className="border rounded px-2 py-1 text-sm bg-paper-raised">
               <option value="">— Afdeling kiezen —</option>
               {(Object.keys(DEPT_FULL_LABELS) as Category[]).map((d) => <option key={d} value={d}>{DEPT_FULL_LABELS[d]}</option>)}
             </select>
@@ -380,23 +380,23 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
               <span>Push bij een nieuw direct bericht van een collega</span>
             </label>
           </div>
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-ink-45">
             Met een inlognaam + wachtwoord maak je een <strong>app-account</strong> aan: de medewerker
             logt in op de loginpagina zonder Home Assistant-account. Laat het wachtwoord leeg en vul
             een HA user_id in om een bestaande HA-gebruiker te koppelen.
           </p>
-          {newError && <p className="text-sm text-red-600 bg-red-50 rounded px-2 py-1">{newError}</p>}
+          {newError && <p className="text-sm text-urgent bg-urgent-soft rounded px-2 py-1">{newError}</p>}
           <div className="flex gap-2">
-            <button onClick={createUser} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
-            <button onClick={() => { setShowNew(false); setNewError(null); }} className="border px-3 py-1.5 rounded-lg text-sm text-gray-600">Annuleren</button>
+            <button onClick={createUser} className="bg-brand text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
+            <button onClick={() => { setShowNew(false); setNewError(null); }} className="border px-3 py-1.5 rounded-lg text-sm text-ink-70">Annuleren</button>
           </div>
         </div>
       )}
 
-      {listError && <p className="text-sm text-red-600 bg-red-50 rounded px-2 py-1">{listError}</p>}
+      {listError && <p className="text-sm text-urgent bg-urgent-soft rounded px-2 py-1">{listError}</p>}
 
-      {loading ? <p className="text-gray-400 text-sm">Laden...</p> : (
-        <div className="divide-y divide-gray-100">
+      {loading ? <p className="text-ink-45 text-sm">Laden...</p> : (
+        <div className="divide-y divide-ink-6">
           {users.map((user) => (
             <div key={user.ha_user_id} className="py-3">
               {editing === user.ha_user_id ? (
@@ -408,21 +408,21 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                     {isAdmin ? (
                       <select value={editForm.role || user.role}
                         onChange={(e) => setEditForm({ ...editForm, role: e.target.value as Role })}
-                        className="border rounded px-2 py-1 text-sm bg-white">
+                        className="border rounded px-2 py-1 text-sm bg-paper-raised">
                         {(Object.keys(ROLE_LABELS) as Role[]).map((r) => <option key={r} value={r}>{ROLE_LABELS[r]}</option>)}
                       </select>
                     ) : (
-                      <span className="border rounded px-2 py-1 text-sm bg-gray-50 text-gray-500">{ROLE_LABELS[user.role]}</span>
+                      <span className="border rounded px-2 py-1 text-sm bg-ink-6 text-ink-45">{ROLE_LABELS[user.role]}</span>
                     )}
                     {isAdmin ? (
                       <select value={editForm.department ?? user.department ?? ""}
                         onChange={(e) => setEditForm({ ...editForm, department: (e.target.value || null) as Category | null })}
-                        className="border rounded px-2 py-1 text-sm bg-white">
+                        className="border rounded px-2 py-1 text-sm bg-paper-raised">
                         <option value="">— Geen afdeling —</option>
                         {(Object.keys(DEPT_FULL_LABELS) as Category[]).map((d) => <option key={d} value={d}>{DEPT_FULL_LABELS[d]}</option>)}
                       </select>
                     ) : (
-                      <span className="border rounded px-2 py-1 text-sm bg-gray-50 text-gray-500">
+                      <span className="border rounded px-2 py-1 text-sm bg-ink-6 text-ink-45">
                         {user.department ? DEPT_FULL_LABELS[user.department] : "Geen afdeling"}
                       </span>
                     )}
@@ -448,35 +448,35 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                     </label>
                   </div>
                   <div className="flex gap-2">
-                    <button onClick={() => saveEdit(user.ha_user_id)} className="bg-blue-600 text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
-                    <button onClick={() => setEditing(null)} className="border px-3 py-1.5 rounded-lg text-sm text-gray-600">Annuleren</button>
+                    <button onClick={() => saveEdit(user.ha_user_id)} className="bg-brand text-white px-3 py-1.5 rounded-lg text-sm">Opslaan</button>
+                    <button onClick={() => setEditing(null)} className="border px-3 py-1.5 rounded-lg text-sm text-ink-70">Annuleren</button>
                   </div>
                 </div>
               ) : (
                 <div className="flex flex-wrap items-center gap-3">
                   <div className="flex-1 min-w-0">
                     <p className="font-medium text-sm">{user.display_name}</p>
-                    <p className="text-xs text-gray-400 break-all">{user.ha_user_id}{user.ha_username ? ` · login: ${user.ha_username}` : ""}</p>
+                    <p className="text-xs text-ink-45 break-all">{user.ha_user_id}{user.ha_username ? ` · login: ${user.ha_username}` : ""}</p>
                     <div className="flex flex-wrap gap-1.5 mt-1">
-                      <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full font-medium">{ROLE_LABELS[user.role]}</span>
-                      {user.department && <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">{DEPT_LABELS[user.department]}</span>}
+                      <span className="text-xs bg-ink-6 text-brand px-2 py-0.5 rounded-full font-medium">{ROLE_LABELS[user.role]}</span>
+                      {user.department && <span className="text-xs bg-ink-6 text-ink-70 px-2 py-0.5 rounded-full">{DEPT_LABELS[user.department]}</span>}
                       {user.has_password && <span className="text-xs bg-purple-100 text-purple-700 px-2 py-0.5 rounded-full font-medium">App-account</span>}
                     </div>
                   </div>
                   <div className="flex gap-3 text-sm shrink-0">
-                    <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }} className="text-blue-600 hover:underline">Bewerken</button>
+                    <button onClick={() => { setEditing(user.ha_user_id); setEditForm({ ...user }); }} className="text-brand hover:underline">Bewerken</button>
                     {isAdmin && (
                       <button onClick={() => resetPassword(user)} className="text-purple-600 hover:underline">
                         {user.has_password ? "Wachtwoord resetten" : "Wachtwoord instellen"}
                       </button>
                     )}
-                    {isAdmin && <button onClick={() => deleteUser(user.ha_user_id)} className="text-red-600 hover:underline">Verwijderen</button>}
+                    {isAdmin && <BevestigKnop label={"Verwijderen"} vraag="Gebruiker verwijderen?" bevestigLabel="Ja, verwijder" onBevestig={() => deleteUser(user.ha_user_id)} className="text-urgent hover:underline" />}
                   </div>
                 </div>
               )}
             </div>
           ))}
-          {users.length === 0 && <p className="py-4 text-center text-gray-500 text-sm italic">Nog geen medewerkers</p>}
+          {users.length === 0 && <p className="py-4 text-center text-ink-45 text-sm italic">Nog geen medewerkers</p>}
         </div>
       )}
     </Section>
@@ -514,7 +514,7 @@ function ZwembadConfigPanel() {
       <select
         value={value ?? ""}
         onChange={(e) => setField(poolId, field as string, e.target.value)}
-        className="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-300"
+        className="w-full mt-1 border rounded-lg px-3 py-2 text-sm bg-paper-raised focus:outline-none focus:ring-2 focus:ring-brand"
       >
         <option value="">— Geen herhalende taak gekoppeld —</option>
         {templates
@@ -536,7 +536,7 @@ function ZwembadConfigPanel() {
     } finally { setSaving(null); }
   }
 
-  if (loading) return <p className="text-gray-400 text-sm">Laden...</p>;
+  if (loading) return <p className="text-ink-45 text-sm">Laden...</p>;
 
   return (
     <>
@@ -547,59 +547,59 @@ function ZwembadConfigPanel() {
           <Section key={cfg.pool_id} title={`${cfg.label} — configuratie`}>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Naam</label>
+                <label className="block text-sm font-medium text-ink-70 mb-1">Naam</label>
                 <input type="text" value={vals.label ?? ""} onChange={(e) => setField(cfg.pool_id, "label", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
+                <label className="block text-sm font-medium text-ink-70 mb-1">
                   {isZwembad ? "NFC tag ID — filter links" : "NFC tag ID — filter"}
                 </label>
                 <input type="text" value={vals.filter_nfc_tag_id ?? ""} placeholder="bijv. 04:A2:F3:1A:..."
                   onChange={(e) => setField(cfg.pool_id, "filter_nfc_tag_id", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand" />
                 <TemplateSelect poolId={cfg.pool_id} field="filter_template_id" value={vals.filter_template_id} />
               </div>
               {isZwembad && (
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">NFC tag ID — filter rechts</label>
+                  <label className="block text-sm font-medium text-ink-70 mb-1">NFC tag ID — filter rechts</label>
                   <input type="text" value={vals.filter_nfc_tag_id_r ?? ""} placeholder="bijv. 04:B7:E1:2C:..."
                     onChange={(e) => setField(cfg.pool_id, "filter_nfc_tag_id_r", e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                    className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand" />
                   <TemplateSelect poolId={cfg.pool_id} field="filter_template_id_r" value={vals.filter_template_id_r} />
                 </div>
               )}
-              <div className="pt-3 mt-1 border-t border-gray-100">
-                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">Chemicaliën</p>
+              <div className="pt-3 mt-1 border-t border-ink-6">
+                <p className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-2">Chemicaliën</p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">NFC tag ID — Chloor tank vervangen</label>
+                <label className="block text-sm font-medium text-ink-70 mb-1">NFC tag ID — Chloor tank vervangen</label>
                 <input type="text" value={vals.chloor_nfc_tag_id ?? ""} placeholder="bijv. 04:C8:D2:3E:..."
                   onChange={(e) => setField(cfg.pool_id, "chloor_nfc_tag_id", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand" />
                 <TemplateSelect poolId={cfg.pool_id} field="chloor_template_id" value={vals.chloor_template_id} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">NFC tag ID — Zuur tank vervangen</label>
+                <label className="block text-sm font-medium text-ink-70 mb-1">NFC tag ID — Zuur tank vervangen</label>
                 <input type="text" value={vals.zuur_nfc_tag_id ?? ""} placeholder="bijv. 04:D9:E3:4F:..."
                   onChange={(e) => setField(cfg.pool_id, "zuur_nfc_tag_id", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand" />
                 <TemplateSelect poolId={cfg.pool_id} field="zuur_template_id" value={vals.zuur_template_id} />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">NFC tag ID — Vlokmiddel bijgevuld</label>
+                <label className="block text-sm font-medium text-ink-70 mb-1">NFC tag ID — Vlokmiddel bijgevuld</label>
                 <input type="text" value={vals.vlokmiddel_nfc_tag_id ?? ""} placeholder="bijv. 04:EA:F4:50:..."
                   onChange={(e) => setField(cfg.pool_id, "vlokmiddel_nfc_tag_id", e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-blue-300" />
+                  className="w-full border rounded-lg px-3 py-2 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-brand" />
                 <TemplateSelect poolId={cfg.pool_id} field="vlokmiddel_template_id" value={vals.vlokmiddel_template_id} />
               </div>
             </div>
             <div className="flex items-center gap-3">
               <button onClick={() => handleSave(cfg.pool_id)} disabled={saving === cfg.pool_id}
-                className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+                className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50">
                 {saving === cfg.pool_id ? "Opslaan..." : "Opslaan"}
               </button>
-              {success === cfg.pool_id && <span className="text-sm text-green-600">✓ Opgeslagen</span>}
+              {success === cfg.pool_id && <span className="text-sm text-done">✓ Opgeslagen</span>}
             </div>
           </Section>
         );
@@ -629,25 +629,25 @@ function ZwembadImportPanel() {
 
   return (
     <Section title="CSV importeren">
-      <p className="text-sm text-gray-500">Importeer historische metingen uit een CSV-bestand (;-gescheiden). Duplicaten worden overgeslagen.</p>
+      <p className="text-sm text-ink-45">Importeer historische metingen uit een CSV-bestand (;-gescheiden). Duplicaten worden overgeslagen.</p>
       <div className="flex gap-3 items-end flex-wrap">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Bad</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Bad</label>
           <select value={poolId} onChange={(e) => setPoolId(e.target.value)} className="border rounded-lg px-3 py-2 text-sm">
             <option value="wellness">Wellness</option>
             <option value="zwembad">Zwembad</option>
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">CSV-bestand</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">CSV-bestand</label>
           <input type="file" accept=".csv,.txt" className="text-sm" onChange={(e) => setFile(e.target.files?.[0] || null)} />
         </div>
         <button onClick={handleImport} disabled={!file || importing}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50">
           {importing ? "Importeren..." : "Importeren"}
         </button>
       </div>
-      {result && <p className={`text-sm ${result.includes("mislukt") ? "text-red-600" : "text-green-700"}`}>{result}</p>}
+      {result && <p className={`text-sm ${result.includes("mislukt") ? "text-urgent" : "text-done"}`}>{result}</p>}
     </Section>
   );
 }
@@ -669,12 +669,12 @@ function ZwembadResetPanel() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow p-5 border border-red-200 space-y-4">
-      <h2 className="font-bold text-base text-red-700">Logboek resetten</h2>
-      <p className="text-sm text-gray-500">Verwijder alle metingen uit het logboek. Dit kan niet ongedaan gemaakt worden.</p>
+    <div className="bg-paper-raised rounded-2xl shadow p-5 border border-urgent space-y-4">
+      <h2 className="font-bold text-base text-urgent">Logboek resetten</h2>
+      <p className="text-sm text-ink-45">Verwijder alle metingen uit het logboek. Dit kan niet ongedaan gemaakt worden.</p>
       <div className="flex gap-3 items-end flex-wrap">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Bad</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Bad</label>
           <select value={poolId} onChange={(e) => { setPoolId(e.target.value); setConfirming(false); }} className="border rounded-lg px-3 py-2 text-sm">
             <option value="">Alle baden</option>
             <option value="wellness">Wellness</option>
@@ -682,18 +682,18 @@ function ZwembadResetPanel() {
           </select>
         </div>
         {!confirming ? (
-          <button onClick={() => setConfirming(true)} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700">Resetten</button>
+          <button onClick={() => setConfirming(true)} className="bg-urgent text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-urgent">Resetten</button>
         ) : (
           <div className="flex gap-2 items-center">
-            <span className="text-red-600 text-sm font-medium">Weet je het zeker?</span>
-            <button onClick={handleReset} disabled={deleting} className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50">
+            <span className="text-urgent text-sm font-medium">Weet je het zeker?</span>
+            <button onClick={handleReset} disabled={deleting} className="bg-urgent text-white px-4 py-2 rounded-lg text-sm hover:bg-urgent disabled:opacity-50">
               {deleting ? "Verwijderen..." : "Ja, verwijder alles"}
             </button>
-            <button onClick={() => setConfirming(false)} className="border px-4 py-2 rounded-lg text-sm hover:bg-gray-50">Annuleren</button>
+            <button onClick={() => setConfirming(false)} className="border px-4 py-2 rounded-lg text-sm hover:bg-ink-6">Annuleren</button>
           </div>
         )}
       </div>
-      {result && <p className={`text-sm ${result.includes("mislukt") ? "text-red-600" : "text-orange-600"}`}>{result}</p>}
+      {result && <p className={`text-sm ${result.includes("mislukt") ? "text-urgent" : "text-high"}`}>{result}</p>}
     </div>
   );
 }
@@ -728,27 +728,27 @@ function FietsenZichtbaarheidPanel() {
     } finally { setSaving(false); }
   }
 
-  if (loading) return <p className="text-gray-400 text-sm">Laden...</p>;
+  if (loading) return <p className="text-ink-45 text-sm">Laden...</p>;
 
   return (
     <Section title="Module-zichtbaarheid">
-      <p className="text-sm text-gray-500">Bepaal welke medewerkers de fietsenmodule in het menu kunnen zien.</p>
+      <p className="text-sm text-ink-45">Bepaal welke medewerkers de fietsenmodule in het menu kunnen zien.</p>
       <div className="space-y-2">
         {BIKES_ROLES_OPTIONS.map((opt) => (
           <label key={opt.value} className={`flex items-start gap-3 p-3 rounded-xl border-2 cursor-pointer transition-colors ${
-            currentRoles === opt.value ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
+            currentRoles === opt.value ? "border-blue-500 bg-ink-6" : "border-ink-12 hover:border-ink-12"
           }`}>
             <input type="radio" name="bikes_roles" value={opt.value} checked={currentRoles === opt.value}
               onChange={() => save(opt.value)} disabled={saving} className="mt-0.5 accent-blue-600" />
             <div>
               <p className="font-medium text-sm">{opt.label}</p>
-              <p className="text-xs text-gray-500">{opt.description}</p>
+              <p className="text-xs text-ink-45">{opt.description}</p>
             </div>
           </label>
         ))}
       </div>
-      {saving && <p className="text-sm text-gray-400">Opslaan...</p>}
-      {saved && <p className="text-sm text-green-600">✓ Opgeslagen</p>}
+      {saving && <p className="text-sm text-ink-45">Opslaan...</p>}
+      {saved && <p className="text-sm text-done">✓ Opgeslagen</p>}
     </Section>
   );
 }
@@ -796,8 +796,8 @@ function FietsenExcelPanel() {
       <div className="space-y-4">
         {/* Import */}
         <div>
-          <p className="text-sm font-medium text-gray-700 mb-1">Importeren</p>
-          <p className="text-sm text-gray-500 mb-3">
+          <p className="text-sm font-medium text-ink-70 mb-1">Importeren</p>
+          <p className="text-sm text-ink-45 mb-3">
             Upload een Excel-bestand in het Fietsverhuur-formaat. Bestaande reserveringen (zelfde fiets + datums)
             worden automatisch overgeslagen — je kunt het bestand meerdere keren uploaden.
           </p>
@@ -805,38 +805,38 @@ function FietsenExcelPanel() {
             <input ref={fileInputRef} type="file" accept=".xlsx" onChange={handleUpload} className="hidden" id="excel-upload" />
             <label
               htmlFor="excel-upload"
-              className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${importing ? "opacity-50 pointer-events-none" : ""}`}
+              className={`cursor-pointer bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-colors ${importing ? "opacity-50 pointer-events-none" : ""}`}
             >
               {importing ? "Importeren..." : "📂 Excel uploaden"}
             </label>
           </div>
           {importResult && (
-            <div className="mt-3 bg-green-50 rounded-lg p-3 text-sm text-green-800 space-y-1">
+            <div className="mt-3 bg-done-soft rounded-lg p-3 text-sm text-done space-y-1">
               <p>✓ <strong>{importResult.imported}</strong> reserveringen geïmporteerd.</p>
               {importResult.bikes_created > 0 && (
-                <p className="text-xs text-blue-700">
+                <p className="text-xs text-brand">
                   🚲 {importResult.bikes_created} nieuwe fiets{importResult.bikes_created !== 1 ? "en" : ""} aangemaakt vanuit de Excel.
                 </p>
               )}
               {importResult.skipped_duplicates > 0 && (
-                <p className="text-xs text-gray-500">
+                <p className="text-xs text-ink-45">
                   {importResult.skipped_duplicates} duplicaten overgeslagen.
                 </p>
               )}
               {importResult.errors.length > 0 && (
-                <ul className="mt-1 text-xs text-orange-700 space-y-0.5">
+                <ul className="mt-1 text-xs text-high space-y-0.5">
                   {importResult.errors.map((e, i) => <li key={i}>⚠ {e}</li>)}
                 </ul>
               )}
             </div>
           )}
-          {importError && <p className="mt-2 text-sm text-red-600">{importError}</p>}
+          {importError && <p className="mt-2 text-sm text-urgent">{importError}</p>}
         </div>
 
         {/* Divider */}
-        <div className="border-t border-gray-100 pt-4">
-          <p className="text-sm font-medium text-gray-700 mb-1">Exporteren</p>
-          <p className="text-sm text-gray-500 mb-3">
+        <div className="border-t border-ink-6 pt-4">
+          <p className="text-sm font-medium text-ink-70 mb-1">Exporteren</p>
+          <p className="text-sm text-ink-45 mb-3">
             Download alle reserveringen (verleden + toekomst) als Excel-bestand.
           </p>
           <button
@@ -872,39 +872,39 @@ function FietsenResetPanel() {
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow p-5 border border-red-200 space-y-4">
-      <h2 className="font-bold text-base text-red-700">Database resetten</h2>
-      <p className="text-sm text-gray-500">
+    <div className="bg-paper-raised rounded-2xl shadow p-5 border border-urgent space-y-4">
+      <h2 className="font-bold text-base text-urgent">Database resetten</h2>
+      <p className="text-sm text-ink-45">
         Verwijdert <strong>alle</strong> fietsdata: reserveringen, fietsen en fietstypes.
         Dit kan <strong>niet</strong> ongedaan worden gemaakt.
       </p>
       {!confirming ? (
         <button
           onClick={() => setConfirming(true)}
-          className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-700"
+          className="bg-urgent text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-urgent"
         >
           🗑 Database resetten
         </button>
       ) : (
         <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-red-600 text-sm font-medium">Weet je het zeker? Dit verwijdert alles.</span>
+          <span className="text-urgent text-sm font-medium">Weet je het zeker? Dit verwijdert alles.</span>
           <button
             onClick={handleReset}
             disabled={resetting}
-            className="bg-red-600 text-white px-4 py-2 rounded-lg text-sm hover:bg-red-700 disabled:opacity-50"
+            className="bg-urgent text-white px-4 py-2 rounded-lg text-sm hover:bg-urgent disabled:opacity-50"
           >
             {resetting ? "Verwijderen..." : "Ja, alles verwijderen"}
           </button>
           <button
             onClick={() => setConfirming(false)}
-            className="border px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+            className="border px-4 py-2 rounded-lg text-sm hover:bg-ink-6"
           >
             Annuleren
           </button>
         </div>
       )}
       {result && (
-        <p className={`text-sm ${result.ok ? "text-orange-600" : "text-red-600"}`}>
+        <p className={`text-sm ${result.ok ? "text-high" : "text-urgent"}`}>
           {result.ok ? "✓ " : "✗ "}{result.text}
         </p>
       )}
@@ -921,20 +921,20 @@ function ColorRow({
 }: { label: string; value: string; onChange: (v: string) => void }) {
   return (
     <div className="flex items-center gap-3">
-      <span className="text-sm text-gray-600 w-32 shrink-0">{label}</span>
+      <span className="text-sm text-ink-70 w-32 shrink-0">{label}</span>
       <input
         type="color"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="w-9 h-9 rounded cursor-pointer border border-gray-200 shrink-0"
+        className="w-9 h-9 rounded cursor-pointer border border-ink-12 shrink-0"
       />
       <input
         type="text"
         value={value}
         onChange={(e) => onChange(e.target.value)}
-        className="border rounded-lg px-3 py-1.5 text-sm font-mono w-28 focus:outline-none focus:ring-2 focus:ring-blue-300"
+        className="border rounded-lg px-3 py-1.5 text-sm font-mono w-28 focus:outline-none focus:ring-2 focus:ring-brand"
       />
-      <div className="flex-1 h-9 rounded-lg border border-gray-200" style={{ backgroundColor: value }} />
+      <div className="flex-1 h-9 rounded-lg border border-ink-12" style={{ backgroundColor: value }} />
     </div>
   );
 }
@@ -1033,7 +1033,7 @@ function HuisstijlPanel() {
     <div className="space-y-5">
       {/* ── Kleuren ── */}
       <Section title="Kleuren">
-        <p className="text-sm text-gray-500 mb-3">
+        <p className="text-sm text-ink-45 mb-3">
           Stel de kleuren in voor de navigatiebalk, knoppen en achtergrond.
         </p>
         <div className="space-y-3">
@@ -1044,11 +1044,11 @@ function HuisstijlPanel() {
           <button
             onClick={saveColors}
             disabled={savingColors}
-            className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+            className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
           >
             {savingColors ? "Opslaan..." : "Kleuren opslaan"}
           </button>
-          {savedColors && <span className="text-sm text-green-600">✓ Opgeslagen</span>}
+          {savedColors && <span className="text-sm text-done">✓ Opgeslagen</span>}
         </div>
       </Section>
 
@@ -1057,13 +1057,13 @@ function HuisstijlPanel() {
         <div className="flex gap-2 mb-4">
           <button
             onClick={() => setBgMode("color")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${bgMode === "color" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"}`}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${bgMode === "color" ? "bg-brand text-white border-brand" : "bg-paper-raised text-ink-70 border-ink-12 hover:border-ink-25"}`}
           >
             Kleur
           </button>
           <button
             onClick={() => setBgMode("image")}
-            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${bgMode === "image" ? "bg-blue-600 text-white border-blue-600" : "bg-white text-gray-600 border-gray-300 hover:border-gray-400"}`}
+            className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${bgMode === "image" ? "bg-brand text-white border-brand" : "bg-paper-raised text-ink-70 border-ink-12 hover:border-ink-25"}`}
           >
             Afbeelding
           </button>
@@ -1075,7 +1075,7 @@ function HuisstijlPanel() {
             <button
               onClick={saveColors}
               disabled={savingColors}
-              className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+              className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
             >
               {savingColors ? "Opslaan..." : "Opslaan"}
             </button>
@@ -1085,12 +1085,12 @@ function HuisstijlPanel() {
         {bgMode === "image" && (
           <div className="space-y-3">
             {bgImage && (
-              <div className="relative w-full h-28 rounded-lg overflow-hidden border border-gray-200">
+              <div className="relative w-full h-28 rounded-lg overflow-hidden border border-ink-12">
                 <img src={bgImage} alt="Achtergrond" className="w-full h-full object-cover" />
                 <button
                   onClick={removeBgImage}
                   disabled={bgUploading}
-                  className="absolute top-2 right-2 bg-red-600 text-white text-xs px-2 py-1 rounded hover:bg-red-700 disabled:opacity-50"
+                  className="absolute top-2 right-2 bg-urgent text-white text-xs px-2 py-1 rounded hover:bg-urgent disabled:opacity-50"
                 >
                   Verwijderen
                 </button>
@@ -1101,17 +1101,17 @@ function HuisstijlPanel() {
                 onChange={handleBgUpload} className="hidden" id="bg-upload" />
               <label
                 htmlFor="bg-upload"
-                className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${bgUploading ? "opacity-50 pointer-events-none" : ""}`}
+                className={`cursor-pointer bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-colors ${bgUploading ? "opacity-50 pointer-events-none" : ""}`}
               >
                 {bgUploading ? "Bezig..." : "📂 Achtergrond uploaden"}
               </label>
-              <span className="text-xs text-gray-400">PNG, JPEG of WebP · max 2 MB</span>
+              <span className="text-xs text-ink-45">PNG, JPEG of WebP · max 2 MB</span>
             </div>
           </div>
         )}
 
         {bgMsg && (
-          <p className={`text-sm mt-2 ${bgMsg.type === "ok" ? "text-green-700" : "text-red-600"}`}>
+          <p className={`text-sm mt-2 ${bgMsg.type === "ok" ? "text-done" : "text-urgent"}`}>
             {bgMsg.type === "ok" ? "✓ " : "✗ "}{bgMsg.text}
           </p>
         )}
@@ -1119,13 +1119,13 @@ function HuisstijlPanel() {
 
       {/* ── Logo ── */}
       <Section title="Logo">
-        <p className="text-sm text-gray-500">
+        <p className="text-sm text-ink-45">
           Upload een logo (PNG of JPEG, max 500 KB). Verschijnt links bovenin en is op mobiel de menu-knop.
         </p>
         {logo && (
           <div className="flex items-center gap-4">
-            <img src={logo} alt="Huidig logo" className="w-16 h-16 object-contain rounded-lg border border-gray-200 bg-gray-50 p-1" />
-            <span className="text-sm text-gray-500">Huidig logo</span>
+            <img src={logo} alt="Huidig logo" className="w-16 h-16 object-contain rounded-lg border border-ink-12 bg-ink-6 p-1" />
+            <span className="text-sm text-ink-45">Huidig logo</span>
           </div>
         )}
         <div className="flex flex-wrap items-center gap-3">
@@ -1133,14 +1133,14 @@ function HuisstijlPanel() {
             onChange={handleLogoUpload} className="hidden" id="logo-upload" />
           <label
             htmlFor="logo-upload"
-            className={`cursor-pointer bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors ${logoUploading ? "opacity-50 pointer-events-none" : ""}`}
+            className={`cursor-pointer bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-colors ${logoUploading ? "opacity-50 pointer-events-none" : ""}`}
           >
             {logoUploading ? "Uploaden..." : "📂 Logo uploaden"}
           </label>
-          <span className="text-xs text-gray-400">PNG, JPEG of WebP · max 500 KB</span>
+          <span className="text-xs text-ink-45">PNG, JPEG of WebP · max 500 KB</span>
         </div>
         {logoMsg && (
-          <p className={`text-sm ${logoMsg.type === "ok" ? "text-green-700" : "text-red-600"}`}>
+          <p className={`text-sm ${logoMsg.type === "ok" ? "text-done" : "text-urgent"}`}>
             {logoMsg.type === "ok" ? "✓ " : "✗ "}{logoMsg.text}
           </p>
         )}
@@ -1211,7 +1211,6 @@ function LoginPaginaPanel() {
   }
 
   async function resetAll() {
-    if (!confirm("Alle eigen loginpagina-instellingen wissen en de algemene huisstijl volgen?")) return;
     setSaving(true);
     try {
       await loginBrandingApi.update({ title: null, subtitle: null, footer: null, btn_color: null, bg_color: null });
@@ -1260,26 +1259,26 @@ function LoginPaginaPanel() {
 
   return (
     <Section title="Loginpagina">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-ink-45">
         Teksten, kleuren, logo en achtergrond van de standalone loginpagina. Velden die je hier
         niet aanpast volgen automatisch de algemene huisstijl hierboven.{" "}
-        <a href="#/login" className="text-blue-600 hover:underline">Bekijk de loginpagina →</a>
+        <a href="#/login" className="text-brand hover:underline">Bekijk de loginpagina →</a>
       </p>
 
       {/* Teksten */}
       <div className="space-y-2">
-        <label className="block text-sm text-gray-600">
-          Titel {inherited("title") && <span className="text-xs text-gray-400">(standaard)</span>}
+        <label className="block text-sm text-ink-70">
+          Titel {inherited("title") && <span className="text-xs text-ink-45">(standaard)</span>}
           <input value={title} onChange={(e) => setTitle(e.target.value)}
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
         </label>
-        <label className="block text-sm text-gray-600">
-          Ondertitel {inherited("subtitle") && <span className="text-xs text-gray-400">(standaard)</span>}
+        <label className="block text-sm text-ink-70">
+          Ondertitel {inherited("subtitle") && <span className="text-xs text-ink-45">(standaard)</span>}
           <input value={subtitle} onChange={(e) => setSubtitle(e.target.value)}
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
         </label>
-        <label className="block text-sm text-gray-600">
-          Voettekst {inherited("footer") && <span className="text-xs text-gray-400">(standaard)</span>}
+        <label className="block text-sm text-ink-70">
+          Voettekst {inherited("footer") && <span className="text-xs text-ink-45">(standaard)</span>}
           <input value={footer} onChange={(e) => setFooter(e.target.value)}
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm" />
         </label>
@@ -1294,17 +1293,17 @@ function LoginPaginaPanel() {
       {/* Logo */}
       <div className="flex flex-wrap items-center gap-3 pt-1">
         {loaded?.logo && (
-          <img src={loaded.logo} alt="Login logo" className="w-12 h-12 object-contain rounded-lg border border-gray-200 bg-gray-50 p-1" />
+          <img src={loaded.logo} alt="Login logo" className="w-12 h-12 object-contain rounded-lg border border-ink-12 bg-ink-6 p-1" />
         )}
         <input ref={logoInputRef} type="file" accept="image/png,image/jpeg,image/webp"
           onChange={(e) => handleUpload(e, "logo")} className="hidden" id="login-logo-upload" />
         <label htmlFor="login-logo-upload"
-          className={`cursor-pointer border border-gray-300 px-3 py-1.5 rounded-lg text-sm hover:border-gray-400 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+          className={`cursor-pointer border border-ink-12 px-3 py-1.5 rounded-lg text-sm hover:border-ink-25 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
           📂 Eigen login-logo
         </label>
         {loaded?.custom.logo && (
           <button onClick={() => handleDelete("logo")} disabled={uploading}
-            className="text-sm text-red-600 hover:underline disabled:opacity-50">
+            className="text-sm text-urgent hover:underline disabled:opacity-50">
             Logo verwijderen
           </button>
         )}
@@ -1313,17 +1312,17 @@ function LoginPaginaPanel() {
       {/* Achtergrondafbeelding */}
       <div className="flex flex-wrap items-center gap-3">
         {loaded?.bg_image && loaded?.custom.bg_image && (
-          <img src={loaded.bg_image} alt="Login achtergrond" className="w-20 h-12 object-cover rounded-lg border border-gray-200" />
+          <img src={loaded.bg_image} alt="Login achtergrond" className="w-20 h-12 object-cover rounded-lg border border-ink-12" />
         )}
         <input ref={bgInputRef} type="file" accept="image/png,image/jpeg,image/webp"
           onChange={(e) => handleUpload(e, "background")} className="hidden" id="login-bg-upload" />
         <label htmlFor="login-bg-upload"
-          className={`cursor-pointer border border-gray-300 px-3 py-1.5 rounded-lg text-sm hover:border-gray-400 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
+          className={`cursor-pointer border border-ink-12 px-3 py-1.5 rounded-lg text-sm hover:border-ink-25 ${uploading ? "opacity-50 pointer-events-none" : ""}`}>
           📂 Eigen achtergrondafbeelding
         </label>
         {loaded?.custom.bg_image && (
           <button onClick={() => handleDelete("background")} disabled={uploading}
-            className="text-sm text-red-600 hover:underline disabled:opacity-50">
+            className="text-sm text-urgent hover:underline disabled:opacity-50">
             Achtergrond verwijderen
           </button>
         )}
@@ -1331,15 +1330,19 @@ function LoginPaginaPanel() {
 
       <div className="flex flex-wrap items-center gap-3 pt-2">
         <button onClick={save} disabled={saving}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50">
+          className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50">
           {saving ? "Opslaan..." : "Opslaan"}
         </button>
-        <button onClick={resetAll} disabled={saving}
-          className="border px-4 py-2 rounded-lg text-sm text-gray-600 hover:border-gray-400 disabled:opacity-50">
-          Herstel algemene huisstijl
-        </button>
+        <BevestigKnop
+          label="Herstel algemene huisstijl"
+          vraag="Alle eigen loginpagina-instellingen wissen?"
+          bevestigLabel="Ja, wissen"
+          onBevestig={resetAll}
+          disabled={saving}
+          className="border px-4 py-2 rounded-lg text-sm text-ink-70 hover:border-ink-25 disabled:opacity-50"
+        />
         {msg && (
-          <span className={`text-sm ${msg.type === "ok" ? "text-green-700" : "text-red-600"}`}>
+          <span className={`text-sm ${msg.type === "ok" ? "text-done" : "text-urgent"}`}>
             {msg.type === "ok" ? "✓ " : "✗ "}{msg.text}
           </span>
         )}
@@ -1396,7 +1399,6 @@ function KennisbotAiPanel() {
   }
 
   async function clearKey() {
-    if (!confirm("De opgeslagen API-sleutel verwijderen?")) return;
     const r = await knowledgeApi.updateAiSettings({ api_key: "   " });
     setSettings(r.data);
     setMsg({ type: "ok", text: "Sleutel verwijderd." });
@@ -1414,7 +1416,7 @@ function KennisbotAiPanel() {
 
   return (
     <Section title="AI / Kennisbot">
-      <p className="text-sm text-gray-600">
+      <p className="text-sm text-ink-70">
         Koppel Claude om vragen te laten beantwoorden uit je documenten. Zonder sleutel
         valt de kennisbot terug op trefwoord-zoeken. De bot put altijd alleen uit jouw
         eigen kennis en verzint nooit antwoorden. Optioneel mag de bot óók zoeken op
@@ -1422,10 +1424,10 @@ function KennisbotAiPanel() {
       </p>
 
       {settings && (
-        <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+        <div className="flex items-center justify-between bg-ink-6 rounded-lg p-3">
           <div>
-            <p className="text-sm font-medium text-gray-800">AI-modus</p>
-            <p className="text-xs text-gray-500">
+            <p className="text-sm font-medium text-ink">AI-modus</p>
+            <p className="text-xs text-ink-45">
               {settings.has_key
                 ? settings.key_from_addon
                   ? "Sleutel actief (via addon-optie)"
@@ -1447,32 +1449,35 @@ function KennisbotAiPanel() {
       )}
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-gray-700">Claude API-sleutel</label>
+        <label className="text-sm font-medium text-ink-70">Claude API-sleutel</label>
         <input
           type="password"
           value={apiKey}
           onChange={(e) => setApiKey(e.target.value)}
           placeholder={settings?.has_key ? "•••••••• (laat leeg om te behouden)" : "sk-ant-..."}
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+          className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm"
           autoComplete="off"
         />
-        <p className="text-xs text-gray-400">
+        <p className="text-xs text-ink-45">
           Een sleutel haal je op bij console.anthropic.com. Wordt versleuteld bewaard en
           nooit teruggetoond.
         </p>
         {settings?.has_key && !settings.key_from_addon && (
-          <button onClick={clearKey} className="text-xs text-red-600 hover:underline">
-            Sleutel verwijderen
-          </button>
+          <BevestigKnop
+            label="Sleutel verwijderen"
+            vraag="De opgeslagen API-sleutel verwijderen?"
+            onBevestig={clearKey}
+            className="text-xs text-urgent hover:underline"
+          />
         )}
       </div>
 
       <div className="space-y-1.5">
-        <label className="text-sm font-medium text-gray-700">Model</label>
+        <label className="text-sm font-medium text-ink-70">Model</label>
         <select
           value={model}
           onChange={(e) => setModel(e.target.value)}
-          className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+          className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm bg-paper-raised"
         >
           {AI_MODELS.map((m) => (
             <option key={m.id} value={m.id}>{m.label}</option>
@@ -1483,10 +1488,10 @@ function KennisbotAiPanel() {
 
       {settings && (
         <div className="space-y-1.5">
-          <div className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+          <div className="flex items-center justify-between bg-ink-6 rounded-lg p-3">
             <div>
-              <p className="text-sm font-medium text-gray-800">Zoeken op websites</p>
-              <p className="text-xs text-gray-500">
+              <p className="text-sm font-medium text-ink">Zoeken op websites</p>
+              <p className="text-xs text-ink-45">
                 {settings.web_search_enabled
                   ? "De bot mag uitsluitend op onderstaande websites zoeken"
                   : "De bot zoekt alleen in je eigen kennisbank"}
@@ -1503,15 +1508,15 @@ function KennisbotAiPanel() {
               <span className="text-sm">{settings.web_search_enabled ? "Aan" : "Uit"}</span>
             </label>
           </div>
-          <label className="text-sm font-medium text-gray-700">Toegestane websites</label>
+          <label className="text-sm font-medium text-ink-70">Toegestane websites</label>
           <textarea
             value={webDomains}
             onChange={(e) => setWebDomains(e.target.value)}
             rows={4}
             placeholder={"Eén website per regel, met daarachter waarvoor die dient, bijv.:\nmiele.nl — handleidingen keukenapparatuur\nsupport.kassaleverancier.com — storingen kassasysteem"}
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm font-mono"
+            className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm font-mono"
           />
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-ink-45">
             Eén website per regel. Zet er (na een spatie of streepje) bij waarvoor de
             website bedoeld is — de bot gebruikt die omschrijving om bij een vraag de
             juiste website te kiezen. De bot zoekt alléén op deze websites, en alleen
@@ -1525,12 +1530,12 @@ function KennisbotAiPanel() {
         <button
           onClick={save}
           disabled={saving}
-          className="bg-blue-600 text-white px-5 py-2 rounded-lg text-sm hover:bg-blue-700 disabled:opacity-50"
+          className="bg-brand text-white px-5 py-2 rounded-lg text-sm hover:opacity-90 disabled:opacity-50"
         >
           {saving ? "Opslaan..." : "Opslaan"}
         </button>
         {msg && (
-          <span className={`text-sm ${msg.type === "ok" ? "text-green-600" : "text-red-600"}`}>
+          <span className={`text-sm ${msg.type === "ok" ? "text-done" : "text-urgent"}`}>
             {msg.text}
           </span>
         )}
@@ -1596,9 +1601,9 @@ function BetaDataPanel({ status, onCopied }: { status: BetaStatus; onCopied: () 
   }
 
   return (
-    <div className="bg-white rounded-2xl shadow p-5 border border-amber-300 space-y-4">
-      <h2 className="font-bold text-base text-amber-800">Productiedata kopiëren</h2>
-      <p className="text-sm text-gray-500">
+    <div className="bg-paper-raised rounded-2xl shadow p-5 border border-high space-y-4">
+      <h2 className="font-bold text-base text-high">Productiedata kopiëren</h2>
+      <p className="text-sm text-ink-45">
         Haalt een verse kopie van <strong>alle</strong> data uit de productie-addon:
         tickets, herhaaltaken, medewerkers, kennisbank, fietsen, zwembadlogboek en
         de bijbehorende foto's. Alles wat nu in deze beta staat wordt daarbij
@@ -1606,26 +1611,26 @@ function BetaDataPanel({ status, onCopied }: { status: BetaStatus; onCopied: () 
         verandert niet.
       </p>
 
-      <dl className="text-sm bg-gray-50 rounded-xl p-4 space-y-1.5">
+      <dl className="text-sm bg-ink-6 rounded-xl p-4 space-y-1.5">
         <div className="flex justify-between gap-4">
-          <dt className="text-gray-500">Productiedatabase</dt>
+          <dt className="text-ink-45">Productiedatabase</dt>
           <dd className="font-medium text-right">
             {status.source.available ? (
               <>
                 {bytesLabel(status.source.size_bytes)}
                 {status.source.modified_at && (
-                  <span className="text-gray-400 font-normal">
+                  <span className="text-ink-45 font-normal">
                     {" · "}gewijzigd {sessieGeleden(status.source.modified_at)}
                   </span>
                 )}
               </>
             ) : (
-              <span className="text-red-600">niet gevonden</span>
+              <span className="text-urgent">niet gevonden</span>
             )}
           </dd>
         </div>
         <div className="flex justify-between gap-4">
-          <dt className="text-gray-500">Laatste kopie</dt>
+          <dt className="text-ink-45">Laatste kopie</dt>
           <dd className="font-medium text-right">
             {status.last_copy_at ? sessieGeleden(status.last_copy_at) : "nog nooit"}
           </dd>
@@ -1633,10 +1638,10 @@ function BetaDataPanel({ status, onCopied }: { status: BetaStatus; onCopied: () 
       </dl>
 
       {!status.source.available ? (
-        <p className="text-sm text-red-600">
+        <p className="text-sm text-urgent">
           De database van de productie-addon is niet zichtbaar. Controleer of de
           gewone Hotel Ticket System addon geïnstalleerd is en of deze beta-addon
-          <code className="mx-1 bg-gray-100 px-1 rounded">config:rw</code> in zijn
+          <code className="mx-1 bg-ink-6 px-1 rounded">config:rw</code> in zijn
           mapping heeft.
         </p>
       ) : !confirming ? (
@@ -1648,7 +1653,7 @@ function BetaDataPanel({ status, onCopied }: { status: BetaStatus; onCopied: () 
         </button>
       ) : (
         <div className="flex flex-wrap gap-2 items-center">
-          <span className="text-amber-700 text-sm font-medium">
+          <span className="text-high text-sm font-medium">
             Weet je het zeker? Alle huidige beta-data verdwijnt.
           </span>
           <button
@@ -1660,19 +1665,19 @@ function BetaDataPanel({ status, onCopied }: { status: BetaStatus; onCopied: () 
           </button>
           <button
             onClick={() => setConfirming(false)}
-            className="border px-4 py-2 rounded-lg text-sm hover:bg-gray-50"
+            className="border px-4 py-2 rounded-lg text-sm hover:bg-ink-6"
           >
             Annuleren
           </button>
         </div>
       )}
 
-      {error && <p className="text-sm text-red-600">✗ {error}</p>}
+      {error && <p className="text-sm text-urgent">✗ {error}</p>}
 
       {result && (
         <div className="space-y-2">
-          <p className="text-sm text-green-700">✓ {result.message}</p>
-          <ul className="text-sm text-gray-600 grid grid-cols-2 gap-x-4 gap-y-0.5">
+          <p className="text-sm text-done">✓ {result.message}</p>
+          <ul className="text-sm text-ink-70 grid grid-cols-2 gap-x-4 gap-y-0.5">
             {Object.entries(result.tables).map(([table, count]) => (
               <li key={table} className="flex justify-between gap-2">
                 <span className="truncate">{TABEL_LABELS[table] ?? table}</span>
@@ -1684,7 +1689,7 @@ function BetaDataPanel({ status, onCopied }: { status: BetaStatus; onCopied: () 
               <span className="font-medium tabular-nums">{result.photos}</span>
             </li>
           </ul>
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-ink-45">
             Ververs de pagina om overal met de gekopieerde data te werken.
           </p>
         </div>
@@ -1696,14 +1701,14 @@ function BetaDataPanel({ status, onCopied }: { status: BetaStatus; onCopied: () 
 function BetaPanel({ status }: { status: BetaStatus }) {
   return (
     <Section title="Over deze omgeving">
-      <p className="text-sm text-gray-500">
+      <p className="text-sm text-ink-45">
         Dit is de <strong>beta-omgeving</strong> (versie {status.version}): dezelfde app als
         productie, maar met een eigen database. Wat je hier doet komt nooit in de
         echte administratie terecht.
       </p>
-      <ul className="text-sm text-gray-500 list-disc pl-5 space-y-1">
+      <ul className="text-sm text-ink-45 list-disc pl-5 space-y-1">
         <li>Pushmeldingen en e-mails worden <strong>niet</strong> verstuurd</li>
-        <li>De <code className="bg-gray-100 px-1 rounded">sensor.hotel_tickets_*</code> entiteiten in Home Assistant blijven van productie</li>
+        <li>De <code className="bg-ink-6 px-1 rounded">sensor.hotel_tickets_*</code> entiteiten in Home Assistant blijven van productie</li>
         <li>De HA-integratie kan hier niet geïnstalleerd worden</li>
         <li>Herhaaltaken lopen wél — er komen dus vanzelf testtickets bij</li>
       </ul>
@@ -1742,11 +1747,11 @@ export default function Instellingen() {
       <h1 className="text-2xl font-bold mb-6">Instellingen</h1>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto scrollbar-none">
+      <div className="flex gap-1 mb-6 bg-ink-6 p-1 rounded-xl w-fit max-w-full overflow-x-auto scrollbar-none">
         {tabs.map((t) => (
           <button key={t.id} onClick={() => setTab(t.id)}
             className={`flex items-center gap-1.5 px-4 py-1.5 rounded-lg text-sm font-medium transition-colors shrink-0 whitespace-nowrap ${
-              tab === t.id ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === t.id ? "bg-paper-raised shadow text-ink" : "text-ink-45 hover:text-ink-70"
             }`}>
             <span>{t.icon}</span>
             <span>{t.label}</span>
@@ -1787,7 +1792,7 @@ export default function Instellingen() {
         </div>
       )}
       {tab === "kennisbot" && me?.role !== "admin" && (
-        <p className="text-sm text-gray-500">Alleen admins kunnen de kennisbot-instellingen aanpassen.</p>
+        <p className="text-sm text-ink-45">Alleen admins kunnen de kennisbot-instellingen aanpassen.</p>
       )}
 
       {tab === "beta" && beta?.beta_mode && (
@@ -1796,7 +1801,7 @@ export default function Instellingen() {
           {me?.role === "admin" ? (
             <BetaDataPanel status={beta} onCopied={loadBeta} />
           ) : (
-            <p className="text-sm text-gray-500">
+            <p className="text-sm text-ink-45">
               Alleen admins kunnen productiedata naar de beta kopiëren.
             </p>
           )}
@@ -1810,7 +1815,7 @@ export default function Instellingen() {
         </>
       )}
       {tab === "huisstijl" && !isAdmin && (
-        <p className="text-sm text-gray-500">Alleen admins kunnen de huisstijl aanpassen.</p>
+        <p className="text-sm text-ink-45">Alleen admins kunnen de huisstijl aanpassen.</p>
       )}
     </div>
   );

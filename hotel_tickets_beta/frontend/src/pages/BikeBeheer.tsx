@@ -1,12 +1,13 @@
 import { useEffect, useState } from "react";
 import { bikeApi, bikeAdminApi, bikeMaintenanceApi, userApi, formatDateNL, type Bike, type BikeType, type BikeMaintenanceConflict } from "../api/client";
+import { BevestigKnop } from "../components/BevestigKnop";
 
 type Tab = "fietsen" | "types" | "onderhoud" | "balans";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
   available: { label: "Beschikbaar", cls: "bg-green-100 text-green-800" },
   maintenance: { label: "Onderhoud", cls: "bg-orange-100 text-orange-800" },
-  retired: { label: "Buiten gebruik", cls: "bg-gray-100 text-gray-600" },
+  retired: { label: "Buiten gebruik", cls: "bg-ink-6 text-ink-70" },
 };
 
 // ── Onderhoud starten modal ────────────────────────────────────────────────────
@@ -63,12 +64,12 @@ function MaintenanceModal({
 
   return (
     <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
+      <div className="bg-paper-raised rounded-2xl shadow-xl max-w-md w-full p-6 space-y-4">
         <h2 className="text-lg font-bold">🔧 Onderhoud starten — Fiets #{bike.number}</h2>
 
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Startdatum</label>
+            <label className="block text-sm font-medium text-ink-70 mb-1">Startdatum</label>
             <input
               type="date"
               value={form.start_date}
@@ -77,7 +78,7 @@ function MaintenanceModal({
             />
           </div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Verwachte terugkomst</label>
+            <label className="block text-sm font-medium text-ink-70 mb-1">Verwachte terugkomst</label>
             <input
               type="date"
               value={form.expected_end_date}
@@ -88,7 +89,7 @@ function MaintenanceModal({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Reden</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Reden</label>
           <input
             type="text"
             value={form.reason}
@@ -99,7 +100,7 @@ function MaintenanceModal({
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Notities</label>
+          <label className="block text-sm font-medium text-ink-70 mb-1">Notities</label>
           <textarea
             value={form.notes}
             onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
@@ -108,7 +109,7 @@ function MaintenanceModal({
           />
         </div>
 
-        {loading && <p className="text-sm text-gray-400">Reserveringen controleren...</p>}
+        {loading && <p className="text-sm text-ink-45">Reserveringen controleren...</p>}
         {!loading && conflicts.length > 0 && (
           <div className="bg-orange-50 rounded-lg p-3">
             <p className="text-sm font-medium text-orange-800 mb-2">
@@ -141,7 +142,7 @@ function MaintenanceModal({
           </div>
         )}
 
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-ink-45">
           💡 Er wordt automatisch een ticket aangemaakt voor de technische dienst.
         </p>
 
@@ -150,7 +151,7 @@ function MaintenanceModal({
         <div className="flex gap-3 pt-2">
           <button
             onClick={onClose}
-            className="flex-1 border rounded-lg px-4 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50"
+            className="flex-1 border rounded-lg px-4 py-2 text-sm font-medium text-ink-70 hover:bg-ink-6"
           >
             Annuleren
           </button>
@@ -219,13 +220,13 @@ function BikeRow({
 
   if (editing) {
     return (
-      <tr className="border-b bg-blue-50">
+      <tr className="border-b bg-ink-6">
         <td className="py-2 px-4">
           <input
             type="text"
             value={number}
             onChange={(e) => setNumber(e.target.value)}
-            className="w-20 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-20 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
             autoFocus
           />
         </td>
@@ -234,14 +235,14 @@ function BikeRow({
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
           />
         </td>
         <td className="py-2 px-4">
           <select
             value={typeId}
             onChange={(e) => setTypeId(parseInt(e.target.value))}
-            className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
           >
             {types.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
           </select>
@@ -253,7 +254,7 @@ function BikeRow({
             onChange={(e) => setIsReserve(e.target.checked)}
           />
         </td>
-        <td className="py-2 px-4 text-gray-500 text-sm">{b.total_rental_days}d</td>
+        <td className="py-2 px-4 text-ink-45 text-sm">{b.total_rental_days}d</td>
         <td className="py-2 px-4">
           <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.cls}`}>{s.label}</span>
         </td>
@@ -263,13 +264,13 @@ function BikeRow({
               <button
                 onClick={save}
                 disabled={saving || !number.trim() || !name.trim()}
-                className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+                className="text-xs bg-brand text-white px-3 py-1 rounded-lg hover:opacity-90 disabled:opacity-50"
               >
                 {saving ? "..." : "Opslaan"}
               </button>
               <button
                 onClick={cancel}
-                className="text-xs text-gray-500 px-3 py-1 rounded-lg border hover:bg-gray-50"
+                className="text-xs text-ink-45 px-3 py-1 rounded-lg border hover:bg-ink-6"
               >
                 Annuleer
               </button>
@@ -282,12 +283,12 @@ function BikeRow({
   }
 
   return (
-    <tr className="border-b hover:bg-gray-50 group">
+    <tr className="border-b hover:bg-ink-6 group">
       <td className="py-3 px-4 font-medium">{b.number}</td>
       <td className="py-3 px-4">{b.name}</td>
-      <td className="py-3 px-4 text-gray-500">{b.type_name}</td>
+      <td className="py-3 px-4 text-ink-45">{b.type_name}</td>
       <td className="py-3 px-4">{b.is_reserve ? "✓" : ""}</td>
-      <td className="py-3 px-4 text-gray-500">{b.total_rental_days}d</td>
+      <td className="py-3 px-4 text-ink-45">{b.total_rental_days}d</td>
       <td className="py-3 px-4">
         <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${s.cls}`}>{s.label}</span>
       </td>
@@ -296,7 +297,7 @@ function BikeRow({
           {canEdit && (
             <button
               onClick={() => setEditing(true)}
-              className="text-xs text-blue-600 hover:underline"
+              className="text-xs text-brand hover:underline"
             >
               Bewerken
             </button>
@@ -359,43 +360,43 @@ function BikeTypeRow({
 
   if (editing) {
     return (
-      <tr className="border-b bg-blue-50">
+      <tr className="border-b bg-ink-6">
         <td className="py-2 px-4">
           <input
             type="text"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="w-full border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
             autoFocus
           />
         </td>
         <td className="py-2 px-4">
           <div className="flex items-center gap-1">
-            <span className="text-sm text-gray-500">€</span>
+            <span className="text-sm text-ink-45">€</span>
             <input
               type="number"
               value={price}
               min={0}
               step={0.5}
               onChange={(e) => setPrice(parseFloat(e.target.value) || 0)}
-              className="w-24 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+              className="w-24 border rounded px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
             />
-            <span className="text-sm text-gray-500">/dag</span>
+            <span className="text-sm text-ink-45">/dag</span>
           </div>
         </td>
-        <td className="py-2 px-4 text-gray-500 text-sm">{t.bike_count ?? 0} fietsen</td>
+        <td className="py-2 px-4 text-ink-45 text-sm">{t.bike_count ?? 0} fietsen</td>
         <td className="py-2 px-4">
           <div className="flex gap-2">
             <button
               onClick={save}
               disabled={saving || !name.trim()}
-              className="text-xs bg-blue-600 text-white px-3 py-1 rounded-lg hover:bg-blue-700 disabled:opacity-50"
+              className="text-xs bg-brand text-white px-3 py-1 rounded-lg hover:opacity-90 disabled:opacity-50"
             >
               {saving ? "..." : "Opslaan"}
             </button>
             <button
               onClick={cancel}
-              className="text-xs text-gray-500 px-3 py-1 rounded-lg border hover:bg-gray-50"
+              className="text-xs text-ink-45 px-3 py-1 rounded-lg border hover:bg-ink-6"
             >
               Annuleer
             </button>
@@ -406,19 +407,19 @@ function BikeTypeRow({
   }
 
   return (
-    <tr className="border-b hover:bg-gray-50 group">
+    <tr className="border-b hover:bg-ink-6 group">
       <td className="py-3 px-4 font-medium">{t.name}</td>
       <td className="py-3 px-4">
-        <span className="text-lg font-bold text-blue-700">€{t.price_per_day.toFixed(2)}</span>
-        <span className="text-xs text-gray-400 ml-1">/dag</span>
+        <span className="text-lg font-bold text-brand">€{t.price_per_day.toFixed(2)}</span>
+        <span className="text-xs text-ink-45 ml-1">/dag</span>
       </td>
-      <td className="py-3 px-4 text-gray-500 text-sm">{t.bike_count ?? 0} fietsen</td>
+      <td className="py-3 px-4 text-ink-45 text-sm">{t.bike_count ?? 0} fietsen</td>
       <td className="py-3 px-4">
         {canEdit && (
           <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
             <button
               onClick={() => setEditing(true)}
-              className="text-xs text-blue-600 hover:underline"
+              className="text-xs text-brand hover:underline"
             >
               Bewerken
             </button>
@@ -492,7 +493,6 @@ function BalansTab({
   }
 
   async function doRebalance() {
-    if (!window.confirm("Toekomstige reserveringen herbalanceren? Dit herverdeelt de fietsen op basis van het aantal verhuurddagen.")) return;
     setRebalancing(true);
     setResult(null);
     setError(null);
@@ -511,12 +511,12 @@ function BalansTab({
 
   return (
     <div className="space-y-4">
-      <div className="bg-white rounded-2xl shadow p-5">
+      <div className="bg-paper-raised rounded-2xl shadow p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
             <h2 className="font-bold text-lg">Gebruiksbalans fietsen</h2>
-            <p className="text-sm text-gray-500">
-              Gemiddeld: <span className="font-semibold text-gray-700">{avgDays} verhuurdagen</span> per fiets
+            <p className="text-sm text-ink-45">
+              Gemiddeld: <span className="font-semibold text-ink-70">{avgDays} verhuurdagen</span> per fiets
             </p>
           </div>
           <div className="flex gap-2">
@@ -527,13 +527,14 @@ function BalansTab({
             >
               {previewing ? "Bezig..." : "🔍 Preview herbalancering"}
             </button>
-            <button
-              onClick={doRebalance}
+            <BevestigKnop
+              label={rebalancing ? "Bezig..." : "⚖️ Herbalanceer"}
+              vraag="Toekomstige reserveringen herverdelen?"
+              bevestigLabel="Ja, herbalanceer"
+              onBevestig={doRebalance}
               disabled={rebalancing}
               className="bg-purple-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-purple-700 disabled:opacity-50 transition-colors"
-            >
-              {rebalancing ? "Bezig..." : "⚖️ Herbalanceer"}
-            </button>
+            />
           </div>
         </div>
 
@@ -558,8 +559,8 @@ function BalansTab({
 
         {/* Legenda preview */}
         {projectedDays && (
-          <div className="flex items-center gap-4 text-xs text-gray-500 mb-3 p-2 bg-gray-50 rounded-lg">
-            <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-gray-300" /> Huidige verdeling</div>
+          <div className="flex items-center gap-4 text-xs text-ink-45 mb-3 p-2 bg-ink-6 rounded-lg">
+            <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-ink-25" /> Huidige verdeling</div>
             <div className="flex items-center gap-1.5"><div className="w-3 h-2 rounded bg-purple-500" /> Na herbalancering</div>
           </div>
         )}
@@ -567,7 +568,7 @@ function BalansTab({
         {/* Balans per type */}
         {[...groups.values()].map((group) => (
           <div key={group.typeName} className="mb-6">
-            <p className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">{group.typeName}</p>
+            <p className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-3">{group.typeName}</p>
             <div className="space-y-2">
               {group.bikes.sort((a, b) => b.total_rental_days - a.total_rental_days).map((b) => {
                 const currentDays = b.total_rental_days;
@@ -583,20 +584,20 @@ function BalansTab({
                   ? "bg-purple-500"
                   : b.status === "maintenance"
                   ? "bg-orange-400"
-                  : isAboveAvg ? "bg-blue-500" : "bg-green-500";
+                  : isAboveAvg ? "bg-ink-60" : "bg-green-500";
 
                 return (
                   <div key={b.id} className="flex items-center gap-3">
                     <div className="w-20 shrink-0 text-sm">
                       <span className="font-medium">#{b.number}</span>
-                      {b.is_reserve && <span className="ml-1 text-xs text-gray-400">(R)</span>}
+                      {b.is_reserve && <span className="ml-1 text-xs text-ink-45">(R)</span>}
                       {b.status === "maintenance" && <span className="ml-1 text-xs text-orange-500">🔧</span>}
                     </div>
-                    <div className="flex-1 bg-gray-100 rounded-full relative overflow-hidden" style={{ height: projectedDays ? 20 : 16 }}>
+                    <div className="flex-1 bg-ink-6 rounded-full relative overflow-hidden" style={{ height: projectedDays ? 20 : 16 }}>
                       {/* Huidige balk (grijs, achtergrond bij preview) */}
                       {projectedDays && (
                         <div
-                          className="absolute top-0 bottom-0 bg-gray-300 rounded-full"
+                          className="absolute top-0 bottom-0 bg-ink-25 rounded-full"
                           style={{ width: `${Math.max(currentPct, 2)}%` }}
                         />
                       )}
@@ -607,11 +608,11 @@ function BalansTab({
                       />
                       {/* Gemiddelde indicator */}
                       <div
-                        className="absolute top-0 bottom-0 w-0.5 bg-gray-500 opacity-50"
+                        className="absolute top-0 bottom-0 w-0.5 bg-ink-60 opacity-50"
                         style={{ left: `${(avgDays / maxDays) * 100}%` }}
                       />
                     </div>
-                    <div className="w-20 text-right text-sm font-medium text-gray-700 flex items-center justify-end gap-1">
+                    <div className="w-20 text-right text-sm font-medium text-ink-70 flex items-center justify-end gap-1">
                       <span>{shownDays}d</span>
                       {projectedDays && delta !== 0 && (
                         <span className={`text-xs font-semibold ${delta > 0 ? "text-orange-500" : "text-green-600"}`}>
@@ -626,17 +627,17 @@ function BalansTab({
           </div>
         ))}
 
-        <div className="flex flex-wrap items-center gap-4 text-xs text-gray-500 pt-2 border-t">
+        <div className="flex flex-wrap items-center gap-4 text-xs text-ink-45 pt-2 border-t">
           {!projectedDays && (
             <>
-              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500" /> Boven gemiddelde</div>
+              <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-ink-60" /> Boven gemiddelde</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-500" /> Onder gemiddelde</div>
               <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-orange-400" /> In onderhoud</div>
             </>
           )}
-          <div className="flex items-center gap-1.5"><div className="w-0.5 h-4 bg-gray-500 opacity-50" /> Gemiddelde</div>
+          <div className="flex items-center gap-1.5"><div className="w-0.5 h-4 bg-ink-60 opacity-50" /> Gemiddelde</div>
           {projectedDays && (
-            <button onClick={() => { setProjectedDays(null); setPreviewMeta(null); }} className="ml-auto text-xs text-gray-400 hover:text-gray-600 underline">
+            <button onClick={() => { setProjectedDays(null); setPreviewMeta(null); }} className="ml-auto text-xs text-ink-45 hover:text-ink-70 underline">
               Preview wissen
             </button>
           )}
@@ -724,7 +725,6 @@ export default function BikeBeheer() {
   }
 
   async function deleteType(id: number) {
-    if (!window.confirm("Fietstype verwijderen?")) return;
     try {
       await bikeApi.deleteType(id);
       load();
@@ -734,7 +734,6 @@ export default function BikeBeheer() {
   }
 
   async function resolveMaintenanceBike(bike: Bike) {
-    if (!window.confirm(`Onderhoud van fiets #${bike.number} afronden?`)) return;
     try {
       await bikeMaintenanceApi.resolve(bike.id);
       load();
@@ -743,7 +742,7 @@ export default function BikeBeheer() {
     }
   }
 
-  if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
+  if (loading) return <p className="p-4 text-ink-45">Laden...</p>;
 
   const inMaintenance = bikes.filter((b) => b.status === "maintenance");
 
@@ -754,13 +753,13 @@ export default function BikeBeheer() {
       </div>
 
       {/* Tabs */}
-      <div className="flex gap-1 mb-6 bg-gray-100 p-1 rounded-xl w-fit max-w-full overflow-x-auto scrollbar-none">
+      <div className="flex gap-1 mb-6 bg-ink-6 p-1 rounded-xl w-fit max-w-full overflow-x-auto scrollbar-none">
         {(["fietsen", "types", "balans", "onderhoud"] as Tab[]).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-colors shrink-0 whitespace-nowrap ${
-              tab === t ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+              tab === t ? "bg-paper-raised shadow text-ink" : "text-ink-45 hover:text-ink-70"
             }`}
           >
             {t === "fietsen" ? "Fietsen"
@@ -774,9 +773,9 @@ export default function BikeBeheer() {
       {/* Tab: Fietsen */}
       {tab === "fietsen" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl shadow overflow-hidden">
+          <div className="bg-paper-raised rounded-2xl shadow overflow-hidden">
             <table className="w-full text-left text-sm">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <thead className="bg-ink-6 text-xs text-ink-45 uppercase tracking-wide">
                 <tr>
                   <th className="py-3 px-4">#</th>
                   <th className="py-3 px-4">Naam</th>
@@ -805,7 +804,7 @@ export default function BikeBeheer() {
 
           {/* Nieuwe fiets */}
           {canEdit && (
-          <div className="bg-white rounded-2xl shadow p-5">
+          <div className="bg-paper-raised rounded-2xl shadow p-5">
             <h2 className="font-bold mb-3">Fiets toevoegen</h2>
             <form onSubmit={addBike} className="grid grid-cols-2 gap-3">
               <input
@@ -813,23 +812,23 @@ export default function BikeBeheer() {
                 placeholder="Nummer (bijv. 21)"
                 value={newBike.number}
                 onChange={(e) => setNewBike((f) => ({ ...f, number: e.target.value }))}
-                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               />
               <input
                 type="text"
                 placeholder="Naam (bijv. Gazelle Innergy)"
                 value={newBike.name}
                 onChange={(e) => setNewBike((f) => ({ ...f, name: e.target.value }))}
-                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               />
               <select
                 value={newBike.type_id}
                 onChange={(e) => setNewBike((f) => ({ ...f, type_id: parseInt(e.target.value) }))}
-                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               >
                 {types.map((t) => <option key={t.id} value={t.id}>{t.name} — €{t.price_per_day.toFixed(2)}/dag</option>)}
               </select>
-              <label className="flex items-center gap-2 text-sm text-gray-600 cursor-pointer">
+              <label className="flex items-center gap-2 text-sm text-ink-70 cursor-pointer">
                 <input
                   type="checkbox"
                   checked={newBike.is_reserve}
@@ -841,7 +840,7 @@ export default function BikeBeheer() {
               <button
                 type="submit"
                 disabled={saving}
-                className="col-span-2 bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                className="col-span-2 bg-brand text-white rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
               >
                 {saving ? "Toevoegen..." : "Fiets toevoegen"}
               </button>
@@ -854,9 +853,9 @@ export default function BikeBeheer() {
       {/* Tab: Fietstypes */}
       {tab === "types" && (
         <div className="space-y-4">
-          <div className="bg-white rounded-2xl shadow overflow-hidden">
+          <div className="bg-paper-raised rounded-2xl shadow overflow-hidden">
             <table className="w-full text-sm text-left">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <thead className="bg-ink-6 text-xs text-ink-45 uppercase tracking-wide">
                 <tr>
                   <th className="py-3 px-4">Naam</th>
                   <th className="py-3 px-4">Prijs per dag</th>
@@ -878,7 +877,7 @@ export default function BikeBeheer() {
             </table>
           </div>
           {canEdit && (
-          <div className="bg-white rounded-2xl shadow p-5">
+          <div className="bg-paper-raised rounded-2xl shadow p-5">
             <h2 className="font-bold mb-3">Fietstype toevoegen</h2>
             <form onSubmit={addType} className="flex gap-3">
               <input
@@ -886,10 +885,10 @@ export default function BikeBeheer() {
                 placeholder="Naam (bijv. E-bike)"
                 value={newType.name}
                 onChange={(e) => setNewType((f) => ({ ...f, name: e.target.value }))}
-                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="flex-1 border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               />
               <div className="flex items-center gap-1 border rounded-lg px-3 py-2">
-                <span className="text-sm text-gray-500">€</span>
+                <span className="text-sm text-ink-45">€</span>
                 <input
                   type="number"
                   placeholder="0"
@@ -899,13 +898,13 @@ export default function BikeBeheer() {
                   onChange={(e) => setNewType((f) => ({ ...f, price_per_day: parseFloat(e.target.value) || 0 }))}
                   className="w-20 text-sm focus:outline-none"
                 />
-                <span className="text-sm text-gray-500">/dag</span>
+                <span className="text-sm text-ink-45">/dag</span>
               </div>
               {error && <p className="text-red-600 text-sm">{error}</p>}
               <button
                 type="submit"
                 disabled={saving}
-                className="bg-blue-600 text-white rounded-lg px-4 py-2 text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                className="bg-brand text-white rounded-lg px-4 py-2 text-sm font-medium hover:opacity-90 disabled:opacity-50"
               >
                 Toevoegen
               </button>
@@ -922,24 +921,25 @@ export default function BikeBeheer() {
 
       {/* Tab: Onderhoud */}
       {tab === "onderhoud" && (
-        <div className="bg-white rounded-2xl shadow p-5">
+        <div className="bg-paper-raised rounded-2xl shadow p-5">
           <h2 className="font-bold mb-4">Fietsen in onderhoud</h2>
           {inMaintenance.length === 0 ? (
-            <p className="text-gray-400 italic text-sm">Geen fietsen in onderhoud</p>
+            <p className="text-ink-45 italic text-sm">Geen fietsen in onderhoud</p>
           ) : (
             <div className="space-y-3">
               {inMaintenance.map((b) => (
                 <div key={b.id} className="flex items-center justify-between p-3 bg-orange-50 rounded-lg">
                   <div>
                     <p className="font-medium text-sm">Fiets #{b.number} — {b.name}</p>
-                    <p className="text-xs text-gray-500">{b.type_name}</p>
+                    <p className="text-xs text-ink-45">{b.type_name}</p>
                   </div>
-                  <button
-                    onClick={() => resolveMaintenanceBike(b)}
+                  <BevestigKnop
+                    label="✓ Onderhoud afronden"
+                    vraag={`Onderhoud van fiets #${b.number} afronden?`}
+                    bevestigLabel="Ja, afronden"
+                    onBevestig={() => resolveMaintenanceBike(b)}
                     className="bg-green-600 text-white px-3 py-1.5 rounded-lg text-xs font-medium hover:bg-green-700"
-                  >
-                    ✓ Onderhoud afronden
-                  </button>
+                  />
                 </div>
               ))}
             </div>

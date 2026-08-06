@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { bikeReservationApi, formatDateNL, type BikeReservation } from "../api/client";
+import { BevestigKnop } from "../components/BevestigKnop";
 
 const STATUS_LABELS: Record<string, { label: string; cls: string }> = {
-  active: { label: "Actief", cls: "bg-blue-100 text-blue-800" },
+  active: { label: "Actief", cls: "bg-ink-6 text-brand" },
   completed: { label: "Voltooid", cls: "bg-green-100 text-green-800" },
   cancelled: { label: "Geannuleerd", cls: "bg-red-100 text-red-800" },
 };
@@ -53,7 +54,7 @@ export default function BikeReserveringDetail() {
   }
 
   async function cancel() {
-    if (!res || !window.confirm("Reservering annuleren?")) return;
+    if (!res) return;
     setCancelling(true);
     try {
       await bikeReservationApi.cancel(res.id);
@@ -75,77 +76,77 @@ export default function BikeReserveringDetail() {
     }
   }
 
-  if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
+  if (loading) return <p className="p-4 text-ink-45">Laden...</p>;
   if (!res) return <p className="p-4 text-red-500">Reservering niet gevonden</p>;
 
-  const s = STATUS_LABELS[res.status] || { label: res.status, cls: "bg-gray-100 text-gray-600" };
+  const s = STATUS_LABELS[res.status] || { label: res.status, cls: "bg-ink-6 text-ink-70" };
 
   return (
     <div className="max-w-lg">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-gray-400 hover:text-gray-600 text-xl">←</button>
+        <button onClick={() => navigate(-1)} className="text-ink-45 hover:text-ink-70 text-xl">←</button>
         <h1 className="text-2xl font-bold">Reservering #{res.id}</h1>
         <span className={`ml-auto text-sm px-3 py-1 rounded-full font-medium ${s.cls}`}>{s.label}</span>
       </div>
 
-      <div className="bg-white rounded-2xl shadow p-6 space-y-4">
+      <div className="bg-paper-raised rounded-2xl shadow p-6 space-y-4">
         {/* Gast info */}
         {editing ? (
           <div className="space-y-3">
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Gastnaam</label>
+              <label className="block text-sm font-medium text-ink-70 mb-1">Gastnaam</label>
               <input
                 type="text"
                 value={form.guest_name}
                 onChange={(e) => setForm((f) => ({ ...f, guest_name: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Kamernummer</label>
+              <label className="block text-sm font-medium text-ink-70 mb-1">Kamernummer</label>
               <input
                 type="text"
                 value={form.guest_room}
                 onChange={(e) => setForm((f) => ({ ...f, guest_room: e.target.value }))}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Notities</label>
+              <label className="block text-sm font-medium text-ink-70 mb-1">Notities</label>
               <textarea
                 value={form.notes}
                 onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                 rows={2}
-                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300 resize-none"
+                className="w-full border rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand resize-none"
               />
             </div>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-4 text-sm">
             <div>
-              <span className="text-gray-500 block text-xs mb-0.5">Gast</span>
+              <span className="text-ink-45 block text-xs mb-0.5">Gast</span>
               <span className="font-medium">{res.guest_name}</span>
             </div>
             {res.guest_room && (
               <div>
-                <span className="text-gray-500 block text-xs mb-0.5">Kamer</span>
+                <span className="text-ink-45 block text-xs mb-0.5">Kamer</span>
                 <span className="font-medium">{res.guest_room}</span>
               </div>
             )}
             <div>
-              <span className="text-gray-500 block text-xs mb-0.5">Startdatum</span>
+              <span className="text-ink-45 block text-xs mb-0.5">Startdatum</span>
               <span className="font-medium">{formatDateNL(res.start_date)}</span>
             </div>
             <div>
-              <span className="text-gray-500 block text-xs mb-0.5">Retourdatum</span>
+              <span className="text-ink-45 block text-xs mb-0.5">Retourdatum</span>
               <span className="font-medium">{formatDateNL(res.end_date)} ({res.num_days}d)</span>
             </div>
             <div>
-              <span className="text-gray-500 block text-xs mb-0.5">Fietstype</span>
+              <span className="text-ink-45 block text-xs mb-0.5">Fietstype</span>
               <span className="font-medium">{res.num_bikes}× {res.bike_type_name}</span>
             </div>
             <div>
-              <span className="text-gray-500 block text-xs mb-0.5">Totaalprijs</span>
+              <span className="text-ink-45 block text-xs mb-0.5">Totaalprijs</span>
               <span className="font-medium">€{res.total_price?.toFixed(2) ?? "-"}</span>
             </div>
           </div>
@@ -154,10 +155,10 @@ export default function BikeReserveringDetail() {
         {/* Toegewezen fietsen */}
         {res.bikes.length > 0 && (
           <div className="border-t pt-4">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-2">Toegewezen fietsen</p>
+            <p className="text-xs text-ink-45 font-medium uppercase tracking-wide mb-2">Toegewezen fietsen</p>
             <div className="flex flex-wrap gap-2">
               {res.bikes.map((b) => (
-                <span key={b.id} className="bg-gray-100 text-gray-700 text-sm px-3 py-1 rounded-full">
+                <span key={b.id} className="bg-ink-6 text-ink-70 text-sm px-3 py-1 rounded-full">
                   #{b.number} {b.name}
                 </span>
               ))}
@@ -168,8 +169,8 @@ export default function BikeReserveringDetail() {
         {/* Notities (niet-bewerkbaar) */}
         {!editing && res.notes && (
           <div className="border-t pt-4">
-            <p className="text-xs text-gray-500 font-medium uppercase tracking-wide mb-1">Notities</p>
-            <p className="text-sm text-gray-700">{res.notes}</p>
+            <p className="text-xs text-ink-45 font-medium uppercase tracking-wide mb-1">Notities</p>
+            <p className="text-sm text-ink-70">{res.notes}</p>
           </div>
         )}
 
@@ -183,13 +184,13 @@ export default function BikeReserveringDetail() {
                 <button
                   onClick={save}
                   disabled={saving}
-                  className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                  className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 disabled:opacity-50"
                 >
                   {saving ? "Opslaan..." : "Opslaan"}
                 </button>
                 <button
                   onClick={() => setEditing(false)}
-                  className="border px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+                  className="border px-4 py-2 rounded-lg text-sm font-medium text-ink-70 hover:bg-ink-6"
                 >
                   Annuleren
                 </button>
@@ -198,7 +199,7 @@ export default function BikeReserveringDetail() {
               <>
                 <button
                   onClick={() => setEditing(true)}
-                  className="border px-4 py-2 rounded-lg text-sm font-medium text-gray-600 hover:bg-gray-50"
+                  className="border px-4 py-2 rounded-lg text-sm font-medium text-ink-70 hover:bg-ink-6"
                 >
                   ✏️ Bewerken
                 </button>
@@ -208,13 +209,14 @@ export default function BikeReserveringDetail() {
                 >
                   ✓ Markeer als voltooid
                 </button>
-                <button
-                  onClick={cancel}
+                <BevestigKnop
+                  label={cancelling ? "Annuleren..." : "✕ Annuleer reservering"}
+                  vraag="Reservering annuleren?"
+                  bevestigLabel="Ja, annuleer"
+                  onBevestig={cancel}
                   disabled={cancelling}
                   className="bg-red-100 text-red-700 px-4 py-2 rounded-lg text-sm font-medium hover:bg-red-200 disabled:opacity-50"
-                >
-                  {cancelling ? "Annuleren..." : "✕ Annuleer reservering"}
-                </button>
+                />
               </>
             )}
           </div>

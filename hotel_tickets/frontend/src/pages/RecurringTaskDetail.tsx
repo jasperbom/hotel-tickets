@@ -107,16 +107,16 @@ export default function RecurringTaskDetail() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
       </div>
     );
   }
 
   if (!template) {
     return (
-      <div className="card py-12 text-center text-gray-500">
+      <div className="card py-12 text-center text-ink-45">
         Sjabloon niet gevonden.{" "}
-        <Link to="/recurring" className="text-blue-600 hover:underline">Terug</Link>
+        <Link to="/recurring" className="text-brand hover:underline">Terug</Link>
       </div>
     );
   }
@@ -146,22 +146,22 @@ export default function RecurringTaskDetail() {
     <div className="space-y-4">
       {/* Header boven de kaart — zoals TicketDetail */}
       <div className="flex items-start gap-3">
-        <button onClick={() => (location.key === "default" ? navigate("/recurring") : navigate(-1))} className="text-gray-400 hover:text-gray-700 mt-0.5 shrink-0">
+        <button onClick={() => (location.key === "default" ? navigate("/recurring") : navigate(-1))} className="text-ink-45 hover:text-ink-70 mt-0.5 shrink-0">
           <svg xmlns="http://www.w3.org/2000/svg" className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
           </svg>
         </button>
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl font-bold text-gray-900">{template.title}</h1>
+          <h1 className="text-xl font-bold text-ink">{template.title}</h1>
           <div className="flex gap-1.5 mt-2 flex-wrap">
             <CategoryBadge category={template.category} />
             <PriorityBadge priority={template.priority} />
-            {!template.is_active && <span className="badge bg-gray-100 text-gray-500">Inactief</span>}
+            {!template.is_active && <span className="badge bg-ink-6 text-ink-45">Inactief</span>}
             {template.nfc_tag_id && (
               <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded">NFC</span>
             )}
-            {isSubtaskMode && <span className="badge bg-blue-50 text-blue-600">☑️ Subtaken</span>}
-            {isRoomsMode && <span className="badge bg-blue-50 text-blue-600">🚪 Kamers</span>}
+            {isSubtaskMode && <span className="badge bg-ink-6 text-brand">☑️ Subtaken</span>}
+            {isRoomsMode && <span className="badge bg-ink-6 text-brand">🚪 Kamers</span>}
           </div>
         </div>
         {/* Afrond-knop rechtsboven (enkelvoudig/subtaken) */}
@@ -171,8 +171,8 @@ export default function RecurringTaskDetail() {
             disabled={doneToday || completing !== null || !template.is_active}
             className={`shrink-0 px-4 py-2 rounded-xl font-semibold text-sm transition-all ${
               doneToday || !template.is_active
-                ? "bg-gray-100 text-gray-400 cursor-not-allowed"
-                : "bg-green-600 text-white hover:bg-green-700"
+                ? "bg-ink-6 text-ink-45 cursor-not-allowed"
+                : "bg-done text-white hover:opacity-90"
             }`}
           >
             {completing === "all" ? "Bezig..." : doneToday ? "✓ Afgerond" : "✓ Afronden"}
@@ -182,8 +182,8 @@ export default function RecurringTaskDetail() {
 
       {/* Kamer-banner (enkelvoudig/subtaken) */}
       {!isRoomsMode && locationName && (
-        <div className="rounded-xl overflow-hidden border border-blue-200">
-          <div className="flex items-center justify-between bg-blue-600 text-white px-5 py-3">
+        <div className="rounded-xl overflow-hidden border border-ink-12">
+          <div className="flex items-center justify-between bg-brand text-white px-5 py-3">
             <div className="flex items-center gap-3">
               <span className="text-2xl">🚪</span>
               <span className="text-xl font-bold tracking-wide">{locationName}</span>
@@ -204,7 +204,7 @@ export default function RecurringTaskDetail() {
 
       {/* Kaart */}
       <div className="card space-y-3">
-        <div className="flex items-center gap-2 text-sm text-gray-600">
+        <div className="flex items-center gap-2 text-sm text-ink-70">
           <span>🔁</span>
           <span>{cronToHuman(template.cron_expression, template.interval_days)}</span>
         </div>
@@ -212,39 +212,39 @@ export default function RecurringTaskDetail() {
         {/* Status banner */}
         {isRoomsMode ? (
           activeTickets.length === 0 && doneToday ? (
-            <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-              <span className="text-green-600">✓</span>
-              <p className="text-sm font-medium text-green-800">Alle kamers afgerond vandaag</p>
+            <div className="flex items-center gap-2 bg-done-soft border border-done rounded-xl px-4 py-3">
+              <span className="text-done">✓</span>
+              <p className="text-sm font-medium text-done">Alle kamers afgerond vandaag</p>
             </div>
           ) : activeTickets.length > 0 ? (
-            <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-xl px-4 py-3">
-              <span className="text-amber-600">⏳</span>
-              <p className="text-sm font-medium text-amber-800">{activeTickets.length} kamer(s) nog te doen</p>
+            <div className="flex items-center gap-2 bg-high-soft border border-high rounded-xl px-4 py-3">
+              <span className="text-high">⏳</span>
+              <p className="text-sm font-medium text-high">{activeTickets.length} kamer(s) nog te doen</p>
             </div>
           ) : null
         ) : doneToday ? (
-          <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-xl px-4 py-3">
-            <span className="text-green-600">✓</span>
-            <p className="text-sm font-medium text-green-800">Vandaag afgerond</p>
+          <div className="flex items-center gap-2 bg-done-soft border border-done rounded-xl px-4 py-3">
+            <span className="text-done">✓</span>
+            <p className="text-sm font-medium text-done">Vandaag afgerond</p>
           </div>
         ) : isOverdue ? (
-          <div className="flex items-center gap-2 bg-red-50 border border-red-200 rounded-xl px-4 py-3">
-            <span className="text-red-500">⚠</span>
-            <p className="text-sm font-medium text-red-800">
+          <div className="flex items-center gap-2 bg-urgent-soft border border-urgent rounded-xl px-4 py-3">
+            <span className="text-urgent">⚠</span>
+            <p className="text-sm font-medium text-urgent">
               Verlopen — stond gepland voor {nextRun ? format(nextRun, "dd:MM:yyyy HH:mm", { locale: nl }) : "onbekend"}
             </p>
           </div>
         ) : nextRun ? (
-          <div className="flex items-center gap-2 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
-            <span className="text-blue-500">📅</span>
-            <p className="text-sm font-medium text-blue-800">
+          <div className="flex items-center gap-2 bg-ink-6 border border-ink-12 rounded-xl px-4 py-3">
+            <span className="text-brand">📅</span>
+            <p className="text-sm font-medium text-brand">
               Volgende uitvoering: {format(nextRun, "dd:MM:yyyy 'om' HH:mm", { locale: nl })}
             </p>
           </div>
         ) : null}
 
         {template.description && (
-          <p className="text-sm text-gray-600 whitespace-pre-line">{template.description}</p>
+          <p className="text-sm text-ink-70 whitespace-pre-line">{template.description}</p>
         )}
 
         {/* Notify when free toggle (enkelvoudig/subtaken met actief ticket) */}
@@ -253,11 +253,11 @@ export default function RecurringTaskDetail() {
             <button
               type="button"
               onClick={() => toggleNotifyWhenFree(activeTicket)}
-              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${activeTicket.notify_when_free ? "bg-amber-500" : "bg-gray-200"}`}
+              className={`relative w-11 h-6 rounded-full transition-colors shrink-0 ${activeTicket.notify_when_free ? "bg-high-soft0" : "bg-ink-12"}`}
             >
-              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${activeTicket.notify_when_free ? "translate-x-5" : "translate-x-0"}`} />
+              <span className={`absolute top-0.5 left-0.5 w-5 h-5 bg-paper-raised rounded-full shadow transition-transform ${activeTicket.notify_when_free ? "translate-x-5" : "translate-x-0"}`} />
             </button>
-            <label className="text-sm text-gray-700">🔑 Meld mij wanneer de kamer vrij is</label>
+            <label className="text-sm text-ink-70">🔑 Meld mij wanneer de kamer vrij is</label>
           </div>
         )}
 
@@ -266,7 +266,7 @@ export default function RecurringTaskDetail() {
           <button
             onClick={() => handleComplete()}
             disabled={completing !== null || !template.is_active}
-            className="w-full py-3 rounded-xl font-semibold text-sm bg-green-600 text-white hover:bg-green-700 active:scale-95 transition-all disabled:opacity-50"
+            className="w-full py-3 rounded-xl font-semibold text-sm bg-done text-white hover:opacity-90 active:scale-95 transition-all disabled:opacity-50"
           >
             {completing === "all"
               ? "Bezig..."
@@ -279,9 +279,9 @@ export default function RecurringTaskDetail() {
       {isSubtaskMode && (
         <div className="card">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="font-semibold text-gray-900">Subtaken</h2>
+            <h2 className="font-semibold text-ink">Subtaken</h2>
             {activeTicket?.subtasks && (
-              <span className="text-xs text-gray-400">
+              <span className="text-xs text-ink-45">
                 {activeTicket.subtasks.filter((s) => s.done).length}/{activeTicket.subtasks.length} gedaan
               </span>
             )}
@@ -299,23 +299,23 @@ export default function RecurringTaskDetail() {
                     disabled={subtaskLoading || !canManage}
                     className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 text-left transition-all ${
                       subtask.done
-                        ? "border-green-200 bg-green-50"
-                        : "border-gray-200 bg-white hover:border-gray-300"
+                        ? "border-done bg-done-soft"
+                        : "border-ink-12 bg-paper-raised hover:border-ink-12"
                     }`}
                   >
                     <span className={`w-5 h-5 rounded flex items-center justify-center shrink-0 border-2 transition-all ${
-                      subtask.done ? "bg-green-500 border-green-500 text-white" : "border-gray-300"
+                      subtask.done ? "bg-done-soft0 border-done text-white" : "border-ink-12"
                     }`}>
                       {subtask.done && <span className="text-xs font-bold">✓</span>}
                     </span>
-                    <span className={`flex-1 text-sm font-medium ${subtask.done ? "line-through text-gray-400" : "text-gray-800"}`}>
+                    <span className={`flex-1 text-sm font-medium ${subtask.done ? "line-through text-ink-45" : "text-ink"}`}>
                       {subtask.label}
                     </span>
                   </button>
                 ))}
               </div>
               {activeTicket.subtasks.every((s) => s.done) && (
-                <p className="text-sm text-green-700 font-medium mt-3 text-center">
+                <p className="text-sm text-done font-medium mt-3 text-center">
                   ✓ Alle subtaken afgevinkt — druk op Taak afronden om te voltooien
                 </p>
               )}
@@ -325,22 +325,22 @@ export default function RecurringTaskDetail() {
             <>
               <div className="space-y-2 opacity-50 pointer-events-none">
                 {template.subtask_items.map((label, idx) => (
-                  <div key={idx} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 border-gray-200 bg-white">
-                    <span className="w-5 h-5 rounded border-2 border-gray-300 shrink-0" />
-                    <span className="text-sm font-medium text-gray-700">{label}</span>
+                  <div key={idx} className="flex items-center gap-3 px-3 py-2.5 rounded-xl border-2 border-ink-12 bg-paper-raised">
+                    <span className="w-5 h-5 rounded border-2 border-ink-12 shrink-0" />
+                    <span className="text-sm font-medium text-ink-70">{label}</span>
                   </div>
                 ))}
               </div>
               <button
                 onClick={startTask}
                 disabled={starting || doneToday || !template.is_active || !canManage}
-                className="w-full mt-3 py-2.5 rounded-xl font-semibold text-sm border-2 border-blue-300 text-blue-700 bg-blue-50 hover:bg-blue-100 transition-all disabled:opacity-50"
+                className="w-full mt-3 py-2.5 rounded-xl font-semibold text-sm border-2 border-brand text-brand bg-ink-6 hover:bg-ink-6 transition-all disabled:opacity-50"
               >
                 {starting ? "Bezig..." : "▶ Taak activeren om te beginnen"}
               </button>
             </>
           ) : (
-            <p className="text-sm text-gray-400 text-center py-4">Geen subtaken geconfigureerd</p>
+            <p className="text-sm text-ink-45 text-center py-4">Geen subtaken geconfigureerd</p>
           )}
         </div>
       )}
@@ -348,9 +348,9 @@ export default function RecurringTaskDetail() {
       {/* Kamers-sectie */}
       {isRoomsMode && (
         <div className="card">
-          <h2 className="font-semibold text-gray-900 mb-3">Kamers</h2>
+          <h2 className="font-semibold text-ink mb-3">Kamers</h2>
           {doneToday && activeTickets.length === 0 ? (
-            <p className="text-sm text-gray-400 text-center py-4">Alle kamers zijn vandaag afgerond ✓</p>
+            <p className="text-sm text-ink-45 text-center py-4">Alle kamers zijn vandaag afgerond ✓</p>
           ) : (
             <div className="space-y-2">
               {/* Actieve tickets (open kamers) */}
@@ -359,23 +359,23 @@ export default function RecurringTaskDetail() {
                 const roomKeycard = ticket.location_id ? keycards[ticket.location_id] : null;
                 const isCompletingRoom = completing === ticket.location_id;
                 return (
-                  <div key={ticket.id} className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl">
+                  <div key={ticket.id} className="flex items-center gap-3 p-3 border border-ink-12 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-ink">
                           🚪 {roomName ?? ticket.location_id ?? "Onbekende kamer"}
                         </span>
                         {roomKeycard?.found && (
                           roomKeycard.occupied
-                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Bezet</span>
-                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">Vrij</span>
+                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-high-soft text-high">Bezet</span>
+                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-done-soft text-done">Vrij</span>
                         )}
                       </div>
                     </div>
                     <button
                       onClick={() => handleComplete(ticket.location_id ?? undefined)}
                       disabled={completing !== null || !canManage}
-                      className="shrink-0 text-sm text-green-700 font-medium border border-green-200 rounded-lg px-3 py-1.5 hover:bg-green-50 transition-colors disabled:opacity-50"
+                      className="shrink-0 text-sm text-done font-medium border border-done rounded-lg px-3 py-1.5 hover:bg-done-soft transition-colors disabled:opacity-50"
                     >
                       {isCompletingRoom ? "Bezig..." : "✓ Afronden"}
                     </button>
@@ -389,23 +389,23 @@ export default function RecurringTaskDetail() {
                 const roomKeycard = keycards[roomId];
                 const isCompletingRoom = completing === roomId;
                 return (
-                  <div key={roomId} className="flex items-center gap-3 p-3 border border-gray-200 rounded-xl">
+                  <div key={roomId} className="flex items-center gap-3 p-3 border border-ink-12 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-gray-900">
+                        <span className="text-sm font-medium text-ink">
                           🚪 {roomName ?? roomId}
                         </span>
                         {roomKeycard?.found && (
                           roomKeycard.occupied
-                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">Bezet</span>
-                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-green-100 text-green-700">Vrij</span>
+                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-high-soft text-high">Bezet</span>
+                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-done-soft text-done">Vrij</span>
                         )}
                       </div>
                     </div>
                     <button
                       onClick={() => handleComplete(roomId)}
                       disabled={completing !== null || !template.is_active || !canManage}
-                      className="shrink-0 text-sm text-green-700 font-medium border border-green-200 rounded-lg px-3 py-1.5 hover:bg-green-50 transition-colors disabled:opacity-50"
+                      className="shrink-0 text-sm text-done font-medium border border-done rounded-lg px-3 py-1.5 hover:bg-done-soft transition-colors disabled:opacity-50"
                     >
                       {isCompletingRoom ? "Bezig..." : "✓ Afronden"}
                     </button>
@@ -414,7 +414,7 @@ export default function RecurringTaskDetail() {
               })}
 
               {activeTickets.length === 0 && !template.subtask_items?.length && (
-                <p className="text-sm text-gray-400 text-center py-4">Geen kamers geconfigureerd</p>
+                <p className="text-sm text-ink-45 text-center py-4">Geen kamers geconfigureerd</p>
               )}
             </div>
           )}
@@ -423,16 +423,16 @@ export default function RecurringTaskDetail() {
 
       {/* Uitvoeringslog */}
       <div className="card">
-        <h2 className="font-semibold text-gray-900 mb-3">Uitvoeringslog</h2>
+        <h2 className="font-semibold text-ink mb-3">Uitvoeringslog</h2>
         {history.length === 0 ? (
-          <p className="text-sm text-gray-400 text-center py-4">Nog niet uitgevoerd</p>
+          <p className="text-sm text-ink-45 text-center py-4">Nog niet uitgevoerd</p>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-ink-6">
             {history.map((entry) => (
               <div key={entry.id} className="flex items-center justify-between py-2.5 gap-3">
                 <div className="flex items-center gap-2">
-                  <span className="text-green-500 text-sm">✓</span>
-                  <span className="text-sm text-gray-700">
+                  <span className="text-done text-sm">✓</span>
+                  <span className="text-sm text-ink-70">
                     {entry.closed_by === "nfc"
                       ? "Via NFC"
                       : entry.closed_by === "system"
@@ -440,7 +440,7 @@ export default function RecurringTaskDetail() {
                       : (entry.closed_by && users[entry.closed_by]) || entry.closed_by || "Onbekend"}
                   </span>
                 </div>
-                <span className="text-xs text-gray-400 shrink-0">
+                <span className="text-xs text-ink-45 shrink-0">
                   {entry.closed_at
                     ? format(parseUTC(entry.closed_at), "dd:MM:yyyy HH:mm", { locale: nl })
                     : "–"}

@@ -70,7 +70,7 @@ export function valueClass(
   variant: "text" | "table" = "text",
 ): string {
   const status = getValueStatus(key, val);
-  if (status === "leeg") return variant === "table" ? "text-gray-400" : "";
+  if (status === "leeg") return variant === "table" ? "text-ink-45" : "";
   if (status === "ok") return variant === "table" ? "" : "text-green-700";
   if (status === "buiten_advies")
     return variant === "table" ? "bg-yellow-50 text-yellow-800 font-semibold" : "text-yellow-700 font-semibold";
@@ -103,9 +103,9 @@ function Gauge({ rangeKey, value }: { rangeKey: RangeKey; value: number | null }
   return (
     <div className="mb-3 last:mb-0">
       <div className="flex items-baseline justify-between mb-1">
-        <span className="text-xs font-medium text-gray-700">
+        <span className="text-xs font-medium text-ink-70">
           {cfg.label}
-          <span className="text-[10px] text-gray-400 ml-1">
+          <span className="text-[10px] text-ink-45 ml-1">
             streef {aLo}
             {aHi > aLo ? `–${aHi}` : ""}
             {cfg.unit && ` ${cfg.unit}`}
@@ -137,7 +137,7 @@ function Gauge({ rangeKey, value }: { rangeKey: RangeKey; value: number | null }
           />
         )}
       </div>
-      <div className="flex justify-between mt-0.5 text-[10px] text-gray-400 tabular-nums">
+      <div className="flex justify-between mt-0.5 text-[10px] text-ink-45 tabular-nums">
         <span>{bLo}</span>
         <span>{bHi}</span>
       </div>
@@ -148,7 +148,7 @@ function Gauge({ rangeKey, value }: { rangeKey: RangeKey; value: number | null }
 function PoolGauges({ logs }: { logs: PoolLog[] }) {
   const latest = logs[0];
   if (!latest) {
-    return <p className="text-sm text-gray-400 italic">Nog niet genoeg data voor grafiek</p>;
+    return <p className="text-sm text-ink-45 italic">Nog niet genoeg data voor grafiek</p>;
   }
   return (
     <div>
@@ -199,8 +199,8 @@ function TrendChart({
   return (
     <div>
       <div className="flex items-baseline justify-between mb-0.5">
-        <span className="text-xs font-medium text-gray-700">{cfg.label}</span>
-        <span className="text-[10px] text-gray-400">
+        <span className="text-xs font-medium text-ink-70">{cfg.label}</span>
+        <span className="text-[10px] text-ink-45">
           streef {aLo}
           {aHi > aLo ? `–${aHi}` : ""}
           {cfg.unit && ` ${cfg.unit}`}
@@ -263,7 +263,7 @@ function TrendChart({
 
 function PoolTrend({ logs }: { logs: PoolLog[] }) {
   if (logs.length < 2) {
-    return <p className="text-sm text-gray-400 italic">Nog niet genoeg data voor grafiek</p>;
+    return <p className="text-sm text-ink-45 italic">Nog niet genoeg data voor grafiek</p>;
   }
   const data = buildTrendData(logs);
   return (
@@ -282,9 +282,9 @@ export function PoolValueVisualization({ logs }: { logs: PoolLog[] }) {
   const [mode, setMode] = useState<"huidig" | "trend">("huidig");
 
   return (
-    <div className="mt-4 pt-3 border-t border-gray-100">
+    <div className="mt-4 pt-3 border-t border-ink-6">
       <div className="flex items-center gap-1 mb-3">
-        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wide mr-auto">
+        <span className="text-xs font-semibold text-ink-45 uppercase tracking-wide mr-auto">
           Waardes versus streefbereik
         </span>
         <button
@@ -296,8 +296,8 @@ export function PoolValueVisualization({ logs }: { logs: PoolLog[] }) {
           aria-pressed={mode === "huidig"}
           className={`text-xs px-2.5 py-1 rounded-md ${
             mode === "huidig"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              ? "bg-brand text-white"
+              : "bg-ink-6 text-ink-70 hover:bg-ink-12"
           }`}
         >
           Huidig
@@ -311,8 +311,8 @@ export function PoolValueVisualization({ logs }: { logs: PoolLog[] }) {
           aria-pressed={mode === "trend"}
           className={`text-xs px-2.5 py-1 rounded-md ${
             mode === "trend"
-              ? "bg-blue-600 text-white"
-              : "bg-gray-100 text-gray-700 hover:bg-gray-200"
+              ? "bg-brand text-white"
+              : "bg-ink-6 text-ink-70 hover:bg-ink-12"
           }`}
         >
           Trend 14d

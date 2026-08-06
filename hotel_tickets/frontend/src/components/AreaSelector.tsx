@@ -17,7 +17,7 @@ export default function AreaSelector({ value, onChange }: Props) {
     <select
       value={value || ""}
       onChange={(e) => onChange(e.target.value || null)}
-      className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+      className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm bg-paper-raised"
     >
       <option value="">— Geen locatie —</option>
       {locations.map((loc) => (

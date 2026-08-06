@@ -74,52 +74,52 @@ export default function Apparaten() {
   return (
     <div className="max-w-lg mx-auto">
       <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700">
+        <button onClick={() => navigate(-1)} className="text-ink-45 hover:text-ink-70">
           ←
         </button>
-        <h1 className="text-xl font-bold text-gray-900">Actieve apparaten</h1>
+        <h1 className="text-xl font-bold text-ink">Actieve apparaten</h1>
       </div>
 
       <div className="card space-y-4">
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-ink-70">
           Dit zijn de apparaten waarop je nu bent ingelogd. Zolang je de app blijft gebruiken, blijf
           je op deze apparaten ingelogd. Herken je er één niet? Log het dan uit — dat apparaat moet
           daarna opnieuw inloggen.
         </p>
 
         {sessions === null ? (
-          <p className="text-sm text-gray-400">Laden…</p>
+          <p className="text-sm text-ink-45">Laden…</p>
         ) : sessions.length === 0 ? (
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-ink-45">
             Geen actieve apparaten gevonden. Sessiebeheer geldt alleen wanneer je via de aparte
             loginpagina bent ingelogd (niet via Home Assistant zelf).
           </p>
         ) : (
-          <div className="divide-y divide-gray-100">
+          <div className="divide-y divide-ink-6">
             {sessions.map((s) => (
               <div key={s.id} className="py-3 flex items-center gap-3">
                 <span className="text-2xl shrink-0">{deviceEmoji(s.device)}</span>
                 <div className="flex-1 min-w-0">
-                  <p className="text-sm font-medium text-gray-900 truncate">
+                  <p className="text-sm font-medium text-ink truncate">
                     {s.device}
                     {s.current && (
-                      <span className="ml-2 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                      <span className="ml-2 text-xs bg-done-soft text-done px-2 py-0.5 rounded-full font-medium">
                         Dit apparaat
                       </span>
                     )}
                   </p>
-                  <p className="text-xs text-gray-500 truncate">
+                  <p className="text-xs text-ink-45 truncate">
                     Laatst actief {timeAgo(s.last_seen_at)}
                     {s.ip ? ` · ${s.ip}` : ""}
                   </p>
                 </div>
                 {s.current ? (
-                  <span className="text-xs text-gray-400 shrink-0">actief</span>
+                  <span className="text-xs text-ink-45 shrink-0">actief</span>
                 ) : (
                   <button
                     onClick={() => revoke(s.id)}
                     disabled={busy === s.id}
-                    className="text-sm text-red-600 hover:underline shrink-0 disabled:opacity-50"
+                    className="text-sm text-urgent hover:underline shrink-0 disabled:opacity-50"
                   >
                     {busy === s.id ? "Uitloggen…" : "Uitloggen"}
                   </button>
@@ -129,7 +129,7 @@ export default function Apparaten() {
           </div>
         )}
 
-        {error && <p className="text-sm text-red-600">{error}</p>}
+        {error && <p className="text-sm text-urgent">{error}</p>}
 
         {others.length > 0 && (
           <button

@@ -23,9 +23,9 @@ function todayDateStr() {
 }
 
 function getDisplayStatus(r: BikeReservation, today: string): DisplayStatus {
-  if (r.status === "completed") return { label: "Voltooid", cls: "bg-gray-100 text-gray-600" };
+  if (r.status === "completed") return { label: "Voltooid", cls: "bg-ink-6 text-ink-70" };
   if (r.status === "cancelled") return { label: "Geannuleerd", cls: "bg-red-100 text-red-800" };
-  if (r.start_date > today) return { label: "Gepland", cls: "bg-blue-100 text-blue-800" };
+  if (r.start_date > today) return { label: "Gepland", cls: "bg-ink-6 text-brand" };
   return { label: "Verhuurd", cls: "bg-green-100 text-green-800" };
 }
 
@@ -148,12 +148,12 @@ function Timeline({
   }
 
   function blockColor(r: BikeReservation): string {
-    if (r.status === "completed") return "bg-gray-300 text-gray-600 border-gray-400";
+    if (r.status === "completed") return "bg-ink-25 text-ink-70 border-ink-25";
     if (r.start_date <= todayStr && r.end_date >= todayStr) {
       if (r.key_given_at && !r.key_returned_at) return "bg-red-500 text-white border-red-600";
       return "bg-green-500 text-white border-green-600";
     }
-    if (r.start_date > todayStr) return "bg-blue-500 text-white border-blue-600";
+    if (r.start_date > todayStr) return "bg-ink-60 text-white border-brand";
     return "bg-gray-400 text-white border-gray-500";
   }
 
@@ -165,7 +165,7 @@ function Timeline({
     <div>
       {/* Tijdlijn controls */}
       <div className="flex flex-wrap items-center gap-2 mb-3">
-        <label className="flex items-center gap-1.5 text-sm text-gray-600 cursor-pointer select-none">
+        <label className="flex items-center gap-1.5 text-sm text-ink-70 cursor-pointer select-none">
           <input
             type="checkbox"
             checked={showCompleted}
@@ -177,7 +177,7 @@ function Timeline({
         <div className="flex gap-1 ml-auto">
           <button
             onClick={() => setWindowStart(p => addDays(p, -7))}
-            className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-100 transition-colors"
+            className="px-3 py-1.5 rounded-lg border text-sm hover:bg-ink-6 transition-colors"
           >‹ -7d</button>
           <button
             onClick={() => {
@@ -186,22 +186,22 @@ function Timeline({
               d.setHours(0, 0, 0, 0);
               setWindowStart(d);
             }}
-            className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-gray-100 transition-colors"
+            className="px-3 py-1.5 rounded-lg border text-sm font-medium hover:bg-ink-6 transition-colors"
           >Vandaag</button>
           <button
             onClick={() => setWindowStart(p => addDays(p, 7))}
-            className="px-3 py-1.5 rounded-lg border text-sm hover:bg-gray-100 transition-colors"
+            className="px-3 py-1.5 rounded-lg border text-sm hover:bg-ink-6 transition-colors"
           >+7d ›</button>
         </div>
       </div>
 
-      <div ref={cardRef} className="bg-white rounded-2xl shadow overflow-hidden">
+      <div ref={cardRef} className="bg-paper-raised rounded-2xl shadow overflow-hidden">
         <div className="overflow-x-auto">
           <div style={{ minWidth: LABEL_W + totalW }}>
             {/* Maandkoppenrij */}
             <div className="flex sticky top-0 z-10">
-              <div className="shrink-0 bg-gray-800 border-r border-white/10" style={{ width: LABEL_W }} />
-              <div className="flex bg-gray-800 text-white text-xs font-semibold">
+              <div className="shrink-0 bg-ink border-r border-white/10" style={{ width: LABEL_W }} />
+              <div className="flex bg-ink text-white text-xs font-semibold">
                 {monthGroups.map((mg, i) => (
                   <div key={i} style={{ width: mg.span * DAY_W }} className="py-2 px-2 border-r border-white/10 capitalize truncate">
                     {mg.label}
@@ -222,7 +222,7 @@ function Timeline({
                       key={i}
                       style={{ width: DAY_W }}
                       className={`flex flex-col items-center justify-center py-1 border-r border-white/10 ${
-                        isToday ? "bg-blue-600 font-bold" : isWeekend ? "bg-gray-600" : ""
+                        isToday ? "bg-brand font-bold" : isWeekend ? "bg-gray-600" : ""
                       }`}
                     >
                       <span>{d.getDate()}</span>
@@ -236,8 +236,8 @@ function Timeline({
             {/* Fietsrijen per type */}
             {bikeGroups.map((group) => (
               <div key={group.typeName}>
-                <div className="flex border-b border-gray-200 bg-gray-50">
-                  <div style={{ width: LABEL_W }} className="shrink-0 px-3 py-1.5 text-[10px] font-semibold text-gray-500 uppercase tracking-wide border-r border-gray-200 flex items-center">
+                <div className="flex border-b border-ink-12 bg-ink-6">
+                  <div style={{ width: LABEL_W }} className="shrink-0 px-3 py-1.5 text-[10px] font-semibold text-ink-45 uppercase tracking-wide border-r border-ink-12 flex items-center">
                     <span className="truncate">{group.typeName}</span>
                   </div>
                   <div style={{ width: totalW }} />
@@ -247,26 +247,26 @@ function Timeline({
                   const bikeRes = resByBike[bike.id] || [];
                   const isRentedToday = bikeRes.some(r => r.status === "active" && r.start_date <= todayStr && r.end_date >= todayStr);
                   return (
-                    <div key={bike.id} className="flex border-b border-gray-100 hover:bg-gray-50 group" style={{ height: ROW_H }}>
-                      <div style={{ width: LABEL_W }} className="shrink-0 border-r border-gray-200 flex items-center gap-2 px-3">
+                    <div key={bike.id} className="flex border-b border-ink-6 hover:bg-ink-6 group" style={{ height: ROW_H }}>
+                      <div style={{ width: LABEL_W }} className="shrink-0 border-r border-ink-12 flex items-center gap-2 px-3">
                         <span className={`w-2 h-2 rounded-full shrink-0 ${
                           bike.status === "maintenance" ? "bg-orange-400" :
-                          isRentedToday ? "bg-green-500" : "bg-gray-300"
+                          isRentedToday ? "bg-green-500" : "bg-ink-25"
                         }`} />
                         <div className="min-w-0">
                           <p className="text-xs font-semibold truncate">#{bike.number}</p>
-                          <p className="text-[10px] text-gray-400 truncate">{bike.total_rental_days}d</p>
+                          <p className="text-[10px] text-ink-45 truncate">{bike.total_rental_days}d</p>
                         </div>
                       </div>
 
                       <div className="relative" style={{ width: totalW }}>
                         {days.map((d, i) =>
                           (d.getDay() === 0 || d.getDay() === 6) ? (
-                            <div key={i} className="absolute top-0 bottom-0 bg-gray-50 pointer-events-none" style={{ left: i * DAY_W, width: DAY_W }} />
+                            <div key={i} className="absolute top-0 bottom-0 bg-ink-6 pointer-events-none" style={{ left: i * DAY_W, width: DAY_W }} />
                           ) : null
                         )}
                         {todayInWindow && (
-                          <div className="absolute top-0 bottom-0 bg-blue-100 opacity-50 pointer-events-none" style={{ left: todayOffset * DAY_W, width: DAY_W }} />
+                          <div className="absolute top-0 bottom-0 bg-ink-6 opacity-50 pointer-events-none" style={{ left: todayOffset * DAY_W, width: DAY_W }} />
                         )}
                         {bikeRes.map((r) => {
                           const geo = blockGeometry(r);
@@ -291,19 +291,19 @@ function Timeline({
             ))}
 
             {bikes.length === 0 && (
-              <div className="flex items-center justify-center h-32 text-gray-400 text-sm">
+              <div className="flex items-center justify-center h-32 text-ink-45 text-sm">
                 Geen fietsen gevonden
               </div>
             )}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-4 px-4 py-3 bg-gray-50 border-t text-xs text-gray-500">
+        <div className="flex flex-wrap items-center gap-4 px-4 py-3 bg-ink-6 border-t text-xs text-ink-45">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-green-500" /> Verhuurd vandaag</div>
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-red-500" /> Sleutel uit</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-blue-500" /> Gepland</div>
-          {showCompleted && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-gray-300" /> Voltooid</div>}
-          <span className="ml-auto text-gray-400">Klik op een blok om de reservering te openen</span>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-ink-60" /> Gepland</div>
+          {showCompleted && <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-ink-25" /> Voltooid</div>}
+          <span className="ml-auto text-ink-45">Klik op een blok om de reservering te openen</span>
         </div>
       </div>
     </div>
@@ -319,17 +319,17 @@ function ReservationRow({ r, onClick }: { r: BikeReservation; onClick: () => voi
 
   return (
     <tr
-      className={`border-b hover:bg-gray-50 cursor-pointer transition-colors ${isNow ? "bg-blue-50" : ""}`}
+      className={`border-b hover:bg-ink-6 cursor-pointer transition-colors ${isNow ? "bg-ink-6" : ""}`}
       onClick={onClick}
     >
-      <td className="py-3 px-4 text-sm font-medium text-gray-500">#{r.id}</td>
+      <td className="py-3 px-4 text-sm font-medium text-ink-45">#{r.id}</td>
       <td className="py-3 px-4">
         <p className="font-medium text-sm">{r.guest_name}</p>
-        {r.guest_room && <p className="text-xs text-gray-400">Kamer {r.guest_room}</p>}
+        {r.guest_room && <p className="text-xs text-ink-45">Kamer {r.guest_room}</p>}
       </td>
       <td className="py-3 px-4 text-sm">
         <p>{formatDateNL(r.start_date)}</p>
-        <p className="text-xs text-gray-400">t/m {formatDateNL(r.end_date)} ({r.num_days}d)</p>
+        <p className="text-xs text-ink-45">t/m {formatDateNL(r.end_date)} ({r.num_days}d)</p>
       </td>
       <td className="py-3 px-4 text-sm">
         {r.num_bikes}× {r.bike_type_name}
@@ -400,7 +400,7 @@ function ReservationList({ reservations, onNavigate }: { reservations: BikeReser
               onClick={() => toggle(s)}
               aria-pressed={active}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                active ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                active ? "bg-brand text-white" : "bg-ink-6 text-ink-70 hover:bg-ink-12"
               }`}
             >
               {active ? "✓ " : ""}{FILTER_LABELS[s]}
@@ -412,17 +412,17 @@ function ReservationList({ reservations, onNavigate }: { reservations: BikeReser
           placeholder="Zoek op naam, kamer of #..."
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="ml-auto border rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-blue-300"
+          className="ml-auto border rounded-lg px-3 py-1.5 text-sm w-52 focus:outline-none focus:ring-2 focus:ring-brand"
         />
       </div>
 
-      <div className="bg-white rounded-2xl shadow overflow-hidden">
+      <div className="bg-paper-raised rounded-2xl shadow overflow-hidden">
         {filtered.length === 0 ? (
-          <p className="p-6 text-gray-400 italic">Geen reserveringen gevonden</p>
+          <p className="p-6 text-ink-45 italic">Geen reserveringen gevonden</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-left">
-              <thead className="bg-gray-50 text-xs text-gray-500 uppercase tracking-wide">
+              <thead className="bg-ink-6 text-xs text-ink-45 uppercase tracking-wide">
                 <tr>
                   <th className="py-3 px-4">#</th>
                   <th className="py-3 px-4">Gast</th>
@@ -466,7 +466,7 @@ export default function BikeReserveringen() {
       .finally(() => setLoading(false));
   }, []);
 
-  if (loading) return <p className="p-4 text-gray-400">Laden...</p>;
+  if (loading) return <p className="p-4 text-ink-45">Laden...</p>;
 
   return (
     <div className="max-w-full">
@@ -474,11 +474,11 @@ export default function BikeReserveringen() {
         <div className="flex flex-wrap items-center gap-3">
           <h1 className="text-2xl font-bold">Reserveringen</h1>
           {/* View toggle */}
-          <div className="flex gap-1 bg-gray-100 p-1 rounded-xl shrink-0">
+          <div className="flex gap-1 bg-ink-6 p-1 rounded-xl shrink-0">
             <button
               onClick={() => setView("tijdlijn")}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                view === "tijdlijn" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+                view === "tijdlijn" ? "bg-paper-raised shadow text-ink" : "text-ink-45 hover:text-ink-70"
               }`}
             >
               📆 Tijdlijn
@@ -486,7 +486,7 @@ export default function BikeReserveringen() {
             <button
               onClick={() => setView("lijst")}
               className={`px-3 py-1 rounded-lg text-sm font-medium transition-colors ${
-                view === "lijst" ? "bg-white shadow text-gray-900" : "text-gray-500 hover:text-gray-700"
+                view === "lijst" ? "bg-paper-raised shadow text-ink" : "text-ink-45 hover:text-ink-70"
               }`}
             >
               📋 Lijst
@@ -495,7 +495,7 @@ export default function BikeReserveringen() {
         </div>
         <button
           onClick={() => navigate("/bikes/reserveringen/nieuw")}
-          className="bg-blue-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
+          className="bg-brand text-white px-4 py-2 rounded-lg text-sm font-medium hover:opacity-90 transition-colors"
         >
           + Nieuwe reservering
         </button>
