@@ -15,6 +15,10 @@
     --blue-700: #1d4ed8;
     --blue-800: #1e40af;
     --blue-900: #1e3799;
+
+    /* Interactiekleur (tokenlaag `brand`). Volgt de instelbare knopkleur;
+       applyButtonPalette() overschrijft hem bij een eigen huisstijl. */
+    --brand: #2563eb;
   }
 
   /* Reserveer onderaan ruimte waar het virtuele toetsenbord opkomt: iOS
@@ -77,6 +81,12 @@
   display: none;
 }
 
+/* Zolang de "Ongedaan maken"-balk onderin staat, schuiven de zwevende
+   actieknoppen omhoog — anders dekt de meldknop precies die balk af. */
+body.undo-open {
+  --undo-lift: 4.75rem;
+}
+
 /* Ruimte onderin voor de zwevende actieknop (het vraag-wolkje), zodat de
    inhoud onderaan de pagina er nooit onder verdwijnt als je helemaal naar
    beneden scrolt: 1rem afstand + 3,5rem knop + marge. */
@@ -128,5 +138,25 @@
   }
   .badge {
     @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium whitespace-nowrap;
+  }
+
+  /* ── Werkrij ────────────────────────────────────────────────────────────
+     Drie klassen, niet meer. De linkerrand betekent overal hetzelfde:
+     prioriteit. Wie die ergens anders voor gebruikt, breekt de hele set. */
+  .row {
+    @apply flex items-center gap-3.5 bg-paper-raised border border-ink-12
+           rounded-[10px] pl-4 pr-3 py-3.5;
+  }
+  .row--urgent {
+    @apply border-l-4 border-l-urgent pl-3;
+  }
+  .row--high {
+    @apply border-l-4 border-l-high pl-3;
+  }
+  .tap {
+    @apply min-w-tap min-h-tap inline-flex items-center justify-center;
+  }
+  .meta {
+    @apply text-meta text-ink-45;
   }
 }

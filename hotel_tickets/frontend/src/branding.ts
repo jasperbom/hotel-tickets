@@ -48,8 +48,11 @@ export function applyButtonPalette(hex: string | null) {
   const root = document.documentElement;
   if (!hex) {
     for (const step of PALETTE_STEPS) root.style.removeProperty(`--blue-${step}`);
+    root.style.removeProperty("--brand");
     return;
   }
+  // Tokenlaag: `brand` is de enige kleur die interactie mag dragen.
+  root.style.setProperty("--brand", hex);
   const [h, s] = hexToHsl(hex);
   const sat = Math.min(s * 1.1, 95);
   root.style.setProperty("--blue-50",  hslToHex(h, Math.min(s * 0.25, 40), 97));

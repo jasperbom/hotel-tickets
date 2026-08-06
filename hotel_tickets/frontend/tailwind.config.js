@@ -5,7 +5,34 @@ export default {
   content: ["./index.html", "./src/**/*.{js,ts,jsx,tsx}"],
   theme: {
     extend: {
+      // ── Ontwerptokens ──────────────────────────────────────────────────────
+      // Semantische namen maken de verkeerde keuze moeilijker dan de goede:
+      // in feature-code hoort geen kale Tailwind-kleur meer voor te komen,
+      // alleen ink / paper / urgent / high / done / brand. Heb je een kleur
+      // nodig die er niet is, dan is dat een ontwerpvraag.
+      fontSize: {
+        meta: ["0.875rem", { lineHeight: "1.4" }],    // 14px — ondergrens inhoud
+        body: ["1rem", { lineHeight: "1.55" }],       // 16px
+        row: ["1.0625rem", { lineHeight: "1.3" }],    // 17px — titels in rijen
+      },
+      spacing: {
+        tap: "2.75rem",   // 44px — minimaal tapdoel
+        tapLg: "3rem",    // 48px — primaire actie
+      },
       colors: {
+        ink: {
+          DEFAULT: "#1C1B19",
+          70: "#4B4945",
+          45: "#6E6B65",
+          25: "#A8A49C",
+          12: "#DAD6CE",
+          6: "#EFEBE3",
+        },
+        paper: { DEFAULT: "#FBFAF7", raised: "#FFFFFF" },
+        urgent: { DEFAULT: "#C0392F", soft: "#FAEAE7" }, // uitsluitend prioriteit urgent
+        high: { DEFAULT: "#8F5410", soft: "#FCF3E4" },   // uitsluitend prioriteit hoog
+        done: { DEFAULT: "#2F6B46", soft: "#E8F1EB" },   // uitsluitend 'klaar'
+        brand: "var(--brand, #2563eb)",                  // uitsluitend interactie
         hotel: {
           50: "#f0f7ff",
           100: "#e0effe",
