@@ -497,7 +497,14 @@ export default function BikesDashboard() {
           {bikeGroups.map((group) => (
             <div key={group.typeName}>
               <p className="text-xs font-semibold text-ink-45 uppercase tracking-wide mb-2">{group.typeName}</p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 2xl:grid-cols-10 gap-2">
+              {/* Vaste kolomaantallen per breekpunt liepen tegen de max-breedte
+                  van de inhoud aan: het scherm werd breder, het rooster niet, en
+                  dus werden de kaartjes juist smaller. Nu bepaalt de kaart zijn
+                  eigen minimum en volgt het aantal kolommen de ruimte. */}
+              <div
+                className="grid gap-2"
+                style={{ gridTemplateColumns: "repeat(auto-fill, minmax(10.5rem, 1fr))" }}
+              >
                 {group.bikes.map((b) => (
                   <BikeCard
                     key={b.id}

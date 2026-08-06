@@ -339,7 +339,7 @@ export default function Melden() {
         {/* Primaire actie, vastgeplakt onderin */}
         <div
           className="fixed left-0 right-0 z-30 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5 md:left-[calc(4rem+220px)]"
-          style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+          style={{ bottom: "var(--onderbalk)" }}
         >
           <div className="max-w-lg">
             <button

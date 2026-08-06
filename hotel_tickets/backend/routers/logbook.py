@@ -38,6 +38,21 @@ CONTROLE_CRON = "0 8 * * *"
 
 # --- Schemas ---
 
+class MaintenanceIn(BaseModel):
+    """Eén onderhoudsschema. Zonder id is het nieuw; met id wordt het bijgewerkt."""
+    id: str | None = None
+    title: str | None = None
+    interval_days: int
+
+
+class MaintenanceOut(BaseModel):
+    id: str
+    title: str
+    interval_days: int | None
+    next_check_at: datetime | None
+    is_active: bool
+
+
 class LogObjectCreate(BaseModel):
     name: str
     type: LogObjectType
@@ -50,10 +65,12 @@ class LogObjectCreate(BaseModel):
     kind: str | None = None
     purchase_date: date | None = None
     supplier: str | None = None
-    # Onderhoudsinterval in dagen. Geen kolom op het object: het wordt een
+    # Onderhoudsschema's. Geen kolom op het object: elk schema wordt een
     # herhaaltaak, zodat de controle als gewoon werk op Vandaag verschijnt in
-    # plaats van als een datum die niemand bekijkt.
-    maintenance_interval_days: int | None = None
+    # plaats van als een datum die niemand bekijkt. Een lijst, want één ding
+    # heeft vaak meer dan één ritme: de cv-ketel maandelijks ontluchten én
+    # jaarlijks een servicebeurt.
+    maintenance: list["MaintenanceIn"] | None = None
 
 
 class LogObjectUpdate(BaseModel):
@@ -68,7 +85,7 @@ class LogObjectUpdate(BaseModel):
     kind: str | None = None
     purchase_date: date | None = None
     supplier: str | None = None
-    maintenance_interval_days: int | None = None
+    maintenance: list["MaintenanceIn"] | None = None
     is_active: bool | None = None
 
 
@@ -91,9 +108,7 @@ class LogObjectOut(BaseModel):
     last_check_at: datetime | None = None
     open_tickets: int = 0
     overdue: bool = False
-    schedule: str | None = None
-    maintenance_interval_days: int | None = None
-    next_check_at: datetime | None = None
+    maintenance: list["MaintenanceOut"] = []
 
     model_config = {"from_attributes": True}
 
@@ -150,74 +165,109 @@ async def _laatste_controle(db: AsyncSession, object_id: str) -> datetime | None
     return regel.created_at if regel else None
 
 
-async def _sync_controleschema(
-    db: AsyncSession, obj: LogObject, interval_days: int | None
-) -> RecurringTemplate | None:
-    """
-    Het onderhoudsinterval van een object ís een herhaaltaak — er komt geen
-    tweede motor naast. Zo verschijnt "Controle noodverlichting" gewoon tussen
-    het werk op Vandaag, en schrijft het afvinken meteen de regel in het boek
-    (de koppeling loopt via ``object_id``).
+async def _schemas_van(db: AsyncSession, object_ids: list[str]) -> dict[str, list[RecurringTemplate]]:
+    """De actieve controleschema's per object, in aanmaakvolgorde."""
+    rijen = (await db.execute(
+        select(RecurringTemplate)
+        .where(and_(
+            RecurringTemplate.object_id.in_(object_ids),
+            RecurringTemplate.is_active == True,  # noqa: E712
+        ))
+        .order_by(RecurringTemplate.created_at)
+    )).scalars().all()
+    per: dict[str, list[RecurringTemplate]] = {}
+    for t in rijen:
+        per.setdefault(t.object_id, []).append(t)
+    return per
 
-    Leegmaken verwijdert het sjabloon niet maar zet het uit: de geschiedenis van
-    wat er ooit gepland stond blijft zo bestaan.
+
+def _als_out(templates: list[RecurringTemplate]) -> list[MaintenanceOut]:
+    return [
+        MaintenanceOut(
+            id=t.id,
+            title=t.title,
+            interval_days=t.interval_days,
+            next_check_at=t.next_due_at,
+            is_active=t.is_active,
+        )
+        for t in templates
+    ]
+
+
+async def _sync_controleschemas(
+    db: AsyncSession, obj: LogObject, gewenst: list[MaintenanceIn]
+) -> list[RecurringTemplate]:
+    """
+    Onderhoudsschema's van een object ín de herhaaltaken — er komt geen tweede
+    motor naast. Zo verschijnt "Controle noodverlichting" gewoon tussen het werk
+    op Vandaag, en schrijft het afvinken meteen de regel in het boek (de
+    koppeling loopt via ``object_id``).
+
+    Eén ding heeft vaak meer dan één ritme: maandelijks een visuele controle,
+    jaarlijks de keuring. Elk schema is een eigen herhaaltaak met een eigen
+    teller, die loopt vanaf de laatste registratie — een keuring die drie weken
+    te laat was moet daarna wéér een jaar mee, niet meteen opnieuw.
+
+    Een schema dat uit de lijst verdwijnt wordt uitgezet, niet verwijderd: wat er
+    ooit gepland stond blijft zo terug te vinden.
     """
     from ..scheduler import remove_template, schedule_template
 
-    template = (await db.execute(
-        select(RecurringTemplate).where(RecurringTemplate.object_id == obj.id).limit(1)
-    )).scalars().first()
-
-    if not interval_days or interval_days <= 0:
-        if template and template.is_active:
-            template.is_active = False
-            await db.flush()
-            await remove_template(template.id)
-        return None
+    bestaand = (await db.execute(
+        select(RecurringTemplate)
+        .where(RecurringTemplate.object_id == obj.id)
+        .order_by(RecurringTemplate.created_at)
+    )).scalars().all()
+    per_id = {t.id: t for t in bestaand}
 
     vorige = await _laatste_controle(db, obj.id)
-    volgende = (vorige or datetime.now(timezone.utc)) + timedelta(days=interval_days)
+    basis = vorige or datetime.now(timezone.utc)
 
-    if template is None:
-        template = RecurringTemplate(
-            title=f"Controle {obj.name}",
-            description=obj.description,
-            category=obj.department or Category.technical,
-            priority=Priority.medium,
-            location_id=obj.location_id,
-            cron_expression=CONTROLE_CRON,
-            interval_days=interval_days,
-            next_due_at=volgende,
-            object_id=obj.id,
-            # Zelfde map als het object, zodat de controle bij Herhalend naast
-            # de andere brandveiligheidstaken staat en niet bij "Zonder map".
-            folder=obj.folder,
-        )
-        db.add(template)
-    else:
-        # Een bestaand sjabloon niet overschrijven: titel, afdeling en subtaken
-        # kunnen met de hand zijn bijgesteld bij Herhalend. Alleen de teller.
-        if template.interval_days != interval_days or template.next_due_at is None:
-            template.next_due_at = volgende
-        template.interval_days = interval_days
-        template.is_active = True
+    gehouden: list[RecurringTemplate] = []
+    for wens in gewenst:
+        if not wens.interval_days or wens.interval_days <= 0:
+            continue
+        titel = (wens.title or "").strip() or f"Controle {obj.name}"
+        template = per_id.get(wens.id) if wens.id else None
+
+        if template is None:
+            template = RecurringTemplate(
+                title=titel,
+                description=obj.description,
+                category=obj.department or Category.technical,
+                priority=Priority.medium,
+                location_id=obj.location_id,
+                cron_expression=CONTROLE_CRON,
+                interval_days=wens.interval_days,
+                next_due_at=basis + timedelta(days=wens.interval_days),
+                object_id=obj.id,
+                # Zelfde map als het object, zodat de controle bij Herhalend
+                # naast de andere brandveiligheidstaken staat.
+                folder=obj.folder,
+            )
+            db.add(template)
+        else:
+            # Alleen de teller en de naam bijstellen: afdeling, prioriteit en
+            # subtaken kunnen met de hand zijn aangepast bij Herhalend.
+            if template.interval_days != wens.interval_days or template.next_due_at is None:
+                template.next_due_at = basis + timedelta(days=wens.interval_days)
+            template.interval_days = wens.interval_days
+            template.title = titel
+            template.is_active = True
+        gehouden.append(template)
 
     await db.flush()
-    await schedule_template(template)
-    return template
+    for template in gehouden:
+        await schedule_template(template)
 
-
-def _schema_op(item: LogObjectOut, template: RecurringTemplate | None) -> None:
-    """
-    In interval-modus is de cron alleen het dagelijkse tikje van de scheduler;
-    hem tonen zou "elke dag" opleveren terwijl er maandelijks gecontroleerd
-    wordt. Dan dus geen schema, alleen het interval.
-    """
-    if template is None:
-        return
-    item.maintenance_interval_days = template.interval_days
-    item.next_check_at = template.next_due_at
-    item.schedule = None if template.interval_days else template.cron_expression
+    # Wat niet meer in de lijst staat: uitzetten en uit de scheduler halen.
+    houden = {t.id for t in gehouden}
+    for template in bestaand:
+        if template.id not in houden and template.is_active:
+            template.is_active = False
+            await remove_template(template.id)
+    await db.flush()
+    return gehouden
 
 
 # --- Objecten ---
@@ -255,14 +305,8 @@ async def list_objects(
     for t in open_tickets:
         open_per[t.object_id] = open_per.get(t.object_id, 0) + 1
 
-    # Het controleschema van het object (de gekoppelde herhaaltaak)
-    templates = (await db.execute(
-        select(RecurringTemplate).where(and_(
-            RecurringTemplate.object_id.in_(ids),
-            RecurringTemplate.is_active == True,  # noqa: E712
-        ))
-    )).scalars().all()
-    schema_per = {t.object_id: t for t in templates}
+    # De controleschema's van het object (de gekoppelde herhaaltaken)
+    schema_per = await _schemas_van(db, ids)
 
     uit: list[LogObjectOut] = []
     for o in objects:
@@ -270,7 +314,7 @@ async def list_objects(
         item.last_check_at = laatste.get(o.id)
         item.open_tickets = open_per.get(o.id, 0)
         item.overdue = item.open_tickets > 0
-        _schema_op(item, schema_per.get(o.id))
+        item.maintenance = _als_out(schema_per.get(o.id, []))
         uit.append(item)
     return uit
 
@@ -280,13 +324,13 @@ async def create_object(body: LogObjectCreate, user: RequireUser, db: AsyncSessi
     if not _mag_beheren(user):
         raise HTTPException(status_code=403, detail="Alleen leidinggevenden kunnen objecten aanmaken")
     velden = body.model_dump()
-    interval = velden.pop("maintenance_interval_days", None)
+    velden.pop("maintenance", None)
     obj = LogObject(**velden)
     db.add(obj)
     await db.flush()
     item = LogObjectOut.model_validate(obj)
-    if interval:
-        _schema_op(item, await _sync_controleschema(db, obj, interval))
+    if body.maintenance:
+        item.maintenance = _als_out(await _sync_controleschemas(db, obj, body.maintenance))
     return item
 
 
@@ -308,13 +352,7 @@ async def get_object(object_id: str, user: RequireUser, db: AsyncSession = Depen
     )).scalars().all()
     item.open_tickets = len(open_count)
     item.overdue = item.open_tickets > 0
-    template = (await db.execute(
-        select(RecurringTemplate).where(and_(
-            RecurringTemplate.object_id == object_id,
-            RecurringTemplate.is_active == True,  # noqa: E712
-        )).limit(1)
-    )).scalars().first()
-    _schema_op(item, template)
+    item.maintenance = _als_out((await _schemas_van(db, [object_id])).get(object_id, []))
     return item
 
 
@@ -326,22 +364,17 @@ async def update_object(object_id: str, body: LogObjectUpdate, user: RequireUser
     if not obj:
         raise HTTPException(status_code=404, detail="Object niet gevonden")
     velden = body.model_dump(exclude_none=True)
-    velden.pop("maintenance_interval_days", None)
+    velden.pop("maintenance", None)
     for veld, waarde in velden.items():
         setattr(obj, veld, waarde)
 
-    # Het interval moet je ook op nul kunnen zetten ("geen onderhoud meer"),
-    # dus hier telt of het veld is meegestuurd — niet of het gevuld is.
+    # Een lege lijst betekent "geen onderhoud meer"; niet meegestuurd betekent
+    # "laat staan". Daarom telt hier of het veld ís meegestuurd.
     item = LogObjectOut.model_validate(obj)
-    if "maintenance_interval_days" in body.model_fields_set:
-        _schema_op(item, await _sync_controleschema(db, obj, body.maintenance_interval_days))
+    if "maintenance" in body.model_fields_set:
+        item.maintenance = _als_out(await _sync_controleschemas(db, obj, body.maintenance or []))
     else:
-        _schema_op(item, (await db.execute(
-            select(RecurringTemplate).where(and_(
-                RecurringTemplate.object_id == object_id,
-                RecurringTemplate.is_active == True,  # noqa: E712
-            )).limit(1)
-        )).scalars().first())
+        item.maintenance = _als_out((await _schemas_van(db, [object_id])).get(object_id, []))
     return item
 
 

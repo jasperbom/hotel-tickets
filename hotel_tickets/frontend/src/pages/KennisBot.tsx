@@ -227,7 +227,7 @@ export default function KennisBot() {
     <div
       data-no-kb-scroll
       className="flex flex-col max-w-2xl mx-auto"
-      style={{ height: "calc(var(--app-vh, 100dvh) - 7rem)" }}
+      style={{ height: "calc(var(--app-vh, 100dvh) - 7rem - var(--onderbalk))" }}
     >
       <div className="flex items-center gap-2 mb-3 shrink-0">
         <h1 className="text-xl font-bold text-ink flex items-center gap-2">

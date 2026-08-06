@@ -71,16 +71,21 @@ class BrandingOut(BaseModel):
     btn_color: str | None
     bg_color: str | None
     bg_image: str | None
+    # Tekst- en icoonkleur óp de navigatiekleur. Leeg = zelf uitrekenen (zwart
+    # of wit, wat het beste contrast geeft). Een huisstijl waarin dat net niet
+    # klopt — donkerblauw met een crèmewitte letter — kan hem overschrijven.
+    brand_text_color: str | None
 
 
 class BrandingUpdate(BaseModel):
     brand_color: str | None = None
     btn_color: str | None = None
     bg_color: str | None = None
+    brand_text_color: str | None = None
 
 
 async def _get_branding(db: AsyncSession) -> BrandingOut:
-    keys = ["brand_color", "brand_logo", "btn_color", "bg_color", "bg_image"]
+    keys = ["brand_color", "brand_logo", "btn_color", "bg_color", "bg_image", "brand_text_color"]
     rows = {k: await db.get(SystemSetting, k) for k in keys}
     return BrandingOut(**{k: rows[k].value if rows[k] else None for k in keys})
 
@@ -98,7 +103,7 @@ async def update_branding(
 ):
     if not user.is_admin:
         raise HTTPException(status_code=403, detail="Alleen admins kunnen de huisstijl wijzigen")
-    for field in ("brand_color", "btn_color", "bg_color"):
+    for field in ("brand_color", "btn_color", "bg_color", "brand_text_color"):
         value = getattr(body, field)
         if value is not None:
             row = await db.get(SystemSetting, field)

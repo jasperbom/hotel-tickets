@@ -8,11 +8,13 @@
  *   Titel      → grootte
  *   Prioriteit → kleur (de enige dimensie met kleur, en alleen bij uitzondering)
  *   Eigendom   → woord
- *   Afdeling   → grijze tekst, alleen als het niet je eigen afdeling is
+ *   Afdeling   → gekleurd plaatje met de afkorting, alleen als het niet je
+ *                eigen afdeling is
  *
- * `in_progress` bestaat in de database maar niet meer in de interface: of iets
- * "in behandeling" is zegt alleen wie de toewijzing deed. Wat een medewerker
- * wil weten is van wie het werk is.
+ * "In behandeling" stond hier een tijd niet meer bij — van wie het werk is zei
+ * meer dan of iemand het al aangeraakt had. Het staat er weer, als woord: een
+ * collega die eraan begónnen is, is iets anders dan een collega aan wie het is
+ * toegewezen.
  */
 import type { Category, Priority, Ticket } from "./api/client";
 import { parseUTC } from "./api/client";
@@ -142,6 +144,34 @@ export function intervalTekst(dagen: number): string {
     365: "jaarlijks",
   };
   return vast[dagen] ?? `elke ${dagen} dagen`;
+}
+
+/**
+ * De onderhoudsritmes van een object in één regel: "onderhoud maandelijks +
+ * jaarlijks". Een object mag er meerdere hebben — visueel controleren gaat
+ * vaker dan keuren.
+ */
+export function onderhoudTekst(
+  schemas: { interval_days: number | null }[] | undefined,
+): string | null {
+  const ritmes = (schemas ?? [])
+    .map((m) => m.interval_days)
+    .filter((d): d is number => !!d && d > 0)
+    .sort((a, b) => a - b)
+    .map(intervalTekst);
+  if (ritmes.length === 0) return null;
+  return `onderhoud ${ritmes.join(" + ")}`;
+}
+
+/** De eerstvolgende controle over alle schema's heen. */
+export function eersteControle(
+  schemas: { next_check_at: string | null }[] | undefined,
+): string | null {
+  const data = (schemas ?? [])
+    .map((m) => m.next_check_at)
+    .filter((d): d is string => !!d)
+    .sort();
+  return data[0] ?? null;
 }
 
 /** "kamer is vrij" is werkbare informatie; "Bezet" als losse pil niet. */
