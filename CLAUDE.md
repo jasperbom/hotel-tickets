@@ -89,8 +89,8 @@ cd hotel_tickets
 /opt/homebrew/bin/python3.13 -m venv .venv
 .venv/bin/pip install -r backend/requirements.txt
 
-# Backend starten (poort 8099, dev mode zonder HA auth)
-DEV_MODE=true DB_PATH=./test.db .venv/bin/python3.13 -m uvicorn backend.main:app --reload --port 8099
+# Backend starten (poort 8080, dev mode zonder HA auth)
+DEV_MODE=true DB_PATH=./test.db .venv/bin/python3.13 -m uvicorn backend.main:app --reload --port 8080
 
 # Frontend (apart terminal)
 cd frontend
@@ -100,7 +100,8 @@ npm run dev -- --port 5174
 ```
 
 In dev mode (`DEV_MODE=true`) wordt het token `dev-token` geaccepteerd zonder HA.
-De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
+De Vite dev server proxiet `/api/*` automatisch naar `localhost:8080` (zie
+`frontend/vite.config.ts`) — dezelfde poort als de addon in productie gebruikt.
 
 ## HA addon installeren
 
@@ -174,6 +175,8 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8099`.
 - **ticket_comments** — commentaar per ticket
 - **recurring_templates** — cron-gebaseerde taaksjablonen
 - **user_roles** — medewerker profiel + HA user_id koppeling
+- **log_objects** — dingen met een logboek (installatie/apparaat/gereedschap), met map, soort, aankoopdatum en leverancier
+- **log_entries** — onwisbare regels per object; corrigeren is een nieuwe regel, verwijderen bestaat niet
 - **sessions** — server-side loginsessies (intrekbaar + meeschuivend); alleen een SHA-256-hash van het token
 - **login_bans** — mislukte inlogpogingen / IP-blokkades loginpagina
 

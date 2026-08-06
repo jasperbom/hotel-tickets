@@ -7,7 +7,7 @@ import {
   locationApi, logbookApi, parseUTC, userApi,
   type LogEntry, type LogObject, type UserRole,
 } from "../api/client";
-import { AFDELING_LABELS, herhaalKort } from "../werk";
+import { AFDELING_LABELS, herhaalKort, intervalTekst } from "../werk";
 import { laatsteTekst } from "./Logboeken";
 
 /**
@@ -128,9 +128,22 @@ export default function LogboekObject() {
   const metaregel = [
     obj.location_id ? (locaties[obj.location_id] ?? obj.location_id) : null,
     TYPE_LABELS[obj.type],
-    herhaalKort(obj.schedule ?? undefined),
+    obj.maintenance_interval_days
+      ? `onderhoud ${intervalTekst(obj.maintenance_interval_days)}`
+      : herhaalKort(obj.schedule ?? undefined),
     obj.department ? AFDELING_LABELS[obj.department] : null,
   ].filter(Boolean).join(" · ");
+
+  // Herkomst staat op één regel: samen zeggen ze iets ("in 2019 gekocht bij
+  // Van der Meer"), los van elkaar bijna niets.
+  // Datum-zonder-tijd niet door parseUTC halen: die plakt er een Z achter en
+  // dat is geen geldige ISO-string. Middaguur voorkomt dat een tijdzone er een
+  // dag naast gaat zitten.
+  const aankoop = obj.purchase_date ? new Date(`${obj.purchase_date}T12:00:00`) : null;
+  const herkomst = [
+    aankoop ? `Gekocht ${format(aankoop, "d MMMM yyyy", { locale: nl })}` : null,
+    obj.supplier ? `bij ${obj.supplier}` : null,
+  ].filter(Boolean).join(" ");
 
   return (
     <div className="max-w-2xl pb-40">
@@ -157,6 +170,12 @@ export default function LogboekObject() {
       <h1 className="text-3xl font-bold text-ink leading-tight">{obj.name}</h1>
       <p className="meta mt-1.5">{metaregel}</p>
       {obj.serial && <p className="meta">Serienummer {obj.serial}</p>}
+      {herkomst && <p className="meta">{herkomst}</p>}
+      {obj.next_check_at && (
+        <p className="meta">
+          Volgende controle {format(parseUTC(obj.next_check_at), "d MMMM yyyy", { locale: nl })}
+        </p>
+      )}
       {obj.nfc_tag_id && <p className="meta print:hidden">NFC-sticker gekoppeld</p>}
       {obj.description && <p className="mt-3 text-body text-ink-70 whitespace-pre-wrap">{obj.description}</p>}
 

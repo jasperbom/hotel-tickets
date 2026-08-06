@@ -7,6 +7,7 @@ import {
 } from "../api/client";
 import { BevestigKnop } from "../components/BevestigKnop";
 import AreaSelector from "../components/AreaSelector";
+import { intervalTekst } from "../werk";
 import { mapVan } from "./Logboeken";
 
 type Tab = "systeem" | "logboeken" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot" | "beta";
@@ -1678,7 +1679,24 @@ const LEEG_OBJECT = {
   nfc_tag_id: "",
   folder: "",
   kind: "",
+  purchase_date: "",
+  supplier: "",
+  // Als tekst in het formulier, zodat "leeg" ook echt leeg is en niet 0.
+  maintenance_interval_days: "",
 };
+
+/**
+ * Veelgebruikte onderhoudsintervallen. Een vrij veld in dagen blijft ernaast
+ * bestaan — een keuring is soms elke 14 maanden.
+ */
+const INTERVALLEN: { label: string; dagen: string }[] = [
+  { label: "Geen", dagen: "" },
+  { label: "Wekelijks", dagen: "7" },
+  { label: "Maandelijks", dagen: "30" },
+  { label: "Per kwartaal", dagen: "91" },
+  { label: "Halfjaarlijks", dagen: "182" },
+  { label: "Jaarlijks", dagen: "365" },
+];
 
 /**
  * Objecten zijn de dingen met een logboek: de brandmeldcentrale, een airco,
@@ -1714,6 +1732,10 @@ function LogboekObjectenPanel() {
     new Set(objecten.map((o) => (o.kind ?? "").trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, "nl"));
 
+  const bekendeLeveranciers = Array.from(
+    new Set(objecten.map((o) => (o.supplier ?? "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "nl"));
+
   const perMap = (() => {
     const groepen = new Map<string, LogObject[]>();
     for (const o of objecten) {
@@ -1736,6 +1758,9 @@ function LogboekObjectenPanel() {
       nfc_tag_id: form.nfc_tag_id.trim() || null,
       folder: form.folder.trim() || null,
       kind: form.kind.trim() || null,
+      purchase_date: form.purchase_date || null,
+      supplier: form.supplier.trim() || null,
+      maintenance_interval_days: Number(form.maintenance_interval_days) || null,
     };
     try {
       if (bewerkt) await logbookApi.updateObject(bewerkt, data);
@@ -1757,9 +1782,9 @@ function LogboekObjectenPanel() {
   return (
     <Section title="Logboekobjecten">
       <p className="text-sm text-ink-45">
-        Een object is een ding met een naam, een plek en een geschiedenis. Koppel er
-        een herhaaltaak aan (bij Herhalend → controleschema) en het afvinken schrijft
-        vanzelf een onwisbare regel in het boek.
+        Een object is een ding met een naam, een plek en een geschiedenis. Zet er een
+        onderhoudsinterval op en de controle komt vanzelf als taak op Vandaag; het
+        afvinken schrijft dan een onwisbare regel in het boek.
       </p>
 
       {!open && (
@@ -1830,8 +1855,69 @@ function LogboekObjectenPanel() {
             <datalist id="logboek-soorten">
               {bekendeSoorten.map((k) => <option key={k} value={k} />)}
             </datalist>
+            <label className="flex flex-col gap-1">
+              <span className="meta">Aankoopdatum</span>
+              <input
+                type="date"
+                value={form.purchase_date}
+                onChange={(e) => setForm({ ...form, purchase_date: e.target.value })}
+                className="h-tap rounded-[10px] border border-ink-12 px-3 text-body"
+              />
+            </label>
+            <label className="flex flex-col gap-1">
+              <span className="meta">Leverancier</span>
+              <input
+                value={form.supplier}
+                onChange={(e) => setForm({ ...form, supplier: e.target.value })}
+                placeholder="bijv. Van der Meer Techniek"
+                list="logboek-leveranciers"
+                className="h-tap rounded-[10px] border border-ink-12 px-3 text-body"
+              />
+            </label>
+            <datalist id="logboek-leveranciers">
+              {bekendeLeveranciers.map((l) => <option key={l} value={l} />)}
+            </datalist>
           </div>
           <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
+
+          {/* Onderhoudsinterval — wordt een herhaaltaak op dit object */}
+          <div className="rounded-[10px] bg-ink-6 p-3 space-y-2">
+            <p className="text-sm font-semibold text-ink">Onderhoudsinterval</p>
+            <div className="flex flex-wrap gap-1.5">
+              {INTERVALLEN.map((i) => (
+                <button
+                  key={i.label}
+                  type="button"
+                  onClick={() => setForm({ ...form, maintenance_interval_days: i.dagen })}
+                  className={`h-tap px-3.5 inline-flex items-center rounded-full text-meta font-medium transition-colors ${
+                    form.maintenance_interval_days === i.dagen
+                      ? "bg-ink text-paper font-semibold"
+                      : "bg-paper-raised border border-ink-12 text-ink-70 hover:bg-ink-6"
+                  }`}
+                >
+                  {i.label}
+                </button>
+              ))}
+              <span className="flex items-center gap-1.5">
+                <span className="meta">of elke</span>
+                <input
+                  type="number"
+                  min={1}
+                  inputMode="numeric"
+                  value={form.maintenance_interval_days}
+                  onChange={(e) => setForm({ ...form, maintenance_interval_days: e.target.value })}
+                  placeholder="90"
+                  className="h-tap w-20 rounded-[10px] border border-ink-12 px-3 text-body"
+                />
+                <span className="meta">dagen</span>
+              </span>
+            </div>
+            <p className="meta">
+              De teller loopt vanaf de laatste registratie, niet vanaf een vaste
+              kalenderdag. De controle verschijnt als gewone taak op Vandaag;
+              afvinken schrijft de regel in dit boek.
+            </p>
+          </div>
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
@@ -1870,6 +1956,10 @@ function LogboekObjectenPanel() {
                     o.kind || OBJECT_TYPES.find((t) => t.value === o.type)?.label,
                     o.location_id ? (locaties[o.location_id] ?? o.location_id) : null,
                     o.department ? DEPT_FULL_LABELS[o.department] : "iedereen mag schrijven",
+                    o.maintenance_interval_days
+                      ? `onderhoud ${intervalTekst(o.maintenance_interval_days)}`
+                      : null,
+                    o.supplier,
                     o.nfc_tag_id ? "NFC" : null,
                   ].filter(Boolean).join(" · ")}
                 </span>
@@ -1882,6 +1972,9 @@ function LogboekObjectenPanel() {
                     name: o.name, type: o.type, location_id: o.location_id,
                     department: o.department, serial: o.serial ?? "", description: o.description ?? "",
                     nfc_tag_id: o.nfc_tag_id ?? "", folder: o.folder ?? "", kind: o.kind ?? "",
+                    purchase_date: o.purchase_date ?? "", supplier: o.supplier ?? "",
+                    maintenance_interval_days: o.maintenance_interval_days
+                      ? String(o.maintenance_interval_days) : "",
                   });
                 }}
                 className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"

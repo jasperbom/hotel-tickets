@@ -2,9 +2,9 @@ import { useEffect, useState, useCallback, useRef } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
-import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUTC, type Ticket, type Comment, type TicketEvent, type UserRole, type Priority, type KeycardStatus, type Role, type Category } from "../api/client";
-import { Camera, Check, ChevronLeft, MoreHorizontal } from "lucide-react";
-import { AFDELING_KORT, AFDELING_LABELS, eigendom, leeftijdTekst, prioriteitWoord } from "../werk";
+import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUTC, type Ticket, type Comment, type TicketEvent, type UserRole, type Priority, type Status, type KeycardStatus, type Role, type Category } from "../api/client";
+import { Camera, Check, ChevronLeft, Clock, MoreHorizontal } from "lucide-react";
+import { AFDELING_KORT, AFDELING_LABELS, bezigTekst, eigendom, leeftijdTekst, prioriteitWoord } from "../werk";
 import { MentionTextarea, renderWithMentions } from "../components/MentionTextarea";
 
 const PRIO_WOORD: Record<string, string> = {
@@ -16,6 +16,12 @@ const PRIORITY_OPTIONS: { value: Priority; label: string }[] = [
   { value: "high", label: "Hoog" },
   { value: "medium", label: "Normaal" },
   { value: "low", label: "Laag" },
+];
+
+const STATUS_OPTIONS: { value: Status; label: string }[] = [
+  { value: "open", label: "Open" },
+  { value: "in_progress", label: "In behandeling" },
+  { value: "closed", label: "Afgerond" },
 ];
 
 /**
@@ -114,6 +120,9 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
     if (!id) return;
     const r = await ticketApi.update(id, data);
     setTicket(r.data);
+    // Het verloop is de neerslag van precies deze handeling; zonder dit stond
+    // "nam dit in behandeling" er pas na een verversing bij.
+    ticketApi.getEvents(id).then((ev) => setEvents(ev.data)).catch(() => {});
   }
 
   async function toggleSubtask(index: number, currentDone: boolean) {
@@ -259,6 +268,8 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
       case "category": return `${naam(e.actor_id)} verplaatste dit naar een andere afdeling`;
       case "closed": return `${naam(e.actor_id)} rondde dit af`;
       case "reopened": return `${naam(e.actor_id)} heropende dit`;
+      case "started": return `${naam(e.actor_id)} nam dit in behandeling`;
+      case "stopped": return `${naam(e.actor_id)} zette dit terug op open`;
       default: return naam(e.actor_id);
     }
   }
@@ -306,6 +317,7 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
 
   const metaregel = [
     prioriteitWoord(ticket.priority),
+    bezigTekst(ticket.status),
     AFDELING_KORT[ticket.category],
     bezit.label,
     leeftijdTekst(ticket.created_at, isAf ? 999 : 3),
@@ -344,6 +356,16 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
                 <MenuKnop onClick={() => { setEditingField("description"); setEditValue(ticket.description ?? ""); setMenuOpen(false); }}>
                   Omschrijving bewerken
                 </MenuKnop>
+                <div className="px-4 pt-2 pb-1 meta">Status</div>
+                {STATUS_OPTIONS.map((o) => (
+                  <MenuKnop
+                    key={o.value}
+                    onClick={() => { updateField({ status: o.value }); setMenuOpen(false); }}
+                    actief={ticket.status === o.value}
+                  >
+                    {o.label}
+                  </MenuKnop>
+                ))}
                 <div className="px-4 pt-2 pb-1 meta">Prioriteit</div>
                 {PRIORITY_OPTIONS.map((o) => (
                   <MenuKnop
@@ -376,6 +398,13 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
       {meekijken && (
         <p className="mb-4 rounded-[10px] border border-ink-12 bg-ink-6 px-4 py-3 text-meta text-ink-70">
           Meekijken — {AFDELING_LABELS[ticket.category]} kan dit wijzigen. Jij kunt reageren en een foto toevoegen.
+        </p>
+      )}
+      {ticket.status === "in_progress" && !isAf && (
+        <p className="mb-4 flex items-center gap-2 rounded-[10px] bg-ink-6 px-4 py-3 text-meta text-brand font-medium">
+          <Clock size={18} aria-hidden="true" />
+          In behandeling
+          {ticket.assigned_to ? ` door ${usersMap[ticket.assigned_to] ?? ticket.assigned_to}` : ""}
         </p>
       )}
       {isAf && (
@@ -732,6 +761,19 @@ export default function TicketDetail({ ticketId, ingebed = false }: { ticketId?:
                   Pakken
                 </button>
               )}
+              {/* Aan/uit, geen eenrichtingsverkeer: wie per ongeluk op "Bezig"
+                  tikt moet het ook terug kunnen zetten. */}
+              <button
+                onClick={() => updateField({ status: ticket.status === "in_progress" ? "open" : "in_progress" })}
+                aria-pressed={ticket.status === "in_progress"}
+                className={`h-[3.25rem] px-4 rounded-[10px] text-body font-semibold shrink-0 border ${
+                  ticket.status === "in_progress"
+                    ? "border-brand bg-ink-6 text-brand"
+                    : "border-ink text-ink"
+                }`}
+              >
+                Bezig
+              </button>
               <button
                 onClick={() => updateField({ status: "closed" })}
                 className="flex-1 h-[3.25rem] rounded-[10px] bg-ink text-paper text-body font-semibold flex items-center justify-center gap-2"

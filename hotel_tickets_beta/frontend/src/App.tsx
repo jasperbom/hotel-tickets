@@ -36,8 +36,8 @@ import { useOngelezen } from "./ongelezen";
 // behalve terug, sluiten en camera.
 import type { LucideIcon } from "lucide-react";
 import {
-  Bike, CircleDot, CircleUser, DoorClosed, LayoutList, Lightbulb,
-  ListChecks, MoreHorizontal, Plus, Waves,
+  Bike, CircleDot, CircleUser, LayoutList, Lightbulb, ListChecks,
+  MessageSquare, MoreHorizontal, Plus, Waves,
 } from "lucide-react";
 import { applyButtonPalette, applyAppBackground, leesbareTekstkleur, readCachedAppBranding, saveCachedAppBranding } from "./branding";
 
@@ -53,6 +53,10 @@ interface NavItem {
   icon?: LucideIcon;
   end?: boolean;
   restricted?: "adminOrSupervisor" | "admin";
+  /** Alleen tonen als deze module voor de gebruiker zichtbaar is. */
+  module?: string;
+  /** Accentkleur in de onderbalk — per module, zodat je op kleur navigeert. */
+  accent?: string;
 }
 
 interface ModuleConfig {
@@ -66,15 +70,22 @@ interface ModuleConfig {
 }
 
 /**
- * Mobiele onderbalk: vier items met een permanent label. De modules staan in
- * Meer; wie dagelijks in Zwembaden werkt zet die als startscherm, en dat is
- * een voorkeur van een enkeling — geen tab voor iedereen.
+ * Mobiele onderbalk. Meer dan vier items passen niet naast elkaar op een
+ * telefoon, dus schuift de balk horizontaal — de eerste vier staan in beeld,
+ * de rest ligt binnen duimbereik één veeg verderop. Elk item houdt zijn label:
+ * een balk vol iconen zonder woord raad je maar.
+ *
+ * De modules staan hier alleen als de gebruiker ze mag zien; wie geen
+ * zwembaden heeft, krijgt geen lege tab.
  */
 const ONDERBALK: NavItem[] = [
-  { to: "/", label: "Vandaag", icon: CircleDot, end: true },
-  { to: "/tickets", label: "Tickets", icon: LayoutList },
-  { to: "/kamers", label: "Kamers", icon: DoorClosed },
-  { to: "/meer", label: "Meer", icon: MoreHorizontal },
+  { to: "/", label: "Vandaag", icon: CircleDot, end: true, accent: "text-brand" },
+  { to: "/tickets", label: "Tickets", icon: LayoutList, accent: "text-brand" },
+  { to: "/pools", label: "Zwembaden", icon: Waves, module: "zwembaden", accent: "text-mod-zwembaden" },
+  { to: "/bikes", label: "Fietsen", icon: Bike, module: "fietsen", accent: "text-mod-fietsen" },
+  { to: "/kennis", label: "Kennisbot", icon: Lightbulb, module: "kennis", accent: "text-mod-kennis" },
+  { to: "/berichten", label: "Berichten", icon: MessageSquare, accent: "text-brand" },
+  { to: "/meer", label: "Meer", icon: MoreHorizontal, accent: "text-brand" },
 ];
 
 const MODULES: ModuleConfig[] = [
@@ -158,22 +169,31 @@ export default function App() {
     }
   }, [location.pathname, navigationType]);
 
+  // Per oproep afhandelen, niet als één blok: met Promise.all sleepte één
+  // hakkelende oproep (huisstijl, fietsinstelling) de hele navigatie mee —
+  // currentUser bleef dan null, en daarmee verdwenen Instellingen, de
+  // modulefilters en de rechten uit het menu.
   useEffect(() => {
-    Promise.all([userApi.me(), userApi.list(), bikesModuleApi.getSetting(), brandingApi.get()])
+    Promise.allSettled([userApi.me(), userApi.list(), bikesModuleApi.getSetting(), brandingApi.get()])
       .then(([meRes, listRes, bikesRes, brandingRes]) => {
-        setCurrentUser(meRes.data);
-        setHasAdmin(listRes.data.some((u) => u.role === "admin"));
-        setBikesModuleRoles(bikesRes.data.bikes_module_roles);
-        const b = brandingRes.data;
-        // Ook bij null expliciet zetten/wissen, zodat een in de instellingen
-        // verwijderde huisstijl niet uit de cache blijft hangen.
-        setBrandColor(b.brand_color);
-        setBrandLogo(b.brand_logo);
-        applyButtonPalette(b.btn_color);
-        applyAppBackground(b.bg_image, b.bg_color);
-        saveCachedAppBranding(b);
-      })
-      .catch(() => {});
+        if (meRes.status === "fulfilled") setCurrentUser(meRes.value.data);
+        if (listRes.status === "fulfilled") {
+          setHasAdmin(listRes.value.data.some((u) => u.role === "admin"));
+        }
+        if (bikesRes.status === "fulfilled") {
+          setBikesModuleRoles(bikesRes.value.data.bikes_module_roles);
+        }
+        if (brandingRes.status === "fulfilled") {
+          const b = brandingRes.value.data;
+          // Ook bij null expliciet zetten/wissen, zodat een in de instellingen
+          // verwijderde huisstijl niet uit de cache blijft hangen.
+          setBrandColor(b.brand_color);
+          setBrandLogo(b.brand_logo);
+          applyButtonPalette(b.btn_color);
+          applyAppBackground(b.bg_image, b.bg_color);
+          saveCachedAppBranding(b);
+        }
+      });
   }, []);
 
   // Draait deze installatie als beta-testomgeving? Dan komt er een duidelijke
@@ -384,6 +404,10 @@ export default function App() {
   const activeModule = visibleModules.find((m) => m.id === activeModuleId) || null;
   const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
+  const zichtbareOnderbalk = ONDERBALK.filter(
+    (item) => !item.module || visibleModules.some((m) => m.id === item.module)
+  );
+
   const zichtbareSchermen = (activeModule?.schermen ?? []).filter((item) => {
     if (item.restricted === "adminOrSupervisor") return magRapportage;
     if (item.restricted === "admin") return currentUser?.role === "admin";
@@ -449,8 +473,11 @@ export default function App() {
 
       <div data-app-root className="flex min-h-[100dvh]">
         {/* ── Desktop: rail van 64 px met de modules ───────────────────────── */}
+        {/* z-50: een sticky element maakt een eigen stapelcontext, dus zonder
+            z-index hier verdween het accountmenu (dat uitklapt over de kolom
+            heen) achter de schermenkolom hiernaast. */}
         <aside
-          className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-[100dvh]"
+          className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 z-50 h-[100dvh]"
           style={{ backgroundColor: merkAchtergrond, color: opMerk }}
         >
           <div className="flex items-center justify-center w-full h-14 shrink-0">
@@ -491,7 +518,7 @@ export default function App() {
               <span className="leading-tight text-center truncate w-full px-0.5">Account</span>
             </button>
             {accountOpen && (
-              <div className="absolute bottom-0 left-full ml-2 w-56 bg-ink rounded-xl shadow-2xl z-50 py-1.5 border border-white/10">
+              <div className="absolute bottom-0 left-full ml-2 w-56 max-h-[70vh] overflow-y-auto bg-ink rounded-xl shadow-2xl z-50 py-1.5 border border-white/10">
                 <div className="px-4 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40 select-none">
                   {currentUser?.display_name ?? "Account"}
                 </div>
@@ -512,7 +539,7 @@ export default function App() {
 
         {/* ── Desktop: kolom van 220 px met alle schermen van de module ────── */}
         {zichtbareSchermen.length > 0 && (
-          <nav className="hidden md:flex w-[220px] shrink-0 flex-col gap-0.5 px-3 py-4 border-r border-ink-12 bg-paper-raised sticky top-0 h-[100dvh]">
+          <nav className="hidden md:flex w-[220px] shrink-0 flex-col gap-0.5 px-3 py-4 border-r border-ink-12 bg-paper-raised sticky top-0 z-30 h-[100dvh]">
             <p className="px-3 pb-2 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
               {activeModule?.navTitle}
             </p>
@@ -523,7 +550,7 @@ export default function App() {
                 end={item.end}
                 className={({ isActive }) =>
                   `flex items-center gap-2 px-3 min-h-tap rounded-[10px] text-meta transition-colors ${
-                    isActive ? "bg-ink-6 text-ink font-semibold" : "text-ink-70 hover:bg-ink-6"
+                    isActive ? "bg-ink-6 text-brand font-semibold" : "text-ink-70 hover:bg-ink-6"
                   }`
                 }
               >
@@ -651,19 +678,23 @@ export default function App() {
           </main>
         </div>
 
-        {/* ── Mobiel: onderbalk van 56 px, vier items met vast label ───────── */}
+        {/* ── Mobiel: onderbalk van 56 px, horizontaal schuifbaar ─────────── */}
         <nav
-          className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t border-ink-12 bg-paper-raised"
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex overflow-x-auto scrollbar-none
+                     border-t border-ink-12 bg-paper-raised"
           style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
         >
-          {ONDERBALK.map((item) => (
+          {zichtbareOnderbalk.map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
+              // flex-1 vult de balk als alles past; min-w houdt het label leesbaar
+              // en laat de balk schuiven zodra er te veel items zijn.
               className={({ isActive }) =>
-                `flex-1 h-14 flex flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium transition-colors ${
-                  isActive ? "text-ink" : "text-ink-45"
+                `flex-1 shrink-0 min-w-[5.5rem] h-14 flex flex-col items-center justify-center gap-0.5
+                 px-1 text-[0.6875rem] font-medium transition-colors ${
+                  isActive ? (item.accent ?? "text-brand") : "text-ink-45"
                 }`
               }
             >
@@ -671,11 +702,13 @@ export default function App() {
                 <>
                   <span className="relative leading-none" aria-hidden="true">
                     {item.icon && <item.icon size={20} strokeWidth={isActive ? 2.25 : 1.75} />}
-                    {item.to === "/meer" && ongelezen > 0 && (
+                    {item.to === "/berichten" && ongelezen > 0 && (
                       <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-urgent" />
                     )}
                   </span>
-                  <span className={isActive ? "font-semibold" : ""}>{item.label}</span>
+                  <span className={`max-w-full truncate ${isActive ? "font-semibold" : ""}`}>
+                    {item.label}
+                  </span>
                 </>
               )}
             </NavLink>
@@ -689,10 +722,11 @@ export default function App() {
             onClick={() => navigate("/tickets/new")}
             title="Melden"
             aria-label="Nieuw ticket melden"
-            className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 rounded-full shadow-lg active:scale-95 transition"
+            // De meldknop is een handeling, geen huisstijl: hij krijgt de
+            // interactiekleur (`brand`), niet de donkere kopbalkkleur.
+            className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 rounded-full
+                       bg-brand text-[color:var(--on-brand,#fff)] shadow-lg active:scale-95 transition"
             style={{
-              backgroundColor: merkAchtergrond,
-              color: opMerk,
               bottom: "calc(4.5rem + var(--undo-lift, 0px) + env(safe-area-inset-bottom, 0px))",
             }}
           >

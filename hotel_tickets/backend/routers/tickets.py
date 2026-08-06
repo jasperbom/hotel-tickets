@@ -612,6 +612,10 @@ async def update_ticket(
             _log_event(db, ticket.id, user.ha_user_id, TicketEventType.closed)
         elif old_status == Status.closed:
             _log_event(db, ticket.id, user.ha_user_id, TicketEventType.reopened)
+        elif body.status == Status.in_progress:
+            _log_event(db, ticket.id, user.ha_user_id, TicketEventType.started)
+        elif old_status == Status.in_progress:
+            _log_event(db, ticket.id, user.ha_user_id, TicketEventType.stopped)
 
     if body.status == Status.closed and not ticket.closed_at:
         ticket.closed_at = datetime.now(timezone.utc)

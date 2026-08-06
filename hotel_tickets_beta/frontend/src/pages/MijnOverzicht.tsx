@@ -4,6 +4,7 @@ import api, {
   type Ticket, type Category, type Priority, type Role, type UpcomingRecurring,
 } from "../api/client";
 import { WorkRow, type ExtraKamer } from "../components/WorkRow";
+import { AfdelingChip } from "../components/AfdelingChip";
 import { UndoBar } from "../components/UndoBar";
 import { useUitgesteldeActie } from "../undo";
 import {
@@ -187,8 +188,11 @@ export default function Vandaag() {
           {prio}
         </strong>
       ),
+      t.status === "in_progress" && (
+        <strong className="font-semibold text-brand">In behandeling</strong>
+      ),
       bezit.soort === "ander" || bezit.soort === "vrij" ? bezit.label : null,
-      afdelingTekst(t.category, user.department),
+      afdelingTekst(t.category, user.department) && <AfdelingChip category={t.category} />,
       subtaakFractie(t),
       kamerTekst(t.location_id ? keycards[t.location_id] : undefined),
       leeftijdTekst(t.created_at),
@@ -204,7 +208,10 @@ export default function Vandaag() {
           {prio}
         </strong>
       ),
-      afdelingTekst(t.category, user.department),
+      t.status === "in_progress" && (
+        <strong className="font-semibold text-brand">In behandeling</strong>
+      ),
+      afdelingTekst(t.category, user.department) && <AfdelingChip category={t.category} />,
       subtaakFractie(t),
       kamerTekst(t.location_id ? keycards[t.location_id] : undefined),
       leeftijdTekst(t.created_at),
@@ -214,7 +221,7 @@ export default function Vandaag() {
   function metaTaak(taak: UpcomingRecurring) {
     const fractie = taak.subtask_total ? `${taak.subtask_done ?? 0}/${taak.subtask_total}` : null;
     return [
-      afdelingTekst(taak.category, user.department),
+      afdelingTekst(taak.category, user.department) && <AfdelingChip category={taak.category} />,
       fractie,
       kamerTekst(taak.location_id ? keycards[taak.location_id] : undefined),
       herhaalKort(taak.cron_expression, taak.interval_days),

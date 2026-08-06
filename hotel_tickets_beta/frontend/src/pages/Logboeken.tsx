@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { locationApi, logbookApi, parseUTC, type LogObject } from "../api/client";
-import { herhaalKort } from "../werk";
+import { herhaalKort, intervalTekst } from "../werk";
 
 /**
  * Logboeken — het naslagscherm.
@@ -119,6 +119,7 @@ export default function Logboeken() {
           o.folder ?? "",
           mapVan(o),
           o.serial ?? "",
+          o.supplier ?? "",
           o.location_id ? (locaties[o.location_id] ?? o.location_id) : "",
           TYPE_LABELS[o.type] ?? "",
         ].some((veld) => veld.toLowerCase().includes(q))
@@ -185,7 +186,9 @@ export default function Logboeken() {
               o.kind || (o.location_id ? (locaties[o.location_id] ?? o.location_id) : TYPE_LABELS[o.type]),
               o.kind && o.location_id ? (locaties[o.location_id] ?? o.location_id) : null,
               o.overdue ? `${o.open_tickets} open` : laatsteTekst(o),
-              herhaalKort(o.schedule ?? undefined),
+              o.maintenance_interval_days
+                ? `onderhoud ${intervalTekst(o.maintenance_interval_days)}`
+                : herhaalKort(o.schedule ?? undefined),
             ].filter(Boolean).join(" · ")}
           </span>
         </span>
@@ -203,7 +206,7 @@ export default function Logboeken() {
           ref={zoekRef}
           type="search"
           inputMode="search"
-          placeholder="Zoek naam, soort, map of serienummer"
+          placeholder="Zoek naam, soort, map, serienummer of leverancier"
           value={zoek}
           onChange={(e) => setZoek(e.target.value)}
           className="w-full h-tap border border-ink-12 rounded-[10px] pl-3 pr-10 text-body bg-paper-raised
@@ -251,7 +254,7 @@ export default function Logboeken() {
                 {zoek.trim() ? <>Geen object met “{zoek.trim()}”.</> : <>Geen object van dit soort.</>}
               </p>
               <p className="mt-1.5 text-[0.9375rem] text-ink-70">
-                Gezocht in namen, soorten, mappen, serienummers en kamers van alle{" "}
+                Gezocht in namen, soorten, mappen, serienummers, leveranciers en kamers van alle{" "}
                 {objecten.length} objecten{soort ? ` van het soort ${soort}` : ""}.
               </p>
               {soort && (

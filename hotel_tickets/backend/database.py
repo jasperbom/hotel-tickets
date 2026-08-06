@@ -75,6 +75,8 @@ async def _run_migrations(conn):
         ("log_objects", "nfc_tag_id", "VARCHAR(255)"),
         ("log_objects", "folder", "VARCHAR(100)"),
         ("log_objects", "kind", "VARCHAR(100)"),
+        ("log_objects", "purchase_date", "DATE"),
+        ("log_objects", "supplier", "VARCHAR(255)"),
         ("knowledge_entries", "images", "TEXT"),
         ("knowledge_entries", "folder", "VARCHAR(100)"),
         ("knowledge_documents", "folder", "VARCHAR(100)"),
