@@ -296,6 +296,8 @@ export interface LogObject {
   nfc_tag_id: string | null;
   /** Vrije map; leeg = gegroepeerd op type. */
   folder: string | null;
+  /** Soort binnen de map: boormachine, ladder, airco. */
+  kind: string | null;
   is_active: boolean;
   created_at: string;
   last_check_at: string | null;

@@ -52,6 +52,7 @@ export default function Logboeken() {
   const [loading, setLoading] = useState(true);
   const [alles, setAlles] = useState(false);
   const [zoek, setZoek] = useState("");
+  const [soort, setSoort] = useState<string | null>(null);
   const zoekRef = useRef<HTMLInputElement>(null);
   const [dicht, setDicht] = useState<string[]>(() => {
     try {
@@ -84,6 +85,22 @@ export default function Logboeken() {
   const aandacht = useMemo(() => objecten.filter((o) => o.overdue), [objecten]);
 
   /**
+   * De soorten die er zijn, met hun aantal. Een boormachine heet in de lijst
+   * vaak "Makita DHP482"; zonder soort vind je die nooit terug door op
+   * "boormachine" te zoeken, en kun je ze ook niet als groep bekijken.
+   */
+  const soorten = useMemo(() => {
+    const telling = new Map<string, number>();
+    for (const o of objecten) {
+      const k = (o.kind ?? "").trim();
+      if (k) telling.set(k, (telling.get(k) ?? 0) + 1);
+    }
+    return [...telling.entries()]
+      .map(([naam, aantal]) => ({ naam, aantal }))
+      .sort((a, b) => b.aantal - a.aantal || a.naam.localeCompare(b.naam, "nl"));
+  }, [objecten]);
+
+  /**
    * Zoeken gaat over naam, map, serienummer en kamer. De lijst is klein genoeg
    * om in de browser te filteren — dat is meteen, zonder verzoek per toets.
    * Tijdens het zoeken vervallen de mappen: je zoekt juist omdat je niet weet
@@ -91,18 +108,23 @@ export default function Logboeken() {
    */
   const gevonden = useMemo(() => {
     const q = zoek.trim().toLowerCase();
-    if (!q) return null;
-    return objecten.filter((o) =>
-      [
-        o.name,
-        o.folder ?? "",
-        mapVan(o),
-        o.serial ?? "",
-        o.location_id ? (locaties[o.location_id] ?? o.location_id) : "",
-        TYPE_LABELS[o.type] ?? "",
-      ].some((veld) => veld.toLowerCase().includes(q))
-    ).sort((a, b) => a.name.localeCompare(b.name, "nl"));
-  }, [zoek, objecten, locaties]);
+    if (!q && !soort) return null;
+    return objecten
+      .filter((o) => !soort || (o.kind ?? "").trim() === soort)
+      .filter((o) =>
+        !q ||
+        [
+          o.name,
+          o.kind ?? "",
+          o.folder ?? "",
+          mapVan(o),
+          o.serial ?? "",
+          o.location_id ? (locaties[o.location_id] ?? o.location_id) : "",
+          TYPE_LABELS[o.type] ?? "",
+        ].some((veld) => veld.toLowerCase().includes(q))
+      )
+      .sort((a, b) => a.name.localeCompare(b.name, "nl"));
+  }, [zoek, soort, objecten, locaties]);
 
   /** Alles per map, met de mappen alfabetisch en "Overig" achteraan. */
   const mappen = useMemo(() => {
@@ -160,7 +182,8 @@ export default function Logboeken() {
           <span className="block text-row text-ink">{o.name}</span>
           <span className="meta">
             {[
-              o.location_id ? (locaties[o.location_id] ?? o.location_id) : TYPE_LABELS[o.type],
+              o.kind || (o.location_id ? (locaties[o.location_id] ?? o.location_id) : TYPE_LABELS[o.type]),
+              o.kind && o.location_id ? (locaties[o.location_id] ?? o.location_id) : null,
               o.overdue ? `${o.open_tickets} open` : laatsteTekst(o),
               herhaalKort(o.schedule ?? undefined),
             ].filter(Boolean).join(" · ")}
@@ -180,7 +203,7 @@ export default function Logboeken() {
           ref={zoekRef}
           type="search"
           inputMode="search"
-          placeholder="Zoek object, map of serienummer"
+          placeholder="Zoek naam, soort, map of serienummer"
           value={zoek}
           onChange={(e) => setZoek(e.target.value)}
           className="w-full h-tap border border-ink-12 rounded-[10px] pl-3 pr-10 text-body bg-paper-raised
@@ -197,17 +220,48 @@ export default function Logboeken() {
         )}
       </div>
 
+      {soorten.length > 1 && (
+        <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4">
+          {soorten.map((k) => (
+            <button
+              key={k.naam}
+              onClick={() => setSoort(soort === k.naam ? null : k.naam)}
+              aria-pressed={soort === k.naam}
+              className={`shrink-0 h-tap px-3.5 rounded-full text-meta transition-colors ${
+                soort === k.naam
+                  ? "bg-ink text-paper font-semibold"
+                  : "bg-paper-raised border border-ink-12 text-ink-70 font-medium hover:bg-ink-6"
+              }`}
+            >
+              {k.naam} <span className="tabular-nums opacity-60">{k.aantal}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {gevonden ? (
         <section>
           <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
             {gevonden.length} {gevonden.length === 1 ? "resultaat" : "resultaten"}
+            {soort && <span className="normal-case tracking-normal font-sans"> · soort {soort}</span>}
           </p>
           {gevonden.length === 0 ? (
             <div className="rounded-[10px] border border-dashed border-ink-12 bg-paper-raised px-5 py-6">
-              <p className="text-[1.1875rem] font-semibold text-ink">Geen object met “{zoek.trim()}”.</p>
-              <p className="mt-1.5 text-[0.9375rem] text-ink-70">
-                Gezocht in namen, mappen, serienummers en kamers van alle {objecten.length} objecten.
+              <p className="text-[1.1875rem] font-semibold text-ink">
+                {zoek.trim() ? <>Geen object met “{zoek.trim()}”.</> : <>Geen object van dit soort.</>}
               </p>
+              <p className="mt-1.5 text-[0.9375rem] text-ink-70">
+                Gezocht in namen, soorten, mappen, serienummers en kamers van alle{" "}
+                {objecten.length} objecten{soort ? ` van het soort ${soort}` : ""}.
+              </p>
+              {soort && (
+                <button
+                  onClick={() => setSoort(null)}
+                  className="mt-4 h-tapLg px-4 inline-flex items-center rounded-[10px] border border-ink-12 text-ink text-meta font-semibold hover:bg-ink-6"
+                >
+                  Soortfilter loslaten
+                </button>
+              )}
             </div>
           ) : (
             <ul className="grid gap-2">{gevonden.map(regel)}</ul>

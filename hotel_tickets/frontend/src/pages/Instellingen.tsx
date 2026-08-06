@@ -1677,6 +1677,7 @@ const LEEG_OBJECT = {
   description: "",
   nfc_tag_id: "",
   folder: "",
+  kind: "",
 };
 
 /**
@@ -1709,6 +1710,10 @@ function LogboekObjectenPanel() {
     new Set(objecten.map((o) => (o.folder ?? "").trim()).filter(Boolean))
   ).sort((a, b) => a.localeCompare(b, "nl"));
 
+  const bekendeSoorten = Array.from(
+    new Set(objecten.map((o) => (o.kind ?? "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "nl"));
+
   const perMap = (() => {
     const groepen = new Map<string, LogObject[]>();
     for (const o of objecten) {
@@ -1730,6 +1735,7 @@ function LogboekObjectenPanel() {
       description: form.description.trim() || null,
       nfc_tag_id: form.nfc_tag_id.trim() || null,
       folder: form.folder.trim() || null,
+      kind: form.kind.trim() || null,
     };
     try {
       if (bewerkt) await logbookApi.updateObject(bewerkt, data);
@@ -1814,6 +1820,16 @@ function LogboekObjectenPanel() {
             <datalist id="logboek-mappen">
               {bekendeMappen.map((m) => <option key={m} value={m} />)}
             </datalist>
+            <input
+              value={form.kind}
+              onChange={(e) => setForm({ ...form, kind: e.target.value })}
+              placeholder="Soort, bijv. boormachine"
+              list="logboek-soorten"
+              className="h-tap rounded-[10px] border border-ink-12 px-3 text-body"
+            />
+            <datalist id="logboek-soorten">
+              {bekendeSoorten.map((k) => <option key={k} value={k} />)}
+            </datalist>
           </div>
           <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
           <textarea
@@ -1851,7 +1867,7 @@ function LogboekObjectenPanel() {
                 <span className="block text-row text-ink">{o.name}</span>
                 <span className="meta">
                   {[
-                    OBJECT_TYPES.find((t) => t.value === o.type)?.label,
+                    o.kind || OBJECT_TYPES.find((t) => t.value === o.type)?.label,
                     o.location_id ? (locaties[o.location_id] ?? o.location_id) : null,
                     o.department ? DEPT_FULL_LABELS[o.department] : "iedereen mag schrijven",
                     o.nfc_tag_id ? "NFC" : null,
@@ -1865,7 +1881,7 @@ function LogboekObjectenPanel() {
                   setForm({
                     name: o.name, type: o.type, location_id: o.location_id,
                     department: o.department, serial: o.serial ?? "", description: o.description ?? "",
-                    nfc_tag_id: o.nfc_tag_id ?? "", folder: o.folder ?? "",
+                    nfc_tag_id: o.nfc_tag_id ?? "", folder: o.folder ?? "", kind: o.kind ?? "",
                   });
                 }}
                 className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"

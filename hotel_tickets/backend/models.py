@@ -389,6 +389,10 @@ class LogObject(Base):
     # Leeg = gegroepeerd op type, zodat gereedschap ook zonder inrichten al
     # apart staat.
     folder: Mapped[str | None] = mapped_column(String(100))
+    # Soort binnen de map: "boormachine", "ladder", "airco". De naam van een
+    # apparaat is vaak een merktype (Makita DHP482) — zonder dit veld vind je
+    # dat nooit terug door op "boormachine" te zoeken.
+    kind: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 
