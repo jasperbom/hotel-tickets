@@ -294,6 +294,8 @@ export interface LogObject {
   description: string | null;
   /** Sticker op het ding: scannen opent dit boek. */
   nfc_tag_id: string | null;
+  /** Vrije map; leeg = gegroepeerd op type. */
+  folder: string | null;
   is_active: boolean;
   created_at: string;
   last_check_at: string | null;

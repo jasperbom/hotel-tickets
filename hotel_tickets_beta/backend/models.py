@@ -385,6 +385,10 @@ class LogObject(Base):
     # klaar. Voor gereedschap wordt de kwartaalinventarisatie daarmee: langs de
     # wand scannen, per scan een vinkje.
     nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
+    # Vrije map om objecten te groeperen ("Gereedschap", "Brandveiligheid").
+    # Leeg = gegroepeerd op type, zodat gereedschap ook zonder inrichten al
+    # apart staat.
+    folder: Mapped[str | None] = mapped_column(String(100))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 

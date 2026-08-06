@@ -7,6 +7,7 @@ import {
 } from "../api/client";
 import { BevestigKnop } from "../components/BevestigKnop";
 import AreaSelector from "../components/AreaSelector";
+import { mapVan } from "./Logboeken";
 
 type Tab = "systeem" | "logboeken" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot" | "beta";
 
@@ -1675,6 +1676,7 @@ const LEEG_OBJECT = {
   serial: "",
   description: "",
   nfc_tag_id: "",
+  folder: "",
 };
 
 /**
@@ -1701,6 +1703,23 @@ function LogboekObjectenPanel() {
 
   useEffect(() => { laden().finally(() => setLoading(false)); }, []);
 
+  // Bestaande mappen als suggestie, zodat je niet drie keer "Gereedschap"
+  // anders spelt.
+  const bekendeMappen = Array.from(
+    new Set(objecten.map((o) => (o.folder ?? "").trim()).filter(Boolean))
+  ).sort((a, b) => a.localeCompare(b, "nl"));
+
+  const perMap = (() => {
+    const groepen = new Map<string, LogObject[]>();
+    for (const o of objecten) {
+      const map = mapVan(o);
+      groepen.set(map, [...(groepen.get(map) ?? []), o]);
+    }
+    return [...groepen.entries()]
+      .map(([map, lijst]) => ({ map, lijst: lijst.sort((a, b) => a.name.localeCompare(b.name, "nl")) }))
+      .sort((a, b) => a.map.localeCompare(b.map, "nl"));
+  })();
+
   async function opslaan() {
     if (!form.name.trim()) return;
     setFout(null);
@@ -1710,6 +1729,7 @@ function LogboekObjectenPanel() {
       serial: form.serial.trim() || null,
       description: form.description.trim() || null,
       nfc_tag_id: form.nfc_tag_id.trim() || null,
+      folder: form.folder.trim() || null,
     };
     try {
       if (bewerkt) await logbookApi.updateObject(bewerkt, data);
@@ -1784,6 +1804,16 @@ function LogboekObjectenPanel() {
               placeholder="NFC-tag ID (optioneel)"
               className="h-tap rounded-[10px] border border-ink-12 px-3 text-body font-mono"
             />
+            <input
+              value={form.folder}
+              onChange={(e) => setForm({ ...form, folder: e.target.value })}
+              placeholder="Map, bijv. Gereedschap"
+              list="logboek-mappen"
+              className="h-tap rounded-[10px] border border-ink-12 px-3 text-body"
+            />
+            <datalist id="logboek-mappen">
+              {bekendeMappen.map((m) => <option key={m} value={m} />)}
+            </datalist>
           </div>
           <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
           <textarea
@@ -1808,8 +1838,14 @@ function LogboekObjectenPanel() {
       ) : objecten.length === 0 ? (
         <p className="text-sm text-ink-45">Nog geen objecten.</p>
       ) : (
-        <ul className="grid gap-2">
-          {objecten.map((o) => (
+        <div className="space-y-4">
+          {perMap.map((groep) => (
+            <div key={groep.map}>
+              <p className="mb-2 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+                {groep.map}
+              </p>
+              <ul className="grid gap-2">
+          {groep.lijst.map((o) => (
             <li key={o.id} className="row min-h-[66px]">
               <span className="flex-1 min-w-0">
                 <span className="block text-row text-ink">{o.name}</span>
@@ -1829,7 +1865,7 @@ function LogboekObjectenPanel() {
                   setForm({
                     name: o.name, type: o.type, location_id: o.location_id,
                     department: o.department, serial: o.serial ?? "", description: o.description ?? "",
-                    nfc_tag_id: o.nfc_tag_id ?? "",
+                    nfc_tag_id: o.nfc_tag_id ?? "", folder: o.folder ?? "",
                   });
                 }}
                 className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"
@@ -1845,7 +1881,10 @@ function LogboekObjectenPanel() {
               />
             </li>
           ))}
-        </ul>
+              </ul>
+            </div>
+          ))}
+        </div>
       )}
     </Section>
   );
