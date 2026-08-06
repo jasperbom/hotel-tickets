@@ -3,6 +3,8 @@ import { Routes, Route, Navigate, NavLink, useNavigate, useLocation, useNavigati
 import MijnOverzicht from "./pages/MijnOverzicht";
 import TicketList from "./pages/TicketList";
 import TicketDetail from "./pages/TicketDetail";
+import Kamers from "./pages/Kamers";
+import Meer from "./pages/Meer";
 import NewTicket from "./pages/NewTicket";
 import RecurringTasks from "./pages/RecurringTasks";
 import RecurringTaskDetail from "./pages/RecurringTaskDetail";
@@ -25,10 +27,17 @@ import WachtwoordWijzigen from "./pages/WachtwoordWijzigen";
 import Apparaten from "./pages/Apparaten";
 import Meldingen from "./pages/Meldingen";
 import Login from "./pages/Login";
-import { InboxEnvelope } from "./components/InboxEnvelope";
-import { userApi, bikesModuleApi, brandingApi, betaApi, hasSessionToken, clearSessionToken, sessionsApi, type UserRole, type BikesModuleRoles, type BetaStatus } from "./api/client";
+import { userApi, bikesModuleApi, brandingApi, betaApi, ticketApi, hasSessionToken, clearSessionToken, sessionsApi, type UserRole, type BikesModuleRoles, type BetaStatus } from "./api/client";
 import { saveLastRoute } from "./lastRoute";
-import { applyButtonPalette, applyAppBackground, readCachedAppBranding, saveCachedAppBranding } from "./branding";
+import { useOngelezen } from "./ongelezen";
+// Iconen per stuk importeren; de regel is: nooit een icoon zonder tekstlabel,
+// behalve terug, sluiten en camera.
+import type { LucideIcon } from "lucide-react";
+import {
+  Bike, CircleDot, CircleUser, DoorClosed, LayoutList, Lightbulb,
+  ListChecks, MoreHorizontal, Plus, Waves,
+} from "lucide-react";
+import { applyButtonPalette, applyAppBackground, leesbareTekstkleur, readCachedAppBranding, saveCachedAppBranding } from "./branding";
 
 // Laatst bekende huisstijl — direct beschikbaar zodat logo en merkkleur al in
 // de eerste render kloppen; de API-respons corrigeert eventuele wijzigingen.
@@ -39,67 +48,82 @@ const cachedBranding = readCachedAppBranding();
 interface NavItem {
   to: string;
   label: string;
-  icon: string;
+  icon?: LucideIcon;
   end?: boolean;
-  restricted: false | "adminOrSupervisor" | "admin" | "settings";
+  restricted?: "adminOrSupervisor" | "admin";
 }
 
 interface ModuleConfig {
   id: string;
   label: string;
-  icon: string;
+  icon: LucideIcon;
   defaultPath: string;
   navTitle: string;
-  navItems: NavItem[];
+  /** Alle schermen van de module — op desktop de kolom van 220 px. */
+  schermen: NavItem[];
 }
+
+/**
+ * Mobiele onderbalk: vier items met een permanent label. De modules staan in
+ * Meer; wie dagelijks in Zwembaden werkt zet die als startscherm, en dat is
+ * een voorkeur van een enkeling — geen tab voor iedereen.
+ */
+const ONDERBALK: NavItem[] = [
+  { to: "/", label: "Vandaag", icon: CircleDot, end: true },
+  { to: "/tickets", label: "Tickets", icon: LayoutList },
+  { to: "/kamers", label: "Kamers", icon: DoorClosed },
+  { to: "/meer", label: "Meer", icon: MoreHorizontal },
+];
 
 const MODULES: ModuleConfig[] = [
   {
     id: "taken",
     label: "Taken",
-    icon: "✅",
+    icon: ListChecks,
     defaultPath: "/",
     navTitle: "Taken",
-    navItems: [
-      { to: "/", label: "Vandaag", icon: "📋", end: true, restricted: false },
-      { to: "/tickets", label: "Tickets", icon: "🎫", restricted: false },
-      { to: "/recurring", label: "Herhalend", icon: "🔄", restricted: false },
-      { to: "/reports", label: "Rapportage", icon: "📊", restricted: "adminOrSupervisor" },
+    schermen: [
+      { to: "/", label: "Vandaag", end: true },
+      { to: "/tickets", label: "Tickets" },
+      { to: "/kamers", label: "Kamers" },
+      { to: "/recurring", label: "Herhalend" },
+      { to: "/berichten", label: "Berichten" },
+      { to: "/reports", label: "Rapportage", restricted: "adminOrSupervisor" },
     ],
   },
   {
     id: "zwembaden",
     label: "Zwembaden",
-    icon: "🏊",
+    icon: Waves,
     defaultPath: "/pools",
     navTitle: "Zwembaden",
-    navItems: [
-      { to: "/pools", label: "Overzicht", icon: "📋", end: true, restricted: false },
-      { to: "/pools/logboek", label: "Logboek", icon: "📖", restricted: false },
-      { to: "/pools/nieuw", label: "Nieuwe meting", icon: "➕", restricted: false },
+    schermen: [
+      { to: "/pools", label: "Overzicht", end: true },
+      { to: "/pools/logboek", label: "Logboek" },
+      { to: "/pools/nieuw", label: "Nieuwe meting" },
     ],
   },
   {
     id: "fietsen",
     label: "Fietsen",
-    icon: "🚲",
+    icon: Bike,
     defaultPath: "/bikes",
     navTitle: "Fietsen",
-    navItems: [
-      { to: "/bikes", label: "Dashboard", icon: "📋", end: true, restricted: false },
-      { to: "/bikes/reserveringen", label: "Reserveringen", icon: "📅", restricted: false },
-      { to: "/bikes/beheer", label: "Fietsbeheer", icon: "🔧", restricted: false },
+    schermen: [
+      { to: "/bikes", label: "Overzicht", end: true },
+      { to: "/bikes/reserveringen", label: "Reserveringen" },
+      { to: "/bikes/beheer", label: "Fietsbeheer" },
     ],
   },
   {
     id: "kennis",
     label: "Kennis",
-    icon: "💡",
+    icon: Lightbulb,
     defaultPath: "/kennis",
     navTitle: "Kennisbot",
-    navItems: [
-      { to: "/kennis", label: "Vragen", icon: "💬", end: true, restricted: false },
-      { to: "/kennis/beheer", label: "Beheer", icon: "🛠️", restricted: "admin" },
+    schermen: [
+      { to: "/kennis", label: "Vragen", end: true },
+      { to: "/kennis/beheer", label: "Beheer", restricted: "admin" },
     ],
   },
 ];
@@ -108,7 +132,8 @@ export default function App() {
   const [currentUser, setCurrentUser] = useState<UserRole | null>(null);
   const [hasAdmin, setHasAdmin] = useState(true);
   const [activeModuleId, setActiveModuleId] = useState<string | null>(null);
-  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [accountOpen, setAccountOpen] = useState(false);
+  const [openTickets, setOpenTickets] = useState<number | null>(null);
   const [bikesModuleRoles, setBikesModuleRoles] = useState<BikesModuleRoles>("all");
   const [brandColor, setBrandColor] = useState<string | null>(cachedBranding?.brand_color ?? null);
   const [brandLogo, setBrandLogo] = useState<string | null>(cachedBranding?.brand_logo ?? null);
@@ -117,6 +142,7 @@ export default function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const navigationType = useNavigationType();
+  const ongelezen = useOngelezen();
 
   // Scroll naar boven bij het openen van een nieuwe pagina. Zonder dit behoudt
   // de app de scrollpositie van de vorige pagina — wie onderin de ticketlijst
@@ -160,6 +186,13 @@ export default function App() {
       })
       .catch(() => {});
   }, []);
+
+  // Teller naast "Tickets" in de desktopkolom.
+  useEffect(() => {
+    ticketApi.counts({})
+      .then((r) => setOpenTickets((r.data.open ?? 0) + (r.data.in_progress ?? 0)))
+      .catch(() => setOpenTickets(null));
+  }, [location.pathname]);
 
   // Onthoud de huidige route met tijdstempel — het herstel gebeurt vóór de
   // eerste render in main.tsx (zie lastRoute.ts). Ook vlak vóór unload
@@ -301,24 +334,22 @@ export default function App() {
       root.style.removeProperty("--kb-inset");
     };
   }, []);
-
-  // Sluit mobile menu bij navigatie
+  // Sluit het accountmenu bij navigatie
   useEffect(() => {
-    setMobileMenuOpen(false);
+    setAccountOpen(false);
   }, [location.pathname]);
 
-  // Sluit mobile menu bij klik buiten het menu
   useEffect(() => {
     function handleClick(e: MouseEvent) {
       if (menuRef.current && !menuRef.current.contains(e.target as Node)) {
-        setMobileMenuOpen(false);
+        setAccountOpen(false);
       }
     }
-    if (mobileMenuOpen) {
+    if (accountOpen) {
       document.addEventListener("mousedown", handleClick);
       return () => document.removeEventListener("mousedown", handleClick);
     }
-  }, [mobileMenuOpen]);
+  }, [accountOpen]);
 
   const isAdminOrSupervisor =
     currentUser?.role === "admin" || currentUser?.role === "supervisor";
@@ -330,37 +361,21 @@ export default function App() {
       (currentUser?.department === "reception" || isAdminOrSupervisor)) ||
     (bikesModuleRoles === "admin_supervisor" && isAdminOrSupervisor);
 
-  const visibleModules = MODULES.filter(
-    (m) => m.id !== "fietsen" || canSeeBikes
-  );
-
+  const visibleModules = MODULES.filter((m) => m.id !== "fietsen" || canSeeBikes);
   const activeModule = visibleModules.find((m) => m.id === activeModuleId) || null;
+  const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
 
-  const visibleNavItems = (activeModule?.navItems || []).filter((item) => {
+  const zichtbareSchermen = (activeModule?.schermen ?? []).filter((item) => {
     if (item.restricted === "adminOrSupervisor") return isAdminOrSupervisor;
     if (item.restricted === "admin") return currentUser?.role === "admin";
-    if (item.restricted === "settings") return isAdminOrSupervisor || !hasAdmin;
     return true;
   });
 
-  const isOnInstellingen = location.pathname === "/instellingen";
-  const isOnWachtwoord = location.pathname === "/wachtwoord";
-  const isOnApparaten = location.pathname === "/apparaten";
-  const isOnMeldingen = location.pathname === "/meldingen";
-  const canSeeInstellingen = isAdminOrSupervisor || !hasAdmin;
-
-  // Zwevende actieknoppen (nieuw ticket + kennisbot-vraag) onderin.
-  // Niet op de pagina's waar ze dubbelop of in de weg zijn: de invoer-
-  // formulieren (die hebben zelf actieknoppen onderin, waar de FAB's overheen
-  // vallen) en de kennisbot (die heeft een eigen invoerbalk onderin).
-  const showFabs =
-    (activeModule || isOnInstellingen) &&
-    !["/tickets/new", "/kennis", "/pools/nieuw", "/bikes/reserveringen/nieuw"].includes(
-      location.pathname
-    );
-
-  // Pagina's buiten module-context die wél in de app-shell renderen
-  const isShellPage = isOnInstellingen || isOnWachtwoord || isOnApparaten || isOnMeldingen;
+  // Eén primaire actie: melden. Niet op de invoerformulieren zelf (die hebben
+  // hun eigen knop onderin) en niet in de kennisbot (eigen invoerbalk).
+  const toonMelden =
+    activeModuleId === "taken" &&
+    !["/tickets/new", "/kennis", "/meer"].includes(location.pathname);
 
   function handleModuleClick(mod: ModuleConfig) {
     setActiveModuleId(mod.id);
@@ -385,324 +400,184 @@ export default function App() {
     return <Login />;
   }
 
+  const schermTitel = SCHERMTITELS[location.pathname] ?? afgeleideTitel(location.pathname, activeModule);
+
+  // Tekst op de merkkleur wordt berekend in plaats van gegokt: bij een lichte
+  // merkkleur haalde wit (en zeker text-white/60) het contrast niet.
+  const merkAchtergrond = brandColor ?? "#1C1B19";
+  const opMerk = leesbareTekstkleur(merkAchtergrond);
+
   return (
     <>
-    {beta?.beta_mode && (
-      <div
-        className="flex items-center justify-center gap-2 flex-wrap px-3 py-1.5 bg-amber-400 text-amber-950 text-xs font-semibold text-center"
-        style={{ paddingTop: "calc(0.375rem + env(safe-area-inset-top, 0px))" }}
-      >
-        <span className="uppercase tracking-wider bg-amber-950 text-amber-50 px-1.5 py-0.5 rounded">
-          {beta.label}
-        </span>
-        <span className="font-normal">
-          Testomgeving met een kopie van de echte data — meldingen staan uit. v{beta.version}
-        </span>
-      </div>
-    )}
-    <div data-app-root className="flex min-h-[100dvh]">
-      {/* Desktop zijbalk — verborgen op mobile */}
-      <aside
-        className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-[100dvh]"
-        style={{ backgroundColor: brandColor ?? "#111827" }}
-      >
-        {/* Logo bovenin zijbalk */}
-        <div className="flex items-center justify-center w-full h-14 shrink-0">
-          {brandLogo ? (
-            <img src={brandLogo} alt="Logo" className="w-8 h-8 object-contain rounded" />
-          ) : (
-            <span className="text-2xl font-bold text-white/80 select-none">S</span>
-          )}
+      {beta?.beta_mode && (
+        <div
+          className="flex items-center justify-center gap-2 flex-wrap px-3 py-1.5 bg-amber-400 text-amber-950 text-xs font-semibold text-center"
+          style={{ paddingTop: "calc(0.375rem + env(safe-area-inset-top, 0px))" }}
+        >
+          <span className="uppercase tracking-wider bg-amber-950 text-amber-50 px-1.5 py-0.5 rounded">
+            {beta.label}
+          </span>
+          <span className="font-normal">
+            Testomgeving met een kopie van de echte data — meldingen staan uit. v{beta.version}
+          </span>
         </div>
-        <div className="flex flex-col items-center gap-2 pt-2 w-full flex-1">
-        {visibleModules.map((mod) => (
-          <button
-            key={mod.id}
-            onClick={() => handleModuleClick(mod)}
-            title={mod.label}
-            className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
-              activeModuleId === mod.id
-                ? "bg-white/20 text-white"
-                : "text-white/60 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <span className="text-xl">{mod.icon}</span>
-            <span className="leading-tight text-center truncate w-full px-0.5">{mod.label}</span>
-          </button>
-        ))}
-        </div>
-        <div className="mb-3">
-          <button
-            onClick={() => navigate("/wachtwoord")}
-            title="Wachtwoord wijzigen"
-            className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
-              isOnWachtwoord
-                ? "bg-white/20 text-white"
-                : "text-white/60 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <span className="text-xl">🔑</span>
-            <span className="leading-tight text-center truncate w-full px-0.5">Wachtwoord</span>
-          </button>
-        </div>
-        <div className="mb-3">
-          <button
-            onClick={() => navigate("/meldingen")}
-            title="Meldingen"
-            className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
-              isOnMeldingen
-                ? "bg-white/20 text-white"
-                : "text-white/60 hover:text-white hover:bg-white/10"
-            }`}
-          >
-            <span className="text-xl">🔔</span>
-            <span className="leading-tight text-center truncate w-full px-0.5">Meldingen</span>
-          </button>
-        </div>
-        {hasSessionToken() && (
-          <div className="mb-3">
+      )}
+
+      <div data-app-root className="flex min-h-[100dvh]">
+        {/* ── Desktop: rail van 64 px met de modules ───────────────────────── */}
+        <aside
+          className="hidden md:flex w-16 flex-col items-center shrink-0 sticky top-0 h-[100dvh]"
+          style={{ backgroundColor: merkAchtergrond, color: opMerk }}
+        >
+          <div className="flex items-center justify-center w-full h-14 shrink-0">
+            {brandLogo ? (
+              <img src={brandLogo} alt="Logo" className="w-8 h-8 object-contain rounded" />
+            ) : (
+              <span className="text-2xl font-bold opacity-80 select-none">S</span>
+            )}
+          </div>
+          <div className="flex flex-col items-center gap-2 pt-2 w-full flex-1">
+            {visibleModules.map((mod) => (
+              <button
+                key={mod.id}
+                onClick={() => handleModuleClick(mod)}
+                title={mod.label}
+                className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+                  activeModuleId === mod.id ? "bg-white/20 opacity-100" : "opacity-60 hover:opacity-100 hover:bg-white/10"
+                }`}
+              >
+                <mod.icon size={20} strokeWidth={1.75} aria-hidden="true" />
+                <span className="leading-tight text-center truncate w-full px-0.5">{mod.label}</span>
+              </button>
+            ))}
+          </div>
+
+          {/* Eén accountmenu onderaan in plaats van vijf losse iconen */}
+          <div className="relative mb-3" ref={menuRef}>
             <button
-              onClick={() => navigate("/apparaten")}
-              title="Actieve apparaten"
+              onClick={() => setAccountOpen(!accountOpen)}
+              title="Account"
+              aria-haspopup="menu"
+              aria-expanded={accountOpen}
               className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
-                isOnApparaten
-                  ? "bg-white/20 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/10"
+                accountOpen ? "bg-white/20 opacity-100" : "opacity-60 hover:opacity-100 hover:bg-white/10"
               }`}
             >
-              <span className="text-xl">📱</span>
-              <span className="leading-tight text-center truncate w-full px-0.5">Apparaten</span>
+              <CircleUser size={20} strokeWidth={1.75} aria-hidden="true" />
+              <span className="leading-tight text-center truncate w-full px-0.5">Account</span>
             </button>
-          </div>
-        )}
-        {canSeeInstellingen && (
-          <div className="mb-3">
-            <button
-              onClick={() => navigate("/instellingen")}
-              title="Instellingen"
-              className={`flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium transition-colors ${
-                isOnInstellingen
-                  ? "bg-white/20 text-white"
-                  : "text-white/60 hover:text-white hover:bg-white/10"
-              }`}
-            >
-              <span className="text-xl">⚙️</span>
-              <span className="leading-tight text-center truncate w-full px-0.5">Instellingen</span>
-            </button>
-          </div>
-        )}
-        {hasSessionToken() && (
-          <div className="mb-3">
-            <button
-              onClick={handleLogout}
-              title="Uitloggen"
-              className="flex flex-col items-center gap-0.5 w-14 py-2.5 rounded-xl text-[10px] font-medium text-white/60 hover:text-white hover:bg-white/10 transition-colors"
-            >
-              <span className="text-xl">🚪</span>
-              <span className="leading-tight text-center truncate w-full px-0.5">Uitloggen</span>
-            </button>
-          </div>
-        )}
-      </aside>
-
-      {/* Rechter kolom: topnav + inhoud */}
-      <div className="flex flex-col flex-1 min-w-0">
-        {/* Top navigatie */}
-        {(activeModule || isShellPage) && (
-          // paddingTop: in web-app-modus op iOS (statusbalk over de pagina heen)
-          // schuift de balkinhoud onder de statusbalk uit; de brandkleur vult
-          // de safe-area zodat het er native uitziet.
-          <nav
-            className="text-white shadow-lg sticky top-0 z-50"
-            // De betabalk staat er al bovenop en neemt de safe-area voor zijn
-            // rekening; anders zou de header die er nog eens bij optellen.
-            style={{
-              backgroundColor: brandColor ?? "#1e3a5f",
-              paddingTop: beta?.beta_mode ? undefined : "env(safe-area-inset-top, 0px)",
-            }}
-          >
-            <div className="px-4">
-              <div className="flex items-center gap-1 h-14 min-w-0">
-                {/* Modulewisselaar knop (mobiel: toont dropdown, desktop: verborgen want
-                    zijbalk). Logo + modulenaam + chevron vormen samen één knop, zodat
-                    zichtbaar is dát dit een menu opent — een kaal logo nodigt niet uit. */}
-                <div className="md:hidden relative min-w-0 shrink-0" ref={menuRef}>
-                  <button
-                    onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-                    title="Modules"
-                    aria-haspopup="menu"
-                    aria-expanded={mobileMenuOpen}
-                    className={`flex items-center gap-1.5 h-9 -ml-1 pl-1 pr-1.5 rounded-lg transition-colors ${
-                      mobileMenuOpen ? "bg-white/20" : "hover:bg-white/10 active:bg-white/10"
-                    }`}
-                  >
-                    {brandLogo ? (
-                      <img src={brandLogo} alt="" className="w-6 h-6 object-contain rounded shrink-0" />
-                    ) : (
-                      <span className="text-xl font-bold text-white select-none shrink-0">S</span>
-                    )}
-                    <span className="font-bold text-base text-white truncate">
-                      {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : isOnMeldingen ? "Meldingen" : "Instellingen")}
-                    </span>
-                    {activeModule?.id === "kennis" && (
-                      <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none shrink-0">
-                        Beta
-                      </span>
-                    )}
-                    <svg
-                      className={`w-3 h-3 text-white/70 shrink-0 transition-transform ${mobileMenuOpen ? "rotate-180" : ""}`}
-                      viewBox="0 0 12 12"
-                      fill="none"
-                      aria-hidden="true"
-                    >
-                      <path d="M2.5 4.5L6 8l3.5-3.5" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
-                    </svg>
-                  </button>
-
-                  {/* Module-dropdown */}
-                  {mobileMenuOpen && (
-                    <div className="absolute top-full left-0 mt-2 w-56 bg-gray-900 rounded-xl shadow-2xl z-50 py-1.5 border border-white/10">
-                      <div className="px-4 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40 select-none">
-                        Modules
-                      </div>
-                      {visibleModules.map((mod) => (
-                        <button
-                          key={mod.id}
-                          onClick={() => handleModuleClick(mod)}
-                          className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
-                            activeModuleId === mod.id
-                              ? "bg-white/20 text-white"
-                              : "text-white/70 hover:text-white hover:bg-white/10"
-                          }`}
-                        >
-                          <span className="text-lg">{mod.icon}</span>
-                          <span>{mod.label}</span>
-                          {activeModuleId === mod.id && <span className="ml-auto text-white/40 text-xs">✓</span>}
-                        </button>
-                      ))}
-                      <div className="mx-3 my-1 border-t border-white/10" />
-                      <button
-                        onClick={() => navigate("/wachtwoord")}
-                        className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
-                          isOnWachtwoord
-                            ? "bg-white/20 text-white"
-                            : "text-white/70 hover:text-white hover:bg-white/10"
-                        }`}
-                      >
-                        <span className="text-lg">🔑</span>
-                        <span>Wachtwoord wijzigen</span>
-                        {isOnWachtwoord && <span className="ml-auto text-white/40 text-xs">✓</span>}
-                      </button>
-                      <button
-                        onClick={() => navigate("/meldingen")}
-                        className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
-                          isOnMeldingen
-                            ? "bg-white/20 text-white"
-                            : "text-white/70 hover:text-white hover:bg-white/10"
-                        }`}
-                      >
-                        <span className="text-lg">🔔</span>
-                        <span>Meldingen</span>
-                        {isOnMeldingen && <span className="ml-auto text-white/40 text-xs">✓</span>}
-                      </button>
-                      {hasSessionToken() && (
-                        <button
-                          onClick={() => navigate("/apparaten")}
-                          className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
-                            isOnApparaten
-                              ? "bg-white/20 text-white"
-                              : "text-white/70 hover:text-white hover:bg-white/10"
-                          }`}
-                        >
-                          <span className="text-lg">📱</span>
-                          <span>Actieve apparaten</span>
-                          {isOnApparaten && <span className="ml-auto text-white/40 text-xs">✓</span>}
-                        </button>
-                      )}
-                      {canSeeInstellingen && (
-                        <>
-                          <div className="mx-3 my-1 border-t border-white/10" />
-                          <button
-                            onClick={() => navigate("/instellingen")}
-                            className={`flex items-center gap-3 w-full px-4 py-2.5 text-sm transition-colors ${
-                              isOnInstellingen
-                                ? "bg-white/20 text-white"
-                                : "text-white/70 hover:text-white hover:bg-white/10"
-                            }`}
-                          >
-                            <span className="text-lg">⚙️</span>
-                            <span>Instellingen</span>
-                            {isOnInstellingen && <span className="ml-auto text-white/40 text-xs">✓</span>}
-                          </button>
-                        </>
-                      )}
-                      {hasSessionToken() && (
-                        <>
-                          <div className="mx-3 my-1 border-t border-white/10" />
-                          <button
-                            onClick={handleLogout}
-                            className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
-                          >
-                            <span className="text-lg">🚪</span>
-                            <span>Uitloggen</span>
-                          </button>
-                        </>
-                      )}
-                    </div>
-                  )}
+            {accountOpen && (
+              <div className="absolute bottom-0 left-full ml-2 w-56 bg-ink rounded-xl shadow-2xl z-50 py-1.5 border border-white/10">
+                <div className="px-4 pt-1.5 pb-1 text-[10px] font-semibold uppercase tracking-wider text-white/40 select-none">
+                  {currentUser?.display_name ?? "Account"}
                 </div>
-
-                {/* Op mobiel staat de titel al in de modulewisselaar-knop hierboven */}
-                <span className="hidden md:flex font-bold text-lg mr-3 text-white shrink-0 items-center gap-1.5">
-                  {activeModule?.navTitle ?? (isOnWachtwoord ? "Wachtwoord" : isOnApparaten ? "Apparaten" : isOnMeldingen ? "Meldingen" : "Instellingen")}
-                  {activeModule?.id === "kennis" && (
-                    <span className="text-[9px] font-bold uppercase tracking-wide bg-amber-400 text-amber-900 px-1.5 py-0.5 rounded leading-none">
-                      Beta
-                    </span>
-                  )}
-                </span>
-
-                {/* Navigatie links — altijd zichtbaar, horizontaal scrollbaar op mobiel */}
-                <div className="flex items-center gap-0.5 md:gap-1 overflow-x-auto scrollbar-none min-w-0 flex-1">
-                  {visibleNavItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      end={item.end}
-                      className={({ isActive }) =>
-                        `flex items-center gap-1 md:gap-1.5 px-2 md:px-3 py-1.5 rounded-lg text-xs md:text-sm transition-colors shrink-0 ${
-                          isActive
-                            ? "bg-white/20 text-white"
-                            : "text-white/70 hover:text-white hover:bg-white/10"
-                        }`
-                      }
-                    >
-                      <span className="hidden sm:inline">{item.icon}</span>
-                      <span>{item.label}</span>
-                    </NavLink>
-                  ))}
-                </div>
-
-                {/* Envelopje: ongelezen berichten (@-mentions + commentaar op eigen tickets) */}
-                <div className="ml-auto shrink-0">
-                  <InboxEnvelope />
-                </div>
+                <AccountKnop label="Wachtwoord wijzigen" onClick={() => navigate("/wachtwoord")} />
+                <AccountKnop label="Meldingen" onClick={() => navigate("/meldingen")} />
+                {hasSessionToken() && <AccountKnop label="Apparaten" onClick={() => navigate("/apparaten")} />}
+                {canSeeInstellingen && <AccountKnop label="Instellingen" onClick={() => navigate("/instellingen")} />}
+                {hasSessionToken() && (
+                  <>
+                    <div className="mx-3 my-1 border-t border-white/10" />
+                    <AccountKnop label="Uitloggen" onClick={handleLogout} />
+                  </>
+                )}
               </div>
-            </div>
+            )}
+          </div>
+        </aside>
+
+        {/* ── Desktop: kolom van 220 px met alle schermen van de module ────── */}
+        {zichtbareSchermen.length > 0 && (
+          <nav className="hidden md:flex w-[220px] shrink-0 flex-col gap-0.5 px-3 py-4 border-r border-ink-12 bg-paper-raised sticky top-0 h-[100dvh]">
+            <p className="px-3 pb-2 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+              {activeModule?.navTitle}
+            </p>
+            {zichtbareSchermen.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.end}
+                className={({ isActive }) =>
+                  `flex items-center gap-2 px-3 min-h-tap rounded-[10px] text-meta transition-colors ${
+                    isActive ? "bg-ink-6 text-ink font-semibold" : "text-ink-70 hover:bg-ink-6"
+                  }`
+                }
+              >
+                <span>{item.label}</span>
+                {item.to === "/berichten" && ongelezen > 0 && (
+                  <span className="ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full bg-ink text-paper text-[0.6875rem] font-semibold inline-flex items-center justify-center">
+                    {ongelezen > 99 ? "99+" : ongelezen}
+                  </span>
+                )}
+                {item.to === "/tickets" && openTickets !== null && (
+                  <span className="ml-auto meta tabular-nums">{openTickets}</span>
+                )}
+              </NavLink>
+            ))}
           </nav>
         )}
 
-        {/* Inhoud */}
-        {activeModule || isShellPage ? (
-          <main
-            className={`flex-1 px-4 py-6 w-full mx-auto ${location.pathname === "/kennis" ? "" : "touch-keyboard-pb"} ${["/pools/logboek", "/bikes", "/bikes/reserveringen"].includes(location.pathname) ? "" : "max-w-5xl"} ${showFabs ? "fab-clearance" : ""}`}
+        <div className="flex-1 flex flex-col min-w-0">
+          {/* ── Mobiel: topbalk van 44 px — logo en schermtitel, geen navigatie ── */}
+          <header
+            className="md:hidden flex items-center gap-2 h-11 px-4 shrink-0 sticky top-0 z-40"
+            style={{
+              backgroundColor: merkAchtergrond,
+              color: opMerk,
+              paddingTop: beta?.beta_mode ? undefined : "env(safe-area-inset-top, 0px)",
+              height: beta?.beta_mode ? undefined : "calc(2.75rem + env(safe-area-inset-top, 0px))",
+            }}
           >
+            {brandLogo ? (
+              <img src={brandLogo} alt="" className="w-6 h-6 object-contain rounded shrink-0" />
+            ) : (
+              <span className="text-lg font-bold select-none shrink-0">S</span>
+            )}
+            <span className="font-bold text-body truncate">{schermTitel}</span>
+          </header>
+
+          {/* Inhoud — max 1100 px, rijen links uitgelijnd */}
+          <main
+            className={`flex-1 px-4 py-6 w-full max-w-[1100px] ${
+              location.pathname === "/kennis" ? "" : "touch-keyboard-pb"
+            } ${toonMelden ? "fab-clearance" : ""} pb-[calc(4rem+env(safe-area-inset-bottom,0px))] md:pb-6`}
+          >
+            {/* Modules die nog hun eigen schermen hebben houden op mobiel een
+                eigen regel; de onderbalk hieronder is van de hoofdnavigatie. */}
+            {activeModule && activeModuleId !== "taken" && zichtbareSchermen.length > 1 && (
+              <div className="md:hidden flex gap-1 mb-4 overflow-x-auto scrollbar-none">
+                {zichtbareSchermen.map((item) => (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    end={item.end}
+                    className={({ isActive }) =>
+                      `shrink-0 h-tap px-3.5 inline-flex items-center rounded-full text-meta transition-colors ${
+                        isActive
+                          ? "bg-ink text-paper font-semibold"
+                          : "bg-paper-raised border border-ink-12 text-ink-70 font-medium"
+                      }`
+                    }
+                  >
+                    {item.label}
+                  </NavLink>
+                ))}
+              </div>
+            )}
+
             <Routes>
               {/* Taken module */}
               <Route path="/" element={<MijnOverzicht />} />
               <Route path="/tickets" element={<TicketList />} />
               <Route path="/tickets/new" element={<NewTicket />} />
               <Route path="/tickets/:id" element={<TicketDetail />} />
+              <Route path="/kamers" element={<Kamers />} />
+              <Route
+                path="/meer"
+                element={
+                  <Meer gebruiker={currentUser} kanBikes={canSeeBikes} kanInstellingen={canSeeInstellingen} />
+                }
+              />
               <Route path="/berichten" element={<Berichten />} />
               <Route path="/recurring/:id" element={<RecurringTaskDetail />} />
               <Route path="/recurring" element={<RecurringTasks />} />
@@ -728,7 +603,7 @@ export default function App() {
                   // nog niet bekend) niet beslissen, zodat een admin niet ten
                   // onrechte wordt weggestuurd.
                   currentUser == null ? (
-                    <div className="text-sm text-gray-400">Laden…</div>
+                    <div className="meta">Laden…</div>
                   ) : currentUser.role === "admin" ? (
                     <KennisbankBeheer />
                   ) : (
@@ -736,54 +611,96 @@ export default function App() {
                   )
                 }
               />
-              {/* Instellingen (globaal) */}
+              {/* Buiten de modules */}
               <Route path="/instellingen" element={<Instellingen />} />
-              {/* Wachtwoord wijzigen (voor iedereen) */}
               <Route path="/wachtwoord" element={<WachtwoordWijzigen />} />
-              {/* Actieve apparaten / sessies (voor iedereen) */}
               <Route path="/apparaten" element={<Apparaten />} />
-              {/* Persoonlijke meldingsvoorkeuren (voor iedereen) */}
               <Route path="/meldingen" element={<Meldingen />} />
             </Routes>
           </main>
-        ) : (
-          <div className="flex-1 flex items-center justify-center text-gray-400 text-lg">
-            <div className="text-center">
-              <div className="text-5xl mb-4">👈</div>
-              <p>Kies een module in de zijbalk</p>
-            </div>
-          </div>
-        )}
+        </div>
 
-        {/* Zwevende actieknoppen: aan beide kanten onderin een apart wolkje —
-            links een vraag stellen (kennisbot), rechts een ticket maken. */}
-        {showFabs && (
-          <>
-            {/* Links onderin: vraag stellen. Op desktop opgeschoven zodat het
-                wolkje niet over de smalle zijbalk (w-16) valt. */}
-            <button
-              onClick={() => navigate("/kennis")}
-              title="Vraag stellen"
-              aria-label="Vraag stellen"
-              className="fixed left-4 md:left-20 z-40 flex items-center justify-center w-14 h-14 bg-white border border-gray-200 shadow-lg rounded-full text-2xl hover:bg-gray-50 active:scale-95 transition"
-              style={{ bottom: "calc(1rem + var(--undo-lift, 0px) + env(safe-area-inset-bottom, 0px))" }}
+        {/* ── Mobiel: onderbalk van 56 px, vier items met vast label ───────── */}
+        <nav
+          className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex border-t border-ink-12 bg-paper-raised"
+          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+        >
+          {ONDERBALK.map((item) => (
+            <NavLink
+              key={item.to}
+              to={item.to}
+              end={item.end}
+              className={({ isActive }) =>
+                `flex-1 h-14 flex flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium transition-colors ${
+                  isActive ? "text-ink" : "text-ink-45"
+                }`
+              }
             >
-              💬
-            </button>
-            {/* Rechts onderin: ticket maken */}
-            <button
-              onClick={() => navigate("/tickets/new")}
-              title="Ticket maken"
-              aria-label="Ticket maken"
-              className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 bg-blue-600 text-white shadow-lg rounded-full text-3xl leading-none hover:bg-blue-700 active:scale-95 transition"
-              style={{ bottom: "calc(1rem + var(--undo-lift, 0px) + env(safe-area-inset-bottom, 0px))" }}
-            >
-              ＋
-            </button>
-          </>
+              {({ isActive }) => (
+                <>
+                  <span className="relative leading-none" aria-hidden="true">
+                    {item.icon && <item.icon size={20} strokeWidth={isActive ? 2.25 : 1.75} />}
+                    {item.to === "/meer" && ongelezen > 0 && (
+                      <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-urgent" />
+                    )}
+                  </span>
+                  <span className={isActive ? "font-semibold" : ""}>{item.label}</span>
+                </>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Eén primaire actie: melden. Rechtsboven de onderbalk — binnen
+            duimbereik, buiten het rijgebied. */}
+        {toonMelden && (
+          <button
+            onClick={() => navigate("/tickets/new")}
+            title="Melden"
+            aria-label="Nieuw ticket melden"
+            className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 rounded-full shadow-lg active:scale-95 transition"
+            style={{
+              backgroundColor: merkAchtergrond,
+              color: opMerk,
+              bottom: "calc(4.5rem + var(--undo-lift, 0px) + env(safe-area-inset-bottom, 0px))",
+            }}
+          >
+            <Plus size={26} strokeWidth={2} aria-hidden="true" />
+          </button>
         )}
       </div>
-    </div>
     </>
   );
+}
+
+function AccountKnop({ label, onClick }: { label: string; onClick: () => void }) {
+  return (
+    <button
+      onClick={onClick}
+      className="flex items-center gap-3 w-full px-4 py-2.5 text-sm text-white/70 hover:text-white hover:bg-white/10 transition-colors"
+    >
+      {label}
+    </button>
+  );
+}
+
+const SCHERMTITELS: Record<string, string> = {
+  "/": "Vandaag",
+  "/tickets": "Tickets",
+  "/tickets/new": "Melden",
+  "/kamers": "Kamers",
+  "/meer": "Meer",
+  "/berichten": "Berichten",
+  "/recurring": "Herhalend",
+  "/reports": "Rapportage",
+  "/instellingen": "Instellingen",
+  "/wachtwoord": "Wachtwoord",
+  "/apparaten": "Apparaten",
+  "/meldingen": "Meldingen",
+};
+
+function afgeleideTitel(pad: string, mod: ModuleConfig | null): string {
+  if (pad.startsWith("/tickets/")) return "Ticket";
+  if (pad.startsWith("/recurring/")) return "Herhaaltaak";
+  return mod?.navTitle ?? "Tickets";
 }

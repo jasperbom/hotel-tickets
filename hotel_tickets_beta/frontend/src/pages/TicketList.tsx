@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ticketApi, locationApi, userApi, type Category, type Ticket } from "../api/client";
 import { WorkRow } from "../components/WorkRow";
@@ -34,7 +34,7 @@ const AFDELINGEN: { value: Category | ""; label: string }[] = [
 const OPEN_STATUS = "open,in_progress";
 
 export default function TicketList() {
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -45,20 +45,42 @@ export default function TicketList() {
 
   // Filters. Twee statuspillen in plaats van drie: of iets nog loopt of niet
   // is de enige statusvraag die iemand stelt.
-  const [klaar, setKlaar] = useState(searchParams.get("status") === "closed");
-  const [afdeling, setAfdeling] = useState<Category | "">((searchParams.get("category") as Category) || "");
-  const [alleenMijne, setAlleenMijne] = useState(searchParams.get("assigned") === "me");
-  const [zoek, setZoek] = useState(searchParams.get("q") ?? "");
-  const [zoekterm, setZoekterm] = useState(zoek);
+  const klaar = searchParams.get("klaar") === "1" || searchParams.get("status") === "closed";
+  const afdeling = ((searchParams.get("afd") || searchParams.get("category") || "") as Category | "");
+  const alleenMijne = searchParams.get("mijn") === "1" || searchParams.get("assigned") === "me";
+  const kamer = searchParams.get("kamer") ?? "";
+  const zoekterm = searchParams.get("q") ?? "";
+  // Het invoerveld loopt vooruit op de URL: die wordt pas na de debounce gezet.
+  const [zoek, setZoek] = useState(zoekterm);
   const [aantallen, setAantallen] = useState<{ open: number; klaar: number } | null>(null);
   const [afdelingOpen, setAfdelingOpen] = useState(false);
   const zoekRef = useRef<HTMLInputElement>(null);
 
+  /**
+   * Al het filterstate staat in de URL: een gefilterde lijst is daarmee te
+   * delen, te bookmarken en overleeft de terugknop. De chips op Vandaag en de
+   * rijen op Kamers wijzen naar dezelfde parameters.
+   */
+  const zetFilter = useCallback((wijziging: Record<string, string | null>) => {
+    setSearchParams((huidig) => {
+      const nieuw = new URLSearchParams(huidig);
+      // Oude parameternamen opruimen zodra we zelf iets zetten
+      ["status", "category", "assigned", "priority"].forEach((k) => nieuw.delete(k));
+      for (const [sleutel, waarde] of Object.entries(wijziging)) {
+        if (waarde === null || waarde === "") nieuw.delete(sleutel);
+        else nieuw.set(sleutel, waarde);
+      }
+      return nieuw;
+    }, { replace: true });
+  }, [setSearchParams]);
+
   // Zoeken gaat naar de server; 250 ms wachten voorkomt een verzoek per toets.
   useEffect(() => {
-    const id = window.setTimeout(() => setZoekterm(zoek.trim()), 250);
+    const id = window.setTimeout(() => {
+      if (zoek.trim() !== zoekterm) zetFilter({ q: zoek.trim() || null });
+    }, 250);
     return () => window.clearTimeout(id);
-  }, [zoek]);
+  }, [zoek, zoekterm, zetFilter]);
 
   // Los van elkaar: hapert de kamerlijst (die komt uit Home Assistant), dan
   // hoort de lijst nog steeds "Van mij" te tonen in plaats van een user-id.
@@ -80,9 +102,10 @@ export default function TicketList() {
     const p: Record<string, string> = { status: klaar ? "closed" : OPEN_STATUS };
     if (afdeling) p.category = afdeling;
     if (alleenMijne) p.assigned_to = "me";
+    if (kamer) p.location_id = kamer;
     if (zoekterm) p.q = zoekterm;
     return p;
-  }, [klaar, afdeling, alleenMijne, zoekterm]);
+  }, [klaar, afdeling, alleenMijne, kamer, zoekterm]);
 
   useEffect(() => {
     setLoading(true);
@@ -142,10 +165,11 @@ export default function TicketList() {
 
   return (
     <div className="space-y-4 max-w-3xl">
-      <h1 className="text-2xl font-bold text-ink">Tickets</h1>
+      {/* Op mobiel staat de titel al in de topbalk */}
+      <h1 className="hidden md:block text-2xl font-bold text-ink">Tickets</h1>
 
       {/* Zoekveld + filters: altijd zichtbaar, alles 44 px */}
-      <div className="sticky top-14 z-30 -mx-4 px-4 py-3 bg-paper/95 backdrop-blur border-b border-ink-12 space-y-2">
+      <div className="sticky top-11 md:top-0 z-30 -mx-4 px-4 py-3 bg-paper/95 backdrop-blur border-b border-ink-12 space-y-2">
         <div className="relative">
           <input
             ref={zoekRef}
@@ -159,7 +183,7 @@ export default function TicketList() {
           />
           {zoek && (
             <button
-              onClick={() => { setZoek(""); zoekRef.current?.focus(); }}
+              onClick={() => { setZoek(""); zetFilter({ q: null }); zoekRef.current?.focus(); }}
               aria-label="Zoekopdracht wissen"
               className="absolute right-1 top-1/2 -translate-y-1/2 tap text-ink-45 hover:text-ink"
             >
@@ -170,14 +194,14 @@ export default function TicketList() {
 
         <div className="flex gap-2 flex-wrap">
           <div className="flex rounded-full border border-ink-12 bg-paper-raised overflow-hidden">
-            <SegmentKnop actief={!klaar} onClick={() => setKlaar(false)}>
+            <SegmentKnop actief={!klaar} onClick={() => zetFilter({ klaar: null })}>
               Te doen{aantallen ? ` ${aantallen.open}` : ""}
             </SegmentKnop>
-            <SegmentKnop actief={klaar} onClick={() => setKlaar(true)}>
+            <SegmentKnop actief={klaar} onClick={() => zetFilter({ klaar: "1" })}>
               Klaar
             </SegmentKnop>
           </div>
-          <Chip actief={alleenMijne} onClick={() => setAlleenMijne(!alleenMijne)}>
+          <Chip actief={alleenMijne} onClick={() => zetFilter({ mijn: alleenMijne ? null : "1" })}>
             Alleen mijne
           </Chip>
           <div className="relative">
@@ -189,7 +213,7 @@ export default function TicketList() {
                 {AFDELINGEN.map((a) => (
                   <button
                     key={a.value}
-                    onClick={() => { setAfdeling(a.value); setAfdelingOpen(false); }}
+                    onClick={() => { zetFilter({ afd: a.value || null }); setAfdelingOpen(false); }}
                     className={`flex w-full items-center px-4 min-h-tap text-meta text-left hover:bg-ink-6 ${
                       afdeling === a.value ? "font-semibold text-ink" : "text-ink-70"
                     }`}
@@ -214,8 +238,8 @@ export default function TicketList() {
           plaats={zoekPlaats}
           klaar={klaar}
           afdeling={afdeling}
-          onOokAfgerond={() => setKlaar(true)}
-          onAlleAfdelingen={() => { setAfdeling(""); setAlleenMijne(false); }}
+          onOokAfgerond={() => zetFilter({ klaar: "1" })}
+          onAlleAfdelingen={() => zetFilter({ afd: null, mijn: null, kamer: null })}
           onMelden={() => navigate("/tickets/new")}
         />
       ) : (

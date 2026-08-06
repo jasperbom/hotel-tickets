@@ -39,6 +39,36 @@ function hslToHex(h: number, s: number, l: number): string {
   return "#" + [f(0), f(8), f(4)].map((v) => v.toString(16).padStart(2, "0")).join("");
 }
 
+/**
+ * Relatieve luminantie volgens WCAG. Wordt gebruikt om te bepalen of tekst op
+ * een instelbare achtergrondkleur zwart of wit moet zijn — een gok als
+ * `text-white/60` haalt bij een lichte merkkleur de 4,5:1 niet.
+ */
+export function luminantie(hex: string): number {
+  const kanaal = (v: number) => {
+    const c = v / 255;
+    return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
+  };
+  const r = kanaal(parseInt(hex.slice(1, 3), 16));
+  const g = kanaal(parseInt(hex.slice(3, 5), 16));
+  const b = kanaal(parseInt(hex.slice(5, 7), 16));
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+/** Contrast van tekstkleur t.o.v. de achtergrond, volgens WCAG. */
+function contrast(l1: number, l2: number): number {
+  const [licht, donker] = l1 > l2 ? [l1, l2] : [l2, l1];
+  return (licht + 0.05) / (donker + 0.05);
+}
+
+/** Wit of inkt — welke van de twee het meeste contrast geeft. */
+export function leesbareTekstkleur(achtergrond: string): string {
+  const l = luminantie(achtergrond);
+  const metWit = contrast(l, 1);
+  const metInkt = contrast(l, luminantie("#1C1B19"));
+  return metWit >= metInkt ? "#FFFFFF" : "#1C1B19";
+}
+
 const PALETTE_STEPS = ["50", "100", "200", "300", "400", "500", "600", "700", "800", "900"];
 
 /** Zet de --blue-* variabelen op basis van de knopkleur; null herstelt de
@@ -49,10 +79,14 @@ export function applyButtonPalette(hex: string | null) {
   if (!hex) {
     for (const step of PALETTE_STEPS) root.style.removeProperty(`--blue-${step}`);
     root.style.removeProperty("--brand");
+    root.style.removeProperty("--on-brand");
     return;
   }
   // Tokenlaag: `brand` is de enige kleur die interactie mag dragen.
   root.style.setProperty("--brand", hex);
+  // Tekst op die kleur wordt berekend, niet gegokt: bij een lichte merkkleur
+  // was wit-op-brand (en zeker text-white/60) onleesbaar.
+  root.style.setProperty("--on-brand", leesbareTekstkleur(hex));
   const [h, s] = hexToHsl(hex);
   const sat = Math.min(s * 1.1, 95);
   root.style.setProperty("--blue-50",  hslToHex(h, Math.min(s * 0.25, 40), 97));

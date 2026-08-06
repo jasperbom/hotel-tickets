@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
+import { Check } from "lucide-react";
 import type { Priority } from "../api/client";
 
 /**
@@ -46,18 +47,6 @@ function BezetStip({ occupied }: { occupied?: boolean | null }) {
         occupied ? "bg-ink" : "border-[1.5px] border-ink"
       }`}
     />
-  );
-}
-
-function Vinkje() {
-  return (
-    <svg viewBox="0 0 20 20" fill="currentColor" className="w-5 h-5" aria-hidden="true">
-      <path
-        fillRule="evenodd"
-        d="M16.704 5.296a1 1 0 010 1.408l-7.5 7.5a1 1 0 01-1.408 0l-3.5-3.5a1 1 0 111.408-1.408L8.5 12.092l6.796-6.796a1 1 0 011.408 0z"
-        clipRule="evenodd"
-      />
-    </svg>
   );
 }
 
@@ -133,7 +122,7 @@ export function WorkRow({
           className="shrink-0 w-tapLg h-tapLg inline-flex items-center justify-center rounded-[10px]
                      border border-ink-12 text-ink hover:bg-ink-6 active:bg-ink-12 transition-colors"
         >
-          <Vinkje />
+          <Check size={22} strokeWidth={2} aria-hidden="true" />
         </button>
       )}
       {actie.soort === "pakken" && (
