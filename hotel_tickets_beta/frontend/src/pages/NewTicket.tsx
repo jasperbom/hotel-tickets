@@ -1,30 +1,62 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { ticketApi, userApi, type Category, type Priority, type UserRole } from "../api/client";
+import { Camera, ChevronDown, ChevronUp, X } from "lucide-react";
+import { locationApi, ticketApi, userApi, type Category, type Priority, type UserRole } from "../api/client";
 import AreaSelector from "../components/AreaSelector";
 import MultiAreaSelector from "../components/MultiAreaSelector";
+import { AFDELING_LABELS } from "../werk";
 
-export default function NewTicket() {
+/**
+ * Melden — drie velden in de volgorde waarin iemand met een telefoon denkt:
+ * waar, wat, plaatje. De kamer stond eerder onderaan, ná de subtaken.
+ *
+ * Afdeling en prioriteit staan op één regel achter "Wijzig", met als standaard
+ * je eigen afdeling. Toewijzen en subtaken zitten achter diezelfde regel: dat
+ * zijn supervisor-velden, geen meld-velden.
+ */
+
+const LAATSTE_KAMER = "hts.laatste_kamer";
+
+const PRIORITEITEN: { value: Priority; label: string }[] = [
+  { value: "low", label: "Laag" },
+  { value: "medium", label: "Normaal" },
+  { value: "high", label: "Hoog" },
+  { value: "urgent", label: "Urgent" },
+];
+
+export default function Melden() {
   const navigate = useNavigate();
   const location = useLocation();
   // Optionele voorvulling, bijv. vanuit de Kennisbot ("Maak hier een ticket van")
   const prefill = (location.state as { title?: string; description?: string } | null) ?? null;
+
   const [form, setForm] = useState({
     title: prefill?.title ?? "",
     description: prefill?.description ?? "",
     category: "technical" as Category,
     priority: "medium" as Priority,
-    location_id: null as string | null,
+    location_id: (localStorage.getItem(LAATSTE_KAMER) || null) as string | null,
     assigned_to: null as string | null,
   });
   const [users, setUsers] = useState<UserRole[]>([]);
-  // Wie de afdeling niet aanpast, meldt hem bij zijn eigen afdeling — niet bij
-  // de technische dienst. Huishouding meldde zo standaard bij TD, met prioriteit
-  // "normaal", en dat corrigeerde vrijwel niemand.
+  const [kamerNamen, setKamerNamen] = useState<Record<string, string>>({});
   const [afdelingGekozen, setAfdelingGekozen] = useState(false);
+  const [multiRoom, setMultiRoom] = useState(false);
+  const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
+  const [kamerOpen, setKamerOpen] = useState(!localStorage.getItem(LAATSTE_KAMER));
+  const [meerOpen, setMeerOpen] = useState(false);
+  const [subtaskLabels, setSubtaskLabels] = useState<string[]>([]);
+  const [newSubtask, setNewSubtask] = useState("");
+  const [fotos, setFotos] = useState<File[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     userApi.list().then((r) => setUsers(r.data)).catch(() => {});
+    locationApi.list()
+      .then((r) => setKamerNamen(Object.fromEntries(r.data.map((l) => [l.id, l.name]))))
+      .catch(() => {});
     userApi.me()
       .then((r) => {
         const eigen = r.data.department;
@@ -33,12 +65,6 @@ export default function NewTicket() {
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-  const [multiRoom, setMultiRoom] = useState(false);
-  const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
-  const [subtaskLabels, setSubtaskLabels] = useState<string[]>([]);
-  const [newSubtask, setNewSubtask] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
 
   function addSubtask() {
     if (!newSubtask.trim()) return;
@@ -56,193 +82,272 @@ export default function NewTicket() {
     setSaving(true);
     setError("");
     try {
-      const rooms = multiRoom && selectedRooms.length > 0 ? selectedRooms : [form.location_id];
-      for (const roomId of rooms) {
-        await ticketApi.create({
-          ...form,
-          location_id: roomId,
-          subtask_labels: subtaskLabels.length > 0 ? subtaskLabels : undefined,
-        });
+      const kamers = multiRoom && selectedRooms.length > 0 ? selectedRooms : [form.location_id];
+      for (const roomId of kamers) {
+        const r = await ticketApi.create({ ...form, location_id: roomId, subtask_labels: subtaskLabels.length ? subtaskLabels : undefined });
+        // Foto's kunnen pas mee als het ticket bestaat.
+        for (const f of fotos) {
+          await ticketApi.uploadPhoto(r.data.id, f).catch(() => {});
+        }
       }
+      if (!multiRoom && form.location_id) localStorage.setItem(LAATSTE_KAMER, form.location_id);
       navigate("/tickets");
     } catch {
-      setError("Fout bij aanmaken ticket. Probeer opnieuw.");
+      setError("Melden mislukt. Probeer het opnieuw.");
       setSaving(false);
     }
   }
 
   const sortedUsers = [...users].sort((a, b) => a.display_name.localeCompare(b.display_name));
-  const departmentUsers = sortedUsers.filter((u) => u.department === form.category);
-  const otherUsers = sortedUsers.filter((u) => u.department !== form.category);
+  const afdelingUsers = sortedUsers.filter((u) => u.department === form.category);
+  const overigeUsers = sortedUsers.filter((u) => u.department !== form.category);
 
-  const roomCount = multiRoom ? selectedRooms.length : 0;
-  const submitLabel = saving
-    ? "Aanmaken..."
-    : roomCount > 1
-    ? `${roomCount} tickets aanmaken`
-    : "Ticket aanmaken";
+  const kamerLabel = multiRoom
+    ? `${selectedRooms.length} kamers`
+    : form.location_id
+      ? (kamerNamen[form.location_id] ?? form.location_id)
+      : "Geen kamer";
+
+  const aantal = multiRoom ? selectedRooms.length : 0;
+  const knopLabel = saving ? "Bezig…" : aantal > 1 ? `${aantal} meldingen maken` : "Melden";
 
   return (
-    <div className="max-w-lg mx-auto">
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={() => navigate(-1)} className="text-gray-500 hover:text-gray-700">←</button>
-        <h1 className="text-xl font-bold text-gray-900">Nieuw ticket</h1>
+    <div className="max-w-lg pb-32">
+      <div className="flex items-center gap-1 -mt-2 mb-4">
+        <button onClick={() => navigate(-1)} aria-label="Sluiten" className="tap -ml-2 text-ink-45 hover:text-ink">
+          <X size={22} aria-hidden="true" />
+        </button>
+        <span className="meta">Melden</span>
       </div>
 
-      <form onSubmit={submit} className="card space-y-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Titel *</label>
+      <form onSubmit={submit} className="space-y-5">
+        {/* 1 — Waar */}
+        <section>
+          <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">Waar</p>
+          <div className="flex items-baseline gap-3 flex-wrap">
+            <span className="text-[1.4375rem] font-bold text-ink">{kamerLabel}</span>
+            <button
+              type="button"
+              onClick={() => setKamerOpen(!kamerOpen)}
+              className="tap px-2 -mx-2 text-meta text-ink-70 underline underline-offset-2"
+            >
+              Wijzig
+            </button>
+          </div>
+          <p className="meta mt-1">
+            {form.location_id && !kamerOpen ? "Laatst gebruikt · " : ""}
+            <button
+              type="button"
+              onClick={() => { setMultiRoom(!multiRoom); setKamerOpen(true); }}
+              className="underline underline-offset-2"
+            >
+              {multiRoom ? "één kamer kiezen" : "of kies meerdere kamers"}
+            </button>
+          </p>
+          {kamerOpen && (
+            <div className="mt-3">
+              {multiRoom ? (
+                <MultiAreaSelector value={selectedRooms} onChange={setSelectedRooms} />
+              ) : (
+                <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
+              )}
+            </div>
+          )}
+        </section>
+
+        {/* 2 — Wat is er */}
+        <section className="pt-5 border-t border-ink-12">
+          <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">Wat is er</p>
           <input
             type="text"
             value={form.title}
             onChange={(e) => setForm({ ...form, title: e.target.value })}
-            placeholder="Korte omschrijving van het probleem"
+            placeholder="Bijv. kraan lekt"
             required
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm"
+            className="w-full h-tapLg rounded-[10px] border border-ink-12 px-3 text-body bg-paper-raised
+                       focus:outline-none focus:ring-2 focus:ring-brand"
           />
-        </div>
-
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">Beschrijving</label>
           <textarea
             value={form.description}
             onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="Meer details..."
-            rows={3}
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none"
+            placeholder="Meer details (optioneel)"
+            rows={2}
+            className="mt-2 w-full rounded-[10px] border border-ink-12 px-3 py-2 text-body bg-paper-raised resize-none
+                       focus:outline-none focus:ring-2 focus:ring-brand"
           />
-        </div>
+        </section>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Afdeling</label>
-            <select
-              value={form.category}
-              onChange={(e) => {
-                setAfdelingGekozen(true);
-                setForm({ ...form, category: e.target.value as Category });
-              }}
-              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+        {/* 3 — Foto */}
+        <section className="pt-5 border-t border-ink-12">
+          <div className="flex flex-wrap gap-2">
+            {fotos.map((f, i) => (
+              <div key={i} className="relative w-[5.5rem] h-[5.5rem] rounded-[10px] overflow-hidden border border-ink-12">
+                <img src={URL.createObjectURL(f)} alt="" className="w-full h-full object-cover" />
+                <button
+                  type="button"
+                  onClick={() => setFotos((p) => p.filter((_, j) => j !== i))}
+                  aria-label="Foto verwijderen"
+                  className="absolute top-1 right-1 w-6 h-6 rounded-full bg-ink/70 text-paper flex items-center justify-center"
+                >
+                  <X size={14} aria-hidden="true" />
+                </button>
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => fileInputRef.current?.click()}
+              className="w-[5.5rem] h-[5.5rem] rounded-[10px] border border-dashed border-ink-12 flex flex-col items-center justify-center gap-1 text-ink-45 hover:bg-ink-6"
             >
-              <option value="technical">TD</option>
-              <option value="housekeeping">Huishouding</option>
-              <option value="reception">Receptie</option>
-              <option value="service">Bediening</option>
-              <option value="kitchen">Keuken</option>
-              <option value="sales">Sales</option>
-              <option value="garden">Tuin</option>
-            </select>
+              <Camera size={22} aria-hidden="true" />
+              <span className="text-[0.6875rem] font-medium">Foto maken</span>
+            </button>
           </div>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/*"
+            capture="environment"
+            multiple
+            onChange={(e) => { setFotos((p) => [...p, ...Array.from(e.target.files ?? [])]); e.target.value = ""; }}
+            className="hidden"
+          />
+        </section>
 
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Prioriteit</label>
-            <select
-              value={form.priority}
-              onChange={(e) => setForm({ ...form, priority: e.target.value as Priority })}
-              className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
-            >
-              <option value="low">Laag</option>
-              <option value="medium">Normaal</option>
-              <option value="high">Hoog</option>
-              <option value="urgent">Urgent</option>
-            </select>
-          </div>
-        </div>
-
-        {/* Toewijzen — medewerkers van de gekozen afdeling bovenaan */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1">
-            Toewijzen aan <span className="text-gray-400 font-normal">(optioneel)</span>
-          </label>
-          <select
-            value={form.assigned_to ?? ""}
-            onChange={(e) => setForm({ ...form, assigned_to: e.target.value || null })}
-            className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
+        {/* 4 — Alles wat een supervisor invult, achter één regel */}
+        <section className="pt-5 border-t border-ink-12">
+          <button
+            type="button"
+            onClick={() => setMeerOpen(!meerOpen)}
+            className="flex items-center gap-2 w-full min-h-tap text-left"
           >
-            <option value="">Niet toegewezen</option>
-            {departmentUsers.length > 0 && (
-              <optgroup label="Gekozen afdeling">
-                {departmentUsers.map((u) => (
-                  <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
-                ))}
-              </optgroup>
-            )}
-            {otherUsers.length > 0 && (
-              <optgroup label="Overige medewerkers">
-                {otherUsers.map((u) => (
-                  <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
-                ))}
-              </optgroup>
-            )}
-          </select>
-        </div>
+            <span className="text-body text-ink">
+              {AFDELING_LABELS[form.category]} · {PRIORITEITEN.find((p) => p.value === form.priority)?.label}
+            </span>
+            <span className="ml-auto flex items-center gap-1 meta">
+              Wijzig
+              {meerOpen ? <ChevronUp size={16} aria-hidden="true" /> : <ChevronDown size={16} aria-hidden="true" />}
+            </span>
+          </button>
 
-        {/* Locatie */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">Locatie (kamer/zone)</label>
-          <div className="flex gap-2 mb-2">
-            <button
-              type="button"
-              onClick={() => setMultiRoom(false)}
-              className={`flex-1 py-1.5 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
-                !multiRoom ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"
-              }`}
-            >
-              Enkele locatie
-            </button>
-            <button
-              type="button"
-              onClick={() => setMultiRoom(true)}
-              className={`flex-1 py-1.5 rounded-lg border text-sm font-medium transition-all whitespace-nowrap ${
-                multiRoom ? "border-blue-600 bg-blue-50 text-blue-700" : "border-gray-200 text-gray-600 hover:border-gray-300"
-              }`}
-            >
-              Meerdere kamers
-            </button>
-          </div>
-          {multiRoom
-            ? <MultiAreaSelector value={selectedRooms} onChange={setSelectedRooms} />
-            : <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
-          }
-        </div>
+          {meerOpen && (
+            <div className="mt-3 space-y-4">
+              <div>
+                <label className="meta block mb-1">Afdeling</label>
+                <select
+                  value={form.category}
+                  onChange={(e) => { setAfdelingGekozen(true); setForm({ ...form, category: e.target.value as Category }); }}
+                  className="w-full h-tap rounded-[10px] border border-ink-12 px-3 text-body bg-paper-raised"
+                >
+                  {(Object.keys(AFDELING_LABELS) as Category[]).map((c) => (
+                    <option key={c} value={c}>{AFDELING_LABELS[c]}</option>
+                  ))}
+                </select>
+              </div>
 
-        {/* Subtaken */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Subtaken <span className="text-gray-400 font-normal">(optioneel)</span>
-          </label>
-          {subtaskLabels.length > 0 && (
-            <div className="space-y-1.5 mb-2">
-              {subtaskLabels.map((label, idx) => (
-                <div key={idx} className="flex items-center gap-2">
-                  <span className="flex-1 text-sm bg-gray-50 border border-gray-200 rounded-lg px-3 py-1.5">{label}</span>
-                  <button type="button" onClick={() => removeSubtask(idx)} className="text-red-500 hover:text-red-700 text-sm px-1">✕</button>
+              <div>
+                <label className="meta block mb-1">Prioriteit</label>
+                <div className="flex gap-2 flex-wrap">
+                  {PRIORITEITEN.map((p) => (
+                    <button
+                      key={p.value}
+                      type="button"
+                      onClick={() => setForm({ ...form, priority: p.value })}
+                      className={`h-tap px-3.5 rounded-full text-meta transition-colors ${
+                        form.priority === p.value
+                          ? "bg-ink text-paper font-semibold"
+                          : "bg-paper-raised border border-ink-12 text-ink-70 font-medium"
+                      }`}
+                    >
+                      {p.label}
+                    </button>
+                  ))}
                 </div>
-              ))}
+              </div>
+
+              <div>
+                <label className="meta block mb-1">Toewijzen aan</label>
+                <select
+                  value={form.assigned_to ?? ""}
+                  onChange={(e) => setForm({ ...form, assigned_to: e.target.value || null })}
+                  className="w-full h-tap rounded-[10px] border border-ink-12 px-3 text-body bg-paper-raised"
+                >
+                  <option value="">Niemand</option>
+                  {afdelingUsers.length > 0 && (
+                    <optgroup label="Gekozen afdeling">
+                      {afdelingUsers.map((u) => (
+                        <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                  {overigeUsers.length > 0 && (
+                    <optgroup label="Overige medewerkers">
+                      {overigeUsers.map((u) => (
+                        <option key={u.ha_user_id} value={u.ha_user_id}>{u.display_name}</option>
+                      ))}
+                    </optgroup>
+                  )}
+                </select>
+              </div>
+
+              <div>
+                <label className="meta block mb-1">Subtaken</label>
+                {subtaskLabels.length > 0 && (
+                  <ul className="space-y-1.5 mb-2">
+                    {subtaskLabels.map((label, idx) => (
+                      <li key={idx} className="flex items-center gap-2">
+                        <span className="flex-1 min-h-tap flex items-center rounded-[10px] border border-ink-12 bg-paper-raised px-3 text-body">
+                          {label}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeSubtask(idx)}
+                          aria-label="Subtaak verwijderen"
+                          className="tap text-ink-45 hover:text-urgent"
+                        >
+                          <X size={18} aria-hidden="true" />
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={newSubtask}
+                    onChange={(e) => setNewSubtask(e.target.value)}
+                    onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSubtask())}
+                    placeholder="Bijv. vloer dweilen"
+                    className="flex-1 min-w-0 h-tap rounded-[10px] border border-ink-12 px-3 text-body bg-paper-raised"
+                  />
+                  <button
+                    type="button"
+                    onClick={addSubtask}
+                    className="shrink-0 h-tap px-4 rounded-[10px] border border-ink text-ink text-meta font-semibold"
+                  >
+                    Toevoegen
+                  </button>
+                </div>
+              </div>
             </div>
           )}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={newSubtask}
-              onChange={(e) => setNewSubtask(e.target.value)}
-              onKeyDown={(e) => e.key === "Enter" && (e.preventDefault(), addSubtask())}
-              placeholder="bijv. Vloer dweilen..."
-              className="flex-1 min-w-0 border border-gray-300 rounded-lg px-3 py-1.5 text-sm"
-            />
-            <button type="button" onClick={addSubtask} className="btn-secondary text-sm shrink-0 whitespace-nowrap">+ Toevoegen</button>
+        </section>
+
+        {error && <p className="text-meta text-urgent">{error}</p>}
+
+        {/* Primaire actie, vastgeplakt onderin */}
+        <div
+          className="fixed left-0 right-0 z-30 border-t border-ink-12 bg-paper/95 backdrop-blur px-4 py-2.5 md:left-[calc(4rem+220px)]"
+          style={{ bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))" }}
+        >
+          <div className="max-w-lg">
+            <button
+              type="submit"
+              disabled={saving || !form.title.trim()}
+              className="w-full h-[3.25rem] rounded-[10px] bg-ink text-paper text-body font-semibold disabled:opacity-50"
+            >
+              {knopLabel}
+            </button>
           </div>
-        </div>
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <div className="flex flex-wrap gap-2 pt-2">
-          <button type="submit" disabled={saving} className="btn-primary flex-1 whitespace-nowrap">
-            {submitLabel}
-          </button>
-          <button type="button" onClick={() => navigate(-1)} className="btn-secondary">
-            Annuleren
-          </button>
         </div>
       </form>
     </div>

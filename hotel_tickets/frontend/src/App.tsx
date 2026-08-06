@@ -373,9 +373,12 @@ export default function App() {
 
   // Eén primaire actie: melden. Niet op de invoerformulieren zelf (die hebben
   // hun eigen knop onderin) en niet in de kennisbot (eigen invoerbalk).
+  // Op het ticketdetail staat de eigen actiebalk onderin; een meldknop
+  // erbovenop zou precies die knop afdekken.
   const toonMelden =
     activeModuleId === "taken" &&
-    !["/tickets/new", "/kennis", "/meer"].includes(location.pathname);
+    !location.pathname.startsWith("/tickets/") &&
+    !["/kennis", "/meer"].includes(location.pathname);
 
   function handleModuleClick(mod: ModuleConfig) {
     setActiveModuleId(mod.id);
