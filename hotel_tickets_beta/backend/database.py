@@ -70,6 +70,8 @@ async def _run_migrations(conn):
         ("user_roles", "extra_departments", "TEXT"),
         ("user_roles", "modules", "TEXT"),
         ("user_roles", "can_reports", "BOOLEAN"),
+        ("tickets", "object_id", "VARCHAR(36)"),
+        ("recurring_templates", "object_id", "VARCHAR(36)"),
         ("knowledge_entries", "images", "TEXT"),
         ("knowledge_entries", "folder", "VARCHAR(100)"),
         ("knowledge_documents", "folder", "VARCHAR(100)"),

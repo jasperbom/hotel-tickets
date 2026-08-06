@@ -4,6 +4,8 @@ import MijnOverzicht from "./pages/MijnOverzicht";
 import TicketList from "./pages/TicketList";
 import TicketDetail from "./pages/TicketDetail";
 import Kamers from "./pages/Kamers";
+import Logboeken from "./pages/Logboeken";
+import LogboekObject from "./pages/LogboekObject";
 import Meer from "./pages/Meer";
 import NewTicket from "./pages/NewTicket";
 import RecurringTasks from "./pages/RecurringTasks";
@@ -86,6 +88,7 @@ const MODULES: ModuleConfig[] = [
       { to: "/", label: "Vandaag", end: true },
       { to: "/tickets", label: "Tickets" },
       { to: "/kamers", label: "Kamers" },
+      { to: "/logboeken", label: "Logboeken" },
       { to: "/recurring", label: "Herhalend" },
       { to: "/berichten", label: "Berichten" },
       { to: "/reports", label: "Rapportage", restricted: "adminOrSupervisor" },
@@ -394,6 +397,8 @@ export default function App() {
   const toonMelden =
     activeModuleId === "taken" &&
     !location.pathname.startsWith("/tickets/") &&
+    // Het logboekdetail heeft zelf een actiebalk onderin
+    !location.pathname.startsWith("/logboeken/") &&
     !["/kennis", "/meer"].includes(location.pathname);
 
   function handleModuleClick(mod: ModuleConfig) {
@@ -591,6 +596,8 @@ export default function App() {
               <Route path="/tickets/new" element={<NewTicket />} />
               <Route path="/tickets/:id" element={<TicketDetail />} />
               <Route path="/kamers" element={<Kamers />} />
+              <Route path="/logboeken" element={<Logboeken />} />
+              <Route path="/logboeken/:id" element={<LogboekObject />} />
               <Route
                 path="/meer"
                 element={
@@ -713,6 +720,7 @@ const SCHERMTITELS: Record<string, string> = {
   "/tickets": "Tickets",
   "/tickets/new": "Melden",
   "/kamers": "Kamers",
+  "/logboeken": "Logboeken",
   "/meer": "Meer",
   "/berichten": "Berichten",
   "/recurring": "Herhalend",
@@ -726,5 +734,6 @@ const SCHERMTITELS: Record<string, string> = {
 function afgeleideTitel(pad: string, mod: ModuleConfig | null): string {
   if (pad.startsWith("/tickets/")) return "Ticket";
   if (pad.startsWith("/recurring/")) return "Herhaaltaak";
+  if (pad.startsWith("/logboeken/")) return "Logboek";
   return mod?.navTitle ?? "Tickets";
 }

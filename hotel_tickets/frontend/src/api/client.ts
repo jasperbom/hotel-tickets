@@ -152,6 +152,8 @@ export interface Ticket {
   closed_at: string | null;
   closed_by: string | null;
   notify_when_free: boolean;
+  /** Koppeling aan een logboekobject (storing of controle). */
+  object_id?: string | null;
   subtasks: Subtask[] | null;
   photos: string[] | null;
   comment_count?: number;
@@ -274,6 +276,50 @@ export interface UpcomingRecurring {
   subtask_mode?: string;
   subtask_items?: string[];
 }
+
+// --- Logboeken ---
+
+export type LogObjectType = "installatie" | "apparaat" | "gereedschap";
+export type LogEntryType = "controle" | "storing" | "registratie" | "correctie";
+
+export interface LogObject {
+  id: string;
+  name: string;
+  type: LogObjectType;
+  location_id: string | null;
+  department: Category | null;
+  serial: string | null;
+  description: string | null;
+  is_active: boolean;
+  created_at: string;
+  last_check_at: string | null;
+  open_tickets: number;
+  overdue: boolean;
+  schedule: string | null;
+}
+
+export interface LogEntry {
+  id: string;
+  object_id: string;
+  actor_id: string;
+  type: LogEntryType;
+  body: string | null;
+  value: string | null;
+  ticket_id: string | null;
+  corrects_id: string | null;
+  created_at: string;
+}
+
+export const logbookApi = {
+  listObjects: () => api.get<LogObject[]>("/logbook/objects"),
+  getObject: (id: string) => api.get<LogObject>(`/logbook/objects/${id}`),
+  createObject: (data: Partial<LogObject>) => api.post<LogObject>("/logbook/objects", data),
+  updateObject: (id: string, data: Partial<LogObject>) => api.patch<LogObject>(`/logbook/objects/${id}`, data),
+  entries: (id: string, params?: Record<string, string>) =>
+    api.get<LogEntry[]>(`/logbook/objects/${id}/entries`, { params }),
+  addEntry: (id: string, data: { type?: LogEntryType; body?: string; value?: string; corrects_id?: string }) =>
+    api.post<LogEntry>(`/logbook/objects/${id}/entries`, data),
+};
 
 export interface Location {
   id: string;

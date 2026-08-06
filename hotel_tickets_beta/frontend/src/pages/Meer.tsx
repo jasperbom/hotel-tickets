@@ -42,6 +42,7 @@ export default function Meer({
     <div className="space-y-6 max-w-3xl">
       <div className="grid gap-2">
         <Regel label="Berichten" badge={ongelezen} onClick={() => navigate("/berichten")} />
+        <Regel label="Logboeken" onClick={() => navigate("/logboeken")} />
         <Regel label="Herhalende taken" onClick={() => navigate("/recurring")} />
         {magRapportage && <Regel label="Rapportage" onClick={() => navigate("/reports")} />}
       </div>

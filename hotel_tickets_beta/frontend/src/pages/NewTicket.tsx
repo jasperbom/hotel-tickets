@@ -28,7 +28,7 @@ export default function Melden() {
   const navigate = useNavigate();
   const location = useLocation();
   // Optionele voorvulling, bijv. vanuit de Kennisbot ("Maak hier een ticket van")
-  const prefill = (location.state as { title?: string; description?: string } | null) ?? null;
+  const prefill = (location.state as { title?: string; description?: string; objectId?: string } | null) ?? null;
 
   const [form, setForm] = useState({
     title: prefill?.title ?? "",
@@ -37,6 +37,8 @@ export default function Melden() {
     priority: "medium" as Priority,
     location_id: (localStorage.getItem(LAATSTE_KAMER) || null) as string | null,
     assigned_to: null as string | null,
+    // Storing gemeld vanaf een logboek: het ticket telt mee in dat boek.
+    object_id: prefill?.objectId ?? null,
   });
   const [users, setUsers] = useState<UserRole[]>([]);
   const [kamerNamen, setKamerNamen] = useState<Record<string, string>>({});

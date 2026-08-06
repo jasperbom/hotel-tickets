@@ -58,6 +58,9 @@ class Ticket(Base):
     closed_at: Mapped[datetime | None] = mapped_column(DateTime)
     closed_by: Mapped[str | None] = mapped_column(String(255))  # HA user_id
     notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Koppeling aan een logboekobject: een storing blijft een gewoon ticket,
+    # alleen telt hij mee in de geschiedenis van dat object.
+    object_id: Mapped[str | None] = mapped_column(String(36))
     subtasks: Mapped[str | None] = mapped_column(Text)  # JSON: [{label, done, done_by, done_at}]
     photos: Mapped[str | None] = mapped_column(Text)  # JSON: ["filename1.jpg", ...]
     sort_order: Mapped[int] = mapped_column(Integer, default=0, nullable=False)
@@ -180,6 +183,9 @@ class RecurringTemplate(Base):
     subtask_mode: Mapped[str] = mapped_column(String(20), default="none")  # none | subtasks | rooms
     subtask_items: Mapped[str | None] = mapped_column(Text)  # JSON: [label, ...] or [area_id, ...]
     notify_when_free: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Controleschema: dit sjabloon hoort bij een logboekobject. Afvinken op
+    # Vandaag schrijft dan een onwisbare regel in het boek van dat object.
+    object_id: Mapped[str | None] = mapped_column(String(36))
     emoji: Mapped[str | None] = mapped_column(String(10))
     folder: Mapped[str | None] = mapped_column(String(100))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
@@ -341,6 +347,68 @@ class PermissionEvent(Base):
     field: Mapped[str] = mapped_column(String(50), nullable=False)                    # role, departments, modules, reports
     from_value: Mapped[str | None] = mapped_column(Text)
     to_value: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
+
+
+# ── Logboeken ─────────────────────────────────────────────────────────────────
+# Een ticket beantwoordt "wat moet er gebeuren?" en verdwijnt als het klaar is.
+# Een logboek beantwoordt "wat is er met dit ding gebeurd?" en mag juist nooit
+# verdwijnen. Voor de brandmeldcentrale is dat wettelijk: de maandelijkse
+# controle moet jaren terug aantoonbaar zijn, met wie en wanneer.
+#
+# Eén regel maakt het een logboek: registraties zijn onwisbaar. Toevoegen kan
+# altijd, corrigeren is een nieuwe regel die naar de oude verwijst, verwijderen
+# bestaat niet. Zonder die regel is het gewoon commentaar.
+
+
+class LogObjectType(str, PyEnum):
+    installatie = "installatie"   # brandmeldcentrale, cv, noodverlichting
+    apparaat = "apparaat"         # airco 214, vaatwasser
+    gereedschap = "gereedschap"   # slijptol #2
+
+
+class LogObject(Base):
+    """Een ding met een naam, een plek en een geschiedenis."""
+    __tablename__ = "log_objects"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    type: Mapped[LogObjectType] = mapped_column(Enum(LogObjectType), nullable=False)
+    # Locatie = bestaande HA-area, net als bij tickets
+    location_id: Mapped[str | None] = mapped_column(String(255))
+    # Wie registraties mag schrijven: deze afdeling (naast admins/supervisors).
+    # Dat is een aantoonbaarheidseis, geen wantrouwen.
+    department: Mapped[Category | None] = mapped_column(Enum(Category))
+    serial: Mapped[str | None] = mapped_column(String(255))
+    description: Mapped[str | None] = mapped_column(Text)
+    is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+
+
+class LogEntryType(str, PyEnum):
+    controle = "controle"          # controleschema uitgevoerd
+    storing = "storing"            # storing verholpen (gekoppeld ticket)
+    registratie = "registratie"    # losse aantekening, meetwaarde, vervanging
+    correctie = "correctie"        # verwijst naar een eerdere regel
+
+
+class LogEntry(Base):
+    """Eén regel in het boek. Append-only: nooit bewerken, nooit verwijderen."""
+    __tablename__ = "log_entries"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    object_id: Mapped[str] = mapped_column(
+        String(36), ForeignKey("log_objects.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    actor_id: Mapped[str] = mapped_column(String(255), nullable=False)
+    type: Mapped[LogEntryType] = mapped_column(Enum(LogEntryType), nullable=False)
+    body: Mapped[str | None] = mapped_column(Text)
+    # Optionele meetwaarde (drukmeting, accuspanning) als vrije tekst
+    value: Mapped[str | None] = mapped_column(String(255))
+    # Het ticket waaruit deze regel voortkwam (controle of storing)
+    ticket_id: Mapped[str | None] = mapped_column(String(36))
+    # Bij een correctie: de regel die hiermee rechtgezet wordt
+    corrects_id: Mapped[str | None] = mapped_column(String(36))
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc), index=True)
 
 

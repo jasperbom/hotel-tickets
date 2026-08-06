@@ -19,6 +19,7 @@ from ..services.ha_entities import sync_ticket_sensors
 from ..services.ha_client import get_areas
 from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
+from .logbook import schrijf_registratie_bij_afronden
 
 import logging
 logger = logging.getLogger(__name__)
@@ -40,11 +41,13 @@ class TicketCreate(BaseModel):
     location_id: str | None = None
     assigned_to: str | None = None
     creator_name: str | None = None  # display-naam bij aanmaken via card/service
+    object_id: str | None = None     # koppeling aan een logboekobject
     subtask_labels: list[str] | None = None  # optionele subtaken bij aanmaken
 
 
 class TicketUpdate(BaseModel):
     title: str | None = None
+    object_id: str | None = None
     description: str | None = None
     status: Status | None = None
     priority: Priority | None = None
@@ -82,6 +85,7 @@ class TicketOut(BaseModel):
     closed_at: datetime | None
     closed_by: str | None
     notify_when_free: bool
+    object_id: str | None = None
     subtasks: list | None = None
     photos: list[str] | None = None
     pinned: bool = False
@@ -415,6 +419,7 @@ async def create_ticket(
         priority=body.priority,
         location_id=body.location_id,
         assigned_to=body.assigned_to,
+        object_id=body.object_id,
         created_by=body.creator_name if body.creator_name else user.ha_user_id,
         subtasks=subtasks_json,
     )
@@ -611,6 +616,9 @@ async def update_ticket(
     if body.status == Status.closed and not ticket.closed_at:
         ticket.closed_at = datetime.now(timezone.utc)
         ticket.closed_by = user.ha_user_id
+        # Hoort dit ticket bij een logboekobject? Dan is afvinken een
+        # onwisbare regel in dat boek.
+        await schrijf_registratie_bij_afronden(db, ticket, user.ha_user_id)
         # Recurring template: volgende uitvoering plannen zodat de taak pas
         # weer opduikt op de dag dat hij echt moet gebeuren.
         if ticket.recurring_template_id:
