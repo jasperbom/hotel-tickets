@@ -89,6 +89,7 @@ export default function KennisBot() {
         // Houd de layout-viewport bovenaan gepind zodat iOS de navigatie niet
         // alsnog wegscrollt bij het focussen van het invoerveld.
         window.scrollTo(0, 0);
+
         const el = listRef.current;
         if (el) el.scrollTop = el.scrollHeight;
       });
@@ -224,11 +225,12 @@ export default function KennisBot() {
   }
 
   return (
-    <div
-      data-no-kb-scroll
-      className="flex flex-col max-w-2xl mx-auto"
-      style={{ height: "calc(var(--app-vh, 100dvh) - 7rem - var(--onderbalk))" }}
-    >
+    // Geen uitgerekende hoogte: `main` is voor dit scherm een flexkolom (zie
+    // App.tsx), dus wat er na de kopbalk en de paginamarge overblijft komt hier
+    // terecht. Elke som die de kopbalk, de veilige zone van het toestel en de
+    // onderbalk zelf moest optellen had er eentje mis — en dan valt het
+    // invoerveld onder de rand.
+    <div data-no-kb-scroll className="flex flex-col flex-1 min-h-0 w-full max-w-2xl mx-auto">
       <div className="flex items-center gap-2 mb-3 shrink-0">
         <h1 className="text-xl font-bold text-ink flex items-center gap-2">
           Jaisper
