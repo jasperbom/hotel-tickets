@@ -1,13 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi, authApi, sessionsApi, betaApi, parseUTC,
+  userApi, integrationApi, systemSettingsApi, logbookApi, locationApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi, authApi, sessionsApi, betaApi, parseUTC,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
   type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding, type LoginBan, type Session,
-  type BetaStatus, type BetaCopyResult,
+  type BetaStatus, type BetaCopyResult, type LogObject, type LogObjectType,
 } from "../api/client";
 import { BevestigKnop } from "../components/BevestigKnop";
+import AreaSelector from "../components/AreaSelector";
 
-type Tab = "systeem" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot" | "beta";
+type Tab = "systeem" | "logboeken" | "zwembaden" | "fietsen" | "huisstijl" | "kennisbot" | "beta";
 
 // ── Gedeelde hulpcomponent ─────────────────────────────────────────────────────
 
@@ -1657,6 +1658,200 @@ function KennisbotAiPanel() {
 }
 
 // ══════════════════════════════════════════════════════════════════════════════
+// LOGBOEKEN — objecten beheren
+// ══════════════════════════════════════════════════════════════════════════════
+
+const OBJECT_TYPES: { value: LogObjectType; label: string }[] = [
+  { value: "installatie", label: "Installatie" },
+  { value: "apparaat", label: "Apparaat" },
+  { value: "gereedschap", label: "Gereedschap" },
+];
+
+const LEEG_OBJECT = {
+  name: "",
+  type: "installatie" as LogObjectType,
+  location_id: null as string | null,
+  department: null as Category | null,
+  serial: "",
+  description: "",
+  nfc_tag_id: "",
+};
+
+/**
+ * Objecten zijn de dingen met een logboek: de brandmeldcentrale, een airco,
+ * een slijptol. Aanmaken is inrichtingswerk — het staat daarom hier en niet in
+ * het naslagscherm zelf.
+ */
+function LogboekObjectenPanel() {
+  const [objecten, setObjecten] = useState<LogObject[]>([]);
+  const [locaties, setLocaties] = useState<Record<string, string>>({});
+  const [loading, setLoading] = useState(true);
+  const [form, setForm] = useState({ ...LEEG_OBJECT });
+  const [bewerkt, setBewerkt] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [fout, setFout] = useState<string | null>(null);
+
+  const laden = () =>
+    Promise.allSettled([logbookApi.listObjects(), locationApi.list()]).then(([objs, locs]) => {
+      if (objs.status === "fulfilled") setObjecten(objs.value.data);
+      if (locs.status === "fulfilled") {
+        setLocaties(Object.fromEntries(locs.value.data.map((l) => [l.id, l.name])));
+      }
+    });
+
+  useEffect(() => { laden().finally(() => setLoading(false)); }, []);
+
+  async function opslaan() {
+    if (!form.name.trim()) return;
+    setFout(null);
+    const data = {
+      ...form,
+      name: form.name.trim(),
+      serial: form.serial.trim() || null,
+      description: form.description.trim() || null,
+      nfc_tag_id: form.nfc_tag_id.trim() || null,
+    };
+    try {
+      if (bewerkt) await logbookApi.updateObject(bewerkt, data);
+      else await logbookApi.createObject(data);
+      setForm({ ...LEEG_OBJECT });
+      setBewerkt(null);
+      setOpen(false);
+      await laden();
+    } catch (err) {
+      setFout(apiErrorText(err, "Opslaan mislukt"));
+    }
+  }
+
+  async function zetActief(o: LogObject, actief: boolean) {
+    await logbookApi.updateObject(o.id, { is_active: actief });
+    await laden();
+  }
+
+  return (
+    <Section title="Logboekobjecten">
+      <p className="text-sm text-ink-45">
+        Een object is een ding met een naam, een plek en een geschiedenis. Koppel er
+        een herhaaltaak aan (bij Herhalend → controleschema) en het afvinken schrijft
+        vanzelf een onwisbare regel in het boek.
+      </p>
+
+      {!open && (
+        <button
+          onClick={() => { setForm({ ...LEEG_OBJECT }); setBewerkt(null); setOpen(true); }}
+          className="btn-primary w-fit"
+        >
+          + Object toevoegen
+        </button>
+      )}
+
+      {open && (
+        <div className="rounded-[10px] border border-ink-12 p-4 space-y-3">
+          <h3 className="text-sm font-semibold">{bewerkt ? "Object bewerken" : "Nieuw object"}</h3>
+          <div className="grid sm:grid-cols-2 gap-2">
+            <input
+              value={form.name}
+              onChange={(e) => setForm({ ...form, name: e.target.value })}
+              placeholder="Naam, bijv. Brandmeldcentrale"
+              className="h-tap rounded-[10px] border border-ink-12 px-3 text-body"
+            />
+            <select
+              value={form.type}
+              onChange={(e) => setForm({ ...form, type: e.target.value as LogObjectType })}
+              className="h-tap rounded-[10px] border border-ink-12 px-3 text-body bg-paper-raised"
+            >
+              {OBJECT_TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+            <select
+              value={form.department ?? ""}
+              onChange={(e) => setForm({ ...form, department: (e.target.value || null) as Category | null })}
+              className="h-tap rounded-[10px] border border-ink-12 px-3 text-body bg-paper-raised"
+            >
+              <option value="">— Iedereen mag schrijven —</option>
+              {(Object.keys(DEPT_FULL_LABELS) as Category[]).map((d) => (
+                <option key={d} value={d}>{DEPT_FULL_LABELS[d]}</option>
+              ))}
+            </select>
+            <input
+              value={form.serial}
+              onChange={(e) => setForm({ ...form, serial: e.target.value })}
+              placeholder="Serienummer (optioneel)"
+              className="h-tap rounded-[10px] border border-ink-12 px-3 text-body font-mono"
+            />
+            <input
+              value={form.nfc_tag_id}
+              onChange={(e) => setForm({ ...form, nfc_tag_id: e.target.value })}
+              placeholder="NFC-tag ID (optioneel)"
+              className="h-tap rounded-[10px] border border-ink-12 px-3 text-body font-mono"
+            />
+          </div>
+          <AreaSelector value={form.location_id} onChange={(id) => setForm({ ...form, location_id: id })} />
+          <textarea
+            value={form.description}
+            onChange={(e) => setForm({ ...form, description: e.target.value })}
+            rows={2}
+            placeholder="Omschrijving (optioneel), bijv. wat de maandelijkse controle inhoudt"
+            className="w-full rounded-[10px] border border-ink-12 px-3 py-2 text-body resize-none"
+          />
+          {fout && <p className="text-sm text-urgent">{fout}</p>}
+          <div className="flex gap-2">
+            <button onClick={opslaan} className="btn-primary">Opslaan</button>
+            <button onClick={() => { setOpen(false); setBewerkt(null); setFout(null); }} className="btn-secondary">
+              Annuleren
+            </button>
+          </div>
+        </div>
+      )}
+
+      {loading ? (
+        <p className="text-sm text-ink-45">Laden…</p>
+      ) : objecten.length === 0 ? (
+        <p className="text-sm text-ink-45">Nog geen objecten.</p>
+      ) : (
+        <ul className="grid gap-2">
+          {objecten.map((o) => (
+            <li key={o.id} className="row min-h-[66px]">
+              <span className="flex-1 min-w-0">
+                <span className="block text-row text-ink">{o.name}</span>
+                <span className="meta">
+                  {[
+                    OBJECT_TYPES.find((t) => t.value === o.type)?.label,
+                    o.location_id ? (locaties[o.location_id] ?? o.location_id) : null,
+                    o.department ? DEPT_FULL_LABELS[o.department] : "iedereen mag schrijven",
+                    o.nfc_tag_id ? "NFC" : null,
+                  ].filter(Boolean).join(" · ")}
+                </span>
+              </span>
+              <button
+                onClick={() => {
+                  setBewerkt(o.id);
+                  setOpen(true);
+                  setForm({
+                    name: o.name, type: o.type, location_id: o.location_id,
+                    department: o.department, serial: o.serial ?? "", description: o.description ?? "",
+                    nfc_tag_id: o.nfc_tag_id ?? "",
+                  });
+                }}
+                className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"
+              >
+                Wijzig
+              </button>
+              <BevestigKnop
+                label={o.is_active ? "Archiveren" : "Terugzetten"}
+                vraag={o.is_active ? "Object archiveren? Het boek blijft bewaard." : "Object terugzetten?"}
+                bevestigLabel="Ja"
+                onBevestig={() => zetActief(o, !o.is_active)}
+                className="shrink-0 h-tap px-3 text-meta font-semibold text-ink-45 hover:text-ink"
+              />
+            </li>
+          ))}
+        </ul>
+      )}
+    </Section>
+  );
+}
+
+// ══════════════════════════════════════════════════════════════════════════════
 // BETA
 // ══════════════════════════════════════════════════════════════════════════════
 
@@ -1846,6 +2041,7 @@ export default function Instellingen() {
 
   const tabs: { id: Tab; label: string; icon: string }[] = [
     { id: "systeem", label: "Systeem", icon: "🏠" },
+    { id: "logboeken", label: "Logboeken", icon: "📘" },
     { id: "zwembaden", label: "Zwembaden", icon: "🏊" },
     { id: "fietsen", label: "Fietsen", icon: "🚲" },
     { id: "kennisbot", label: "Kennisbot", icon: "💡" },
@@ -1905,6 +2101,14 @@ export default function Instellingen() {
       )}
       {tab === "kennisbot" && me?.role !== "admin" && (
         <p className="text-sm text-ink-45">Alleen admins kunnen de kennisbot-instellingen aanpassen.</p>
+      )}
+
+      {tab === "logboeken" && (
+        <div className="space-y-5">
+          {isAdmin ? <LogboekObjectenPanel /> : (
+            <p className="text-sm text-ink-45">Alleen leidinggevenden kunnen objecten beheren.</p>
+          )}
+        </div>
       )}
 
       {tab === "beta" && beta?.beta_mode && (

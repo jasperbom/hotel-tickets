@@ -72,6 +72,7 @@ async def _run_migrations(conn):
         ("user_roles", "can_reports", "BOOLEAN"),
         ("tickets", "object_id", "VARCHAR(36)"),
         ("recurring_templates", "object_id", "VARCHAR(36)"),
+        ("log_objects", "nfc_tag_id", "VARCHAR(255)"),
         ("knowledge_entries", "images", "TEXT"),
         ("knowledge_entries", "folder", "VARCHAR(100)"),
         ("knowledge_documents", "folder", "VARCHAR(100)"),

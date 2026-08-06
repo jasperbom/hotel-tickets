@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { recurringApi, locationApi, ticketApi, userApi, type RecurringTemplate, type Category, type Priority, type SubtaskMode, type UserRole } from "../api/client";
+import { recurringApi, locationApi, logbookApi, ticketApi, userApi, type LogObject, type RecurringTemplate, type Category, type Priority, type SubtaskMode, type UserRole } from "../api/client";
 import { herhaalKort } from "../werk";
 import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
 import AreaSelector from "../components/AreaSelector";
@@ -21,6 +21,7 @@ const EMPTY_FORM = {
   interval_days: null as number | null,
   is_active: true,
   nfc_tag_id: "",
+  object_id: "",
   notify_when_free: false,
   subtask_mode: "none" as SubtaskMode,
   subtask_items: [] as string[],
@@ -69,6 +70,7 @@ export default function RecurringTasks() {
   // Open exemplaren per sjabloon: dat is het "overgeslagen"-signaal.
   const [openPerSjabloon, setOpenPerSjabloon] = useState<Record<string, number>>({});
   const [beheerOpen, setBeheerOpen] = useState(false);
+  const [objecten, setObjecten] = useState<LogObject[]>([]);
 
   useEffect(() => {
     Promise.allSettled([recurringApi.list(), locationApi.list(), userApi.me()])
@@ -83,6 +85,8 @@ export default function RecurringTasks() {
 
     // Openstaande exemplaren tellen: een sjabloon waarvan er meerdere blijven
     // hangen is niet afgevinkt en dat is het signaal dat je hier wil zien.
+    logbookApi.listObjects().then((r) => setObjecten(r.data)).catch(() => {});
+
     ticketApi.list({ status: "open,in_progress" })
       .then((r) => {
         const per: Record<string, number> = {};
@@ -143,6 +147,7 @@ export default function RecurringTasks() {
     const payload: Partial<RecurringTemplate> = {
       ...form,
       nfc_tag_id: form.nfc_tag_id || null,
+      object_id: form.object_id || null,
       emoji: null,
       folder: form.folder.trim(),
       subtask_items: form.subtask_items.length > 0 ? form.subtask_items : null,
@@ -192,6 +197,7 @@ export default function RecurringTasks() {
       interval_days: template.interval_days,
       is_active: template.is_active,
       nfc_tag_id: template.nfc_tag_id || "",
+      object_id: template.object_id || "",
       notify_when_free: template.notify_when_free,
       subtask_mode: template.subtask_mode || "none",
       subtask_items: template.subtask_items || [],
@@ -520,6 +526,24 @@ export default function RecurringTasks() {
               intervalDays={form.interval_days}
               onChange={(cron, intervalDays) => setForm({ ...form, cron_expression: cron, interval_days: intervalDays })}
             />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-ink-70 mb-1">
+              Controleschema van <span className="text-ink-45 font-normal">(optioneel)</span>
+            </label>
+            <select
+              value={form.object_id}
+              onChange={(e) => setForm({ ...form, object_id: e.target.value })}
+              className="block w-full border border-ink-12 rounded-lg px-3 py-2 text-sm bg-paper-raised"
+            >
+              <option value="">— Geen logboekobject —</option>
+              {objecten.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+            </select>
+            <p className="meta mt-1">
+              Koppel je dit aan een object, dan schrijft het afvinken op Vandaag een
+              onwisbare regel in het logboek van dat object.
+            </p>
           </div>
 
           <div>

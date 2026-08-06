@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { ChevronLeft, Printer } from "lucide-react";
@@ -38,6 +38,9 @@ const REGEL_LABELS: Record<string, string> = {
 export default function LogboekObject() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  // Vanaf een NFC-sticker: ?registratie=1 zet het formulier meteen open, zodat
+  // scannen en vastleggen één handeling wordt.
+  const [zoekParams] = useSearchParams();
   const [obj, setObj] = useState<LogObject | null>(null);
   const [regels, setRegels] = useState<LogEntry[]>([]);
   const [users, setUsers] = useState<Record<string, string>>({});
@@ -45,7 +48,7 @@ export default function LogboekObject() {
   const [mij, setMij] = useState<UserRole | null>(null);
   const [loading, setLoading] = useState(true);
   const [nieuw, setNieuw] = useState<{ open: boolean; body: string; value: string; corrects: string | null }>({
-    open: false, body: "", value: "", corrects: null,
+    open: zoekParams.get("registratie") === "1", body: "", value: "", corrects: null,
   });
   const [bezig, setBezig] = useState(false);
   const [fout, setFout] = useState<string | null>(null);
@@ -140,6 +143,7 @@ export default function LogboekObject() {
       <h1 className="text-3xl font-bold text-ink leading-tight">{obj.name}</h1>
       <p className="meta mt-1.5">{metaregel}</p>
       {obj.serial && <p className="meta">Serienummer {obj.serial}</p>}
+      {obj.nfc_tag_id && <p className="meta print:hidden">NFC-sticker gekoppeld</p>}
       {obj.description && <p className="mt-3 text-body text-ink-70 whitespace-pre-wrap">{obj.description}</p>}
 
       <section className="mt-5 pt-5 border-t border-ink-12">

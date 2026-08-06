@@ -11,6 +11,7 @@ from ..models import RecurringTemplate, Category, Priority, Ticket, Status, Pool
 from ..auth import RequireUser
 from ..services.ha_entities import sync_ticket_sensors
 from ..scheduler import mark_template_completed, calc_next_due_after_completion
+from .logbook import schrijf_registratie_bij_afronden
 
 router = APIRouter(prefix="/recurring", tags=["recurring"])
 
@@ -27,6 +28,8 @@ class TemplateCreate(BaseModel):
     interval_days: int | None = None
     is_active: bool = True
     nfc_tag_id: str | None = None
+    # Controleschema: hoort dit sjabloon bij een logboekobject?
+    object_id: str | None = None
     subtask_mode: str = "none"  # none | subtasks | rooms
     subtask_items: list[str] | None = None
     notify_when_free: bool = False
@@ -46,6 +49,7 @@ class TemplateUpdate(BaseModel):
     interval_days: int | None = None
     is_active: bool | None = None
     nfc_tag_id: str | None = None
+    object_id: str | None = None
     subtask_mode: str | None = None
     subtask_items: list[str] | None = None
     notify_when_free: bool | None = None
@@ -66,6 +70,7 @@ class TemplateOut(BaseModel):
     interval_days: int | None
     is_active: bool
     nfc_tag_id: str | None
+    object_id: str | None = None
     subtask_mode: str
     subtask_items: list[str] | None
     notify_when_free: bool
@@ -149,6 +154,7 @@ def _template_with_next_run(template: RecurringTemplate) -> dict:
         "interval_days": template.interval_days,
         "is_active": template.is_active,
         "nfc_tag_id": template.nfc_tag_id,
+        "object_id": template.object_id,
         "subtask_mode": template.subtask_mode or "none",
         "subtask_items": subtask_items,
         "notify_when_free": template.notify_when_free,
@@ -347,6 +353,11 @@ async def complete_template(template_id: str, body: CompleteRequest = CompleteRe
             ticket.status = Status.closed
             ticket.closed_at = now
             ticket.closed_by = user.ha_user_id if user else "manual"
+            # Hoort dit sjabloon bij een logboekobject? Dan is afvinken een
+            # onwisbare regel in dat boek.
+            if not ticket.object_id and template.object_id:
+                ticket.object_id = template.object_id
+            await schrijf_registratie_bij_afronden(db, ticket, ticket.closed_by)
             closed_ids.append(ticket.id)
     else:
         # Geen openstaand ticket — maak een nieuw aan en sluit direct
@@ -364,8 +375,11 @@ async def complete_template(template_id: str, body: CompleteRequest = CompleteRe
             status=Status.closed,
             closed_at=now,
             closed_by=user.ha_user_id if user else "manual",
+            object_id=template.object_id,
         )
         db.add(ticket)
+        await db.flush()
+        await schrijf_registratie_bij_afronden(db, ticket, ticket.closed_by)
         closed_ids.append(ticket.id)
 
     # Volgende uitvoering plannen (interval: now + interval_days, cron:

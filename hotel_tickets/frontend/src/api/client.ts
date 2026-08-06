@@ -233,6 +233,8 @@ export interface RecurringTemplate {
   interval_days: number | null;
   is_active: boolean;
   nfc_tag_id: string | null;
+  /** Controleschema: hoort dit sjabloon bij een logboekobject? */
+  object_id?: string | null;
   next_run: string | null;
   next_due_at: string | null;
   subtask_mode: SubtaskMode;
@@ -290,6 +292,8 @@ export interface LogObject {
   department: Category | null;
   serial: string | null;
   description: string | null;
+  /** Sticker op het ding: scannen opent dit boek. */
+  nfc_tag_id: string | null;
   is_active: boolean;
   created_at: string;
   last_check_at: string | null;

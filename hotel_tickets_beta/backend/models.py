@@ -381,6 +381,10 @@ class LogObject(Base):
     department: Mapped[Category | None] = mapped_column(Enum(Category))
     serial: Mapped[str | None] = mapped_column(String(255))
     description: Mapped[str | None] = mapped_column(Text)
+    # Sticker op het ding: scannen opent het boek met "Registratie toevoegen"
+    # klaar. Voor gereedschap wordt de kwartaalinventarisatie daarmee: langs de
+    # wand scannen, per scan een vinkje.
+    nfc_tag_id: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 

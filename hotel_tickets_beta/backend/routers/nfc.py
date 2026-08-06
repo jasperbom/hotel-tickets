@@ -10,6 +10,7 @@ from pydantic import BaseModel
 
 from ..database import get_db
 from ..models import (
+    LogObject,
     RecurringTemplate,
     Ticket,
     Status,
@@ -24,6 +25,7 @@ from ..services.notifications import notify_push
 from ..services.ha_entities import sync_ticket_sensors
 from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
+from .logbook import schrijf_registratie_bij_afronden
 
 router = APIRouter(prefix="/nfc", tags=["nfc"])
 
@@ -49,6 +51,10 @@ class NfcScanResponse(BaseModel):
     ticket_id: str | None = None
     template_title: str | None = None
     pool_log_id: str | None = None
+    # Sticker op een logboekobject: hiermee weet de aanroeper welk boek open moet
+    object_id: str | None = None
+    object_name: str | None = None
+    object_url: str | None = None
 
 
 def _filterspoeling_value(config: PoolConfig, tag_id: str) -> str | None:
@@ -221,10 +227,39 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
         body, db, send_notification=not templates
     )
 
+    # Sticker op een logboekobject: scannen opent het boek met "Registratie
+    # toevoegen" klaar. Dit is de plek waar NFC het sterkst is — de
+    # kwartaalinventarisatie wordt dan: langs de wand scannen, per scan een
+    # regel.
+    obj = (await db.execute(
+        select(LogObject).where(
+            and_(LogObject.nfc_tag_id == body.tag_id, LogObject.is_active == True)  # noqa: E712
+        ).limit(1)
+    )).scalars().first()
+
     if not templates:
+        if obj is not None:
+            base_url = await get_ticket_base_url(db)
+            object_url = f"{base_url}/#/logboeken/{obj.id}?registratie=1"
+            if body.ha_user_id:
+                scanner = await db.get(UserRole, body.ha_user_id)
+                if scanner and scanner.ha_notify_service:
+                    await notify_push(
+                        scanner.ha_notify_service,
+                        title=f"📘 {obj.name}",
+                        message="Logboek geopend — registratie toevoegen",
+                        data={"url": object_url},
+                    )
+            return NfcScanResponse(
+                ok=True,
+                message=f"Logboek van {obj.name} geopend",
+                object_id=obj.id,
+                object_name=obj.name,
+                object_url=object_url,
+            )
         if pool_response is not None:
             return pool_response
-        raise HTTPException(status_code=404, detail=f"Geen taak gekoppeld aan NFC-tag '{body.tag_id}'")
+        raise HTTPException(status_code=404, detail=f"Geen taak of object gekoppeld aan NFC-tag '{body.tag_id}'")
 
     now = datetime.now(timezone.utc)
     closed_by = body.ha_user_id or "nfc"
@@ -251,6 +286,9 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
                 t.status = Status.closed
                 t.closed_at = now
                 t.closed_by = closed_by
+                if not t.object_id and template.object_id:
+                    t.object_id = template.object_id
+                await schrijf_registratie_bij_afronden(db, t, closed_by)
             ticket = open_tickets[0]
         else:
             # Geen openstaande ticket — maak er een aan en sluit hem direct
@@ -268,8 +306,11 @@ async def nfc_scan(body: NfcScanRequest, db: AsyncSession = Depends(get_db)):
                 status=Status.closed,
                 closed_at=now,
                 closed_by=closed_by,
+                object_id=template.object_id,
             )
             db.add(ticket)
+            await db.flush()
+            await schrijf_registratie_bij_afronden(db, ticket, closed_by)
 
         # Plan de volgende ticket zodat de taak pas weer opduikt op de dag
         # dat hij echt uitgevoerd moet worden (interval-modus: closed_at +

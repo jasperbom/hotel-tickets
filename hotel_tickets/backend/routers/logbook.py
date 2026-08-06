@@ -38,6 +38,7 @@ class LogObjectCreate(BaseModel):
     department: Category | None = None
     serial: str | None = None
     description: str | None = None
+    nfc_tag_id: str | None = None
 
 
 class LogObjectUpdate(BaseModel):
@@ -47,6 +48,7 @@ class LogObjectUpdate(BaseModel):
     department: Category | None = None
     serial: str | None = None
     description: str | None = None
+    nfc_tag_id: str | None = None
     is_active: bool | None = None
 
 
@@ -58,6 +60,7 @@ class LogObjectOut(BaseModel):
     department: Category | None
     serial: str | None
     description: str | None
+    nfc_tag_id: str | None
     is_active: bool
     created_at: datetime
     # Afgeleid, niet opgeslagen:
