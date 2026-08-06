@@ -36,7 +36,7 @@ import { useOngelezen } from "./ongelezen";
 // behalve terug, sluiten en camera.
 import type { LucideIcon } from "lucide-react";
 import {
-  Bike, CircleDot, CircleUser, LayoutList, Lightbulb, ListChecks,
+  Bike, CircleDot, CircleUser, LayoutList, Lightbulb, ListChecks, Mail,
   MessageSquare, MoreHorizontal, Plus, Waves,
 } from "lucide-react";
 import { applyButtonPalette, applyAppBackground, leesbareTekstkleur, readCachedAppBranding, saveCachedAppBranding } from "./branding";
@@ -573,9 +573,7 @@ export default function App() {
               >
                 <span>{item.label}</span>
                 {item.to === "/berichten" && ongelezen > 0 && (
-                  <span className="ml-auto min-w-[1.25rem] h-5 px-1.5 rounded-full bg-ink text-paper text-[0.6875rem] font-semibold inline-flex items-center justify-center">
-                    {ongelezen > 99 ? "99+" : ongelezen}
-                  </span>
+                  <Teller aantal={ongelezen} className="ml-auto" />
                 )}
                 {item.to === "/tickets" && openTickets !== null && (
                   <span className="ml-auto meta tabular-nums">{openTickets}</span>
@@ -605,6 +603,19 @@ export default function App() {
               <span className="text-lg font-bold select-none shrink-0">S</span>
             )}
             <span className="font-bold text-body truncate">{schermTitel}</span>
+            {/* Het envelopje verschijnt alleen als er iets te lezen is. Een lege
+                brievenbus hoeft geen plek in een balk van 44 px. */}
+            {ongelezen > 0 && (
+              <button
+                onClick={() => navigate("/berichten")}
+                aria-label={`${ongelezen} ongelezen ${ongelezen === 1 ? "bericht" : "berichten"}`}
+                className="ml-auto -mr-2 shrink-0 relative w-tap h-tap inline-flex items-center justify-center"
+                style={{ color: opMerk }}
+              >
+                <Mail size={20} aria-hidden="true" />
+                <Teller aantal={ongelezen} className="absolute top-1.5 right-1.5" />
+              </button>
+            )}
           </header>
 
           {/* Inhoud — max 1100 px, rijen links uitgelijnd */}
@@ -729,7 +740,7 @@ export default function App() {
                 <span className="relative leading-none" aria-hidden="true">
                   {item.icon && <item.icon size={20} strokeWidth={isActive ? 2.25 : 1.75} />}
                   {item.to === "/berichten" && ongelezen > 0 && (
-                    <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-urgent" />
+                    <Teller aantal={ongelezen} className="absolute -top-2 -right-3" />
                   )}
                 </span>
                 <span className={`max-w-full truncate ${isActive ? "font-semibold" : ""}`}>
@@ -760,6 +771,23 @@ export default function App() {
         </button>
       )}
     </>
+  );
+}
+
+/**
+ * Het rode cijfer bij ongelezen berichten. Eén component voor de kopbalk, de
+ * onderbalk en de schermenkolom — anders staat er drie keer een net iets ander
+ * bolletje in dezelfde app.
+ */
+function Teller({ aantal, className = "" }: { aantal: number; className?: string }) {
+  return (
+    <span
+      aria-hidden="true"
+      className={`min-w-[1.125rem] h-[1.125rem] px-1 rounded-full bg-urgent text-white
+                  text-[0.625rem] font-bold leading-none inline-flex items-center justify-center ${className}`}
+    >
+      {aantal > 99 ? "99+" : aantal}
+    </span>
   );
 }
 
