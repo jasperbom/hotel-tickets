@@ -85,6 +85,36 @@ export function subtaakFractie(ticket: Pick<Ticket, "subtasks">): string | null 
   return `${done}/${ticket.subtasks.length}`;
 }
 
+const DAG_KORT = ["zo", "ma", "di", "wo", "do", "vr", "za"];
+
+/**
+ * Kort herhaalpatroon voor in de metaregel: "elke wo". Een herhalende taak is
+ * voor de medewerker gewoon werk; dat het uit een sjabloon komt hoort geen
+ * eigen sectie, kleur of 🔁 te krijgen.
+ */
+export function herhaalKort(cron?: string, intervalDays?: number | null): string | null {
+  if (intervalDays && intervalDays > 0) {
+    return intervalDays === 1 ? "elke dag" : `elke ${intervalDays} dagen`;
+  }
+  if (!cron) return null;
+  const delen = cron.trim().split(/\s+/);
+  if (delen.length < 5) return null;
+  const [, , dagVanMaand, maand, dagVanWeek] = delen;
+  if (dagVanWeek !== "*") {
+    const dagen = dagVanWeek
+      .split(",")
+      .map((d) => DAG_KORT[Number(d) % 7])
+      .filter(Boolean);
+    if (dagen.length) return `elke ${dagen.join("/")}`;
+  }
+  if (dagVanMaand !== "*") {
+    const perMaanden = maand.startsWith("*/") ? Number(maand.slice(2)) : 1;
+    if (perMaanden > 1) return `elke ${perMaanden} maanden`;
+    return `elke ${dagVanMaand}e van de maand`;
+  }
+  return "elke dag";
+}
+
 /** "kamer is vrij" is werkbare informatie; "Bezet" als losse pil niet. */
 export function kamerTekst(occupied: boolean | null | undefined): string | null {
   if (occupied === false) return "kamer is vrij";

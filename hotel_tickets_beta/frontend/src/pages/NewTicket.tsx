@@ -18,9 +18,20 @@ export default function NewTicket() {
     assigned_to: null as string | null,
   });
   const [users, setUsers] = useState<UserRole[]>([]);
+  // Wie de afdeling niet aanpast, meldt hem bij zijn eigen afdeling — niet bij
+  // de technische dienst. Huishouding meldde zo standaard bij TD, met prioriteit
+  // "normaal", en dat corrigeerde vrijwel niemand.
+  const [afdelingGekozen, setAfdelingGekozen] = useState(false);
 
   useEffect(() => {
     userApi.list().then((r) => setUsers(r.data)).catch(() => {});
+    userApi.me()
+      .then((r) => {
+        const eigen = r.data.department;
+        if (eigen && !afdelingGekozen) setForm((f) => ({ ...f, category: eigen }));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   const [multiRoom, setMultiRoom] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
@@ -107,7 +118,10 @@ export default function NewTicket() {
             <label className="block text-sm font-medium text-gray-700 mb-1">Afdeling</label>
             <select
               value={form.category}
-              onChange={(e) => setForm({ ...form, category: e.target.value as Category })}
+              onChange={(e) => {
+                setAfdelingGekozen(true);
+                setForm({ ...form, category: e.target.value as Category });
+              }}
               className="block w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white"
             >
               <option value="technical">TD</option>

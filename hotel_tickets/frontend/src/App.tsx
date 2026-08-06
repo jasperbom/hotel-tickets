@@ -1,14 +1,12 @@
 import { useState, useEffect, useRef } from "react";
 import { Routes, Route, Navigate, NavLink, useNavigate, useLocation, useNavigationType } from "react-router-dom";
 import MijnOverzicht from "./pages/MijnOverzicht";
-import Dashboard from "./pages/Dashboard";
 import TicketList from "./pages/TicketList";
 import TicketDetail from "./pages/TicketDetail";
 import NewTicket from "./pages/NewTicket";
 import RecurringTasks from "./pages/RecurringTasks";
 import RecurringTaskDetail from "./pages/RecurringTaskDetail";
 import Reports from "./pages/Reports";
-import Settings from "./pages/Settings";
 import PoolOverzicht from "./pages/PoolOverzicht";
 import PoolLogboek from "./pages/PoolLogboek";
 import PoolNieuweMeting from "./pages/PoolNieuweMeting";
@@ -63,9 +61,8 @@ const MODULES: ModuleConfig[] = [
     defaultPath: "/",
     navTitle: "Taken",
     navItems: [
-      { to: "/", label: "Mijn overzicht", icon: "👤", end: true, restricted: false },
+      { to: "/", label: "Vandaag", icon: "📋", end: true, restricted: false },
       { to: "/tickets", label: "Tickets", icon: "🎫", restricted: false },
-      { to: "/dashboard", label: "Dashboard", icon: "⊞", restricted: false },
       { to: "/recurring", label: "Herhalend", icon: "🔄", restricted: false },
       { to: "/reports", label: "Rapportage", icon: "📊", restricted: "adminOrSupervisor" },
     ],
@@ -703,7 +700,6 @@ export default function App() {
             <Routes>
               {/* Taken module */}
               <Route path="/" element={<MijnOverzicht />} />
-              <Route path="/dashboard" element={<Dashboard />} />
               <Route path="/tickets" element={<TicketList />} />
               <Route path="/tickets/new" element={<NewTicket />} />
               <Route path="/tickets/:id" element={<TicketDetail />} />
@@ -711,7 +707,6 @@ export default function App() {
               <Route path="/recurring/:id" element={<RecurringTaskDetail />} />
               <Route path="/recurring" element={<RecurringTasks />} />
               <Route path="/reports" element={<Reports />} />
-              <Route path="/settings" element={<Settings />} />
               {/* Zwembaden module */}
               <Route path="/pools" element={<PoolOverzicht />} />
               <Route path="/pools/logboek" element={<PoolLogboek />} />
@@ -771,7 +766,7 @@ export default function App() {
               title="Vraag stellen"
               aria-label="Vraag stellen"
               className="fixed left-4 md:left-20 z-40 flex items-center justify-center w-14 h-14 bg-white border border-gray-200 shadow-lg rounded-full text-2xl hover:bg-gray-50 active:scale-95 transition"
-              style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+              style={{ bottom: "calc(1rem + var(--undo-lift, 0px) + env(safe-area-inset-bottom, 0px))" }}
             >
               💬
             </button>
@@ -781,7 +776,7 @@ export default function App() {
               title="Ticket maken"
               aria-label="Ticket maken"
               className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 bg-blue-600 text-white shadow-lg rounded-full text-3xl leading-none hover:bg-blue-700 active:scale-95 transition"
-              style={{ bottom: "calc(1rem + env(safe-area-inset-bottom, 0px))" }}
+              style={{ bottom: "calc(1rem + var(--undo-lift, 0px) + env(safe-area-inset-bottom, 0px))" }}
             >
               ＋
             </button>

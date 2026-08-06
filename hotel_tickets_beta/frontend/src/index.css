@@ -53,7 +53,7 @@
 
   body {
     @apply text-gray-900 font-sans;
-    background-color: var(--app-bg, #f9fafb);
+    background-color: var(--app-bg, #FBFAF7);
     position: relative;
   }
 
@@ -64,7 +64,7 @@
     position: fixed;
     inset: 0;
     z-index: -1;
-    background-color: var(--app-bg, #f9fafb);
+    background-color: var(--app-bg, #FBFAF7);
     background-image: var(--app-bg-image, none);
     background-size: cover;
     background-position: center;

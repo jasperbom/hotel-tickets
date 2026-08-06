@@ -236,6 +236,8 @@ export interface UpcomingRecurring {
   location_id: string | null;
   nfc_tag_id: string | null;
   next_run: string;
+  cron_expression?: string;
+  interval_days?: number | null;
   subtask_done?: number;
   subtask_total?: number;
   emoji?: string | null;

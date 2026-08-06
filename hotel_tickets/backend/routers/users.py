@@ -324,6 +324,10 @@ def _template_dict(t: RecurringTemplate, next_run: datetime, active_ticket: "Tic
         "location_id": t.location_id,
         "nfc_tag_id": t.nfc_tag_id,
         "next_run": next_run.isoformat(),
+        # Herhaalpatroon mee, zodat de rij op Vandaag "elke wo" in de metaregel
+        # kan zetten in plaats van een aparte sectie met een 🔁-icoon.
+        "cron_expression": t.cron_expression,
+        "interval_days": t.interval_days,
         "emoji": t.emoji,
         "subtask_mode": t.subtask_mode,
         "subtask_items": json.loads(t.subtask_items) if t.subtask_items else [],

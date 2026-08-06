@@ -1,26 +1,28 @@
-import { useEffect, useState, useRef, type CSSProperties, type ReactNode } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { format } from "date-fns";
-import { nl } from "date-fns/locale";
-import api, { ticketApi, locationApi, userApi, recurringApi, parseUTC, type Ticket, type Category, type Role, type UpcomingRecurring } from "../api/client";
-import { PriorityBadge, StatusBadge } from "../components/StatusBadge";
-import { OverviewRow, type ExtraRoom } from "../components/OverviewRow";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import api, {
+  ticketApi, locationApi, userApi, recurringApi,
+  type Ticket, type Category, type Priority, type Role, type UpcomingRecurring,
+} from "../api/client";
+import { WorkRow, type ExtraKamer } from "../components/WorkRow";
+import { UndoBar } from "../components/UndoBar";
+import { useUitgesteldeActie } from "../undo";
 import {
-  DndContext,
-  PointerSensor,
-  TouchSensor,
-  useSensor,
-  useSensors,
-  closestCenter,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext,
-  arrayMove,
-  verticalListSortingStrategy,
-  useSortable,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+  AFDELING_LABELS, afdelingTekst, eigendom, herhaalKort, kamerTekst,
+  leeftijdTekst, prioriteitWoord, subtaakFractie,
+} from "../werk";
+
+/**
+ * Vandaag — het startscherm.
+ *
+ * Twee blokken, vaste volgorde, altijd aanwezig (ook leeg):
+ *   NU        — wat aan jou toebehoort of urgent is, inclusief de
+ *               herhaaltaken van vandaag; die staan gewoon tussen de rest.
+ *   TE PAKKEN — wat er in jouw afdeling ligt zonder eigenaar.
+ *
+ * Meer blokken zijn er niet: een derde vraag heeft niemand in de eerste twee
+ * seconden. Geen begroeting, geen datum, geen statistiektegels — die kostten
+ * 342 px vóór de eerste regel werk.
+ */
 
 interface Overview {
   user: {
@@ -29,11 +31,7 @@ interface Overview {
     role: Role;
     department: Category | null;
   };
-  stats: {
-    my_open: number;
-    team_open: number;
-    urgent: number;
-  };
+  stats: { my_open: number; team_open: number; urgent: number };
   urgent_tickets: Ticket[];
   my_tickets: Ticket[];
   available_tickets: Ticket[];
@@ -41,127 +39,70 @@ interface Overview {
   upcoming_recurring: UpcomingRecurring[];
 }
 
-const ROLE_LABELS: Record<Role, string> = {
-  admin: "Beheerder",
-  supervisor: "Supervisor",
-  employee: "Medewerker",
-};
+const PRIORITEIT_RANG: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
-const DEPT_LABELS: Record<Category, string> = {
-  technical: "TD",
-  housekeeping: "Huishouding",
-  reception: "Receptie",
-  service: "Bediening",
-  kitchen: "Keuken",
-  sales: "Sales",
-  garden: "Tuin",
-};
+const TE_PAKKEN_ZICHTBAAR = 3;
 
-const ALL_CATEGORIES: Category[] = ["technical", "housekeeping", "reception", "service", "kitchen", "sales", "garden"];
+type NuItem =
+  | { soort: "ticket"; key: string; ticket: Ticket }
+  | { soort: "taak"; key: string; taak: UpcomingRecurring };
 
-const PRIORITY_ORDER: Record<string, number> = {
-  urgent: 0,
-  high: 1,
-  medium: 2,
-  low: 3,
-};
-
-function greeting(): string {
-  const h = new Date().getHours();
-  if (h < 12) return "Goedemorgen";
-  if (h < 18) return "Goedemiddag";
-  return "Goedenavond";
-}
-
-export default function MijnOverzicht() {
+export default function Vandaag() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState<Record<string, string>>({});
   const [users, setUsers] = useState<Record<string, string>>({});
   const [keycards, setKeycards] = useState<Record<string, boolean | null>>({});
-  const [assignedMe, setAssignedMe] = useState(() => localStorage.getItem("ht_assigned_me") === "1");
-  const [showAllToday, setShowAllToday] = useState(() => localStorage.getItem("ht_show_all_today") === "1");
-  const [deptFilter, setDeptFilter] = useState<Category | "">(() => {
-    const saved = localStorage.getItem("ht_dept_filter");
-    if (saved && (ALL_CATEGORIES as string[]).includes(saved)) return saved as Category;
-    return "";
-  });
-  const [showUpcoming, setShowUpcoming] = useState(() => localStorage.getItem("ht_show_upcoming") === "1");
-  // Standaard open; alleen expliciet ingeklapt onthouden
-  const [showAvailable, setShowAvailable] = useState(() => localStorage.getItem("ht_show_available") !== "0");
-  const [showTodayTasks, setShowTodayTasks] = useState(() => localStorage.getItem("ht_show_today") !== "0");
-  const [showMyTickets, setShowMyTickets] = useState(() => localStorage.getItem("ht_show_mine") !== "0");
-  // Stil verversen (filterwissel/achtergrond): inhoud dimmen i.p.v. fullscreen spinner
-  const [refreshing, setRefreshing] = useState(false);
+  const [allesTonen, setAllesTonen] = useState(false);
+  // De twee getallen bovenaan zetten een filter, ze navigeren niet.
+  const [focus, setFocus] = useState<"nu" | "pakken" | null>(null);
+  const tePakkenRef = useRef<HTMLElement>(null);
 
-  useEffect(() => {
-    localStorage.setItem("ht_show_upcoming", showUpcoming ? "1" : "0");
-  }, [showUpcoming]);
+  const loadData = useCallback(async () => {
+    // Het werk zelf is het enige dat moet lukken. Kamernamen en collega-namen
+    // komen uit Home Assistant; hapert dat, dan hoort het startscherm niet leeg
+    // te blijven — dan staat er een kamer-id in plaats van "214".
+    const ov = await api.get<Overview>("/users/me/overview");
+    setOverview(ov.data);
 
-  useEffect(() => {
-    localStorage.setItem("ht_show_available", showAvailable ? "1" : "0");
-  }, [showAvailable]);
+    const [locs, usrs] = await Promise.allSettled([locationApi.list(), userApi.list()]);
+    if (locs.status === "fulfilled") {
+      setLocations(Object.fromEntries(locs.value.data.map((l) => [l.id, l.name])));
+    }
+    if (usrs.status === "fulfilled") {
+      setUsers(Object.fromEntries(usrs.value.data.map((u) => [u.ha_user_id, u.display_name])));
+    }
 
-  useEffect(() => {
-    localStorage.setItem("ht_show_today", showTodayTasks ? "1" : "0");
-  }, [showTodayTasks]);
-
-  useEffect(() => {
-    localStorage.setItem("ht_show_mine", showMyTickets ? "1" : "0");
-  }, [showMyTickets]);
-
-  useEffect(() => {
-    localStorage.setItem("ht_show_all_today", showAllToday ? "1" : "0");
-  }, [showAllToday]);
-
-  useEffect(() => {
-    localStorage.setItem("ht_assigned_me", assignedMe ? "1" : "0");
-  }, [assignedMe]);
-  const todaySectionRef = useRef<HTMLElement>(null);
-  const navigate = useNavigate();
-
-  async function loadKeycards(tickets: Ticket[], recurring: UpcomingRecurring[], locs: Record<string, string>) {
-    const ticketLocs = tickets.map(t => t.location_id).filter(Boolean) as string[];
-    const recurringLocs = recurring.map(t => t.location_id).filter(Boolean) as string[];
-    const roomsItems = recurring
-      .filter(t => t.subtask_mode === "rooms")
-      .flatMap(t => t.subtask_items ?? []);
-    const areaIds = [...new Set([...ticketLocs, ...recurringLocs, ...roomsItems])];
+    const tickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
+    const taken = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
+    const areaIds = [...new Set([
+      ...tickets.map((t) => t.location_id).filter(Boolean) as string[],
+      ...taken.map((t) => t.location_id).filter(Boolean) as string[],
+      ...taken.filter((t) => t.subtask_mode === "rooms").flatMap((t) => t.subtask_items ?? []),
+    ])];
     const results = await Promise.allSettled(
-      areaIds.map(id => locationApi.keycard(id).then(r => ({ id, occupied: r.data.found ? r.data.occupied : null })))
+      areaIds.map((id) => locationApi.keycard(id).then((r) => ({ id, occupied: r.data.found ? r.data.occupied : null })))
     );
     const map: Record<string, boolean | null> = {};
-    results.forEach(r => { if (r.status === "fulfilled") map[r.value.id] = r.value.occupied; });
+    results.forEach((r) => { if (r.status === "fulfilled") map[r.value.id] = r.value.occupied; });
     setKeycards(map);
-    setLocations(locs);
-  }
-
-  async function loadData(dept?: Category | "") {
-    // "all" = expliciet alle afdelingen — ook voor gewone medewerkers
-    const params = `?department=${dept || "all"}`;
-    const [ov, locs, usrs] = await Promise.all([
-      api.get<Overview>(`/users/me/overview${params}`),
-      locationApi.list(),
-      userApi.list(),
-    ]);
-    setOverview(ov.data);
-    setUsers(Object.fromEntries(usrs.data.map((u) => [u.ha_user_id, u.display_name])));
-    const locMap = Object.fromEntries(locs.data.map(l => [l.id, l.name]));
-    const allTickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
-    const allRecurring = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
-    loadKeycards(allTickets, allRecurring, locMap);
-  }
-
-  useEffect(() => {
-    loadData(deptFilter).finally(() => setLoading(false));
   }, []);
 
-  // Stil verversen: wanneer de app weer zichtbaar wordt en elke minuut,
-  // zodat een pagina die de hele dienst openstaat actueel blijft.
+  // Afvinken gaat optimistisch: de rij is meteen klaar en de API-aanroep
+  // vertrekt pas na het ongedaan-maken-venster.
+  const { actie, plan, ongedaan } = useUitgesteldeActie(5000, () => {
+    loadData().catch(() => {});
+  });
+
+  useEffect(() => {
+    loadData().finally(() => setLoading(false));
+  }, [loadData]);
+
+  // Stil verversen zolang de pagina open staat.
   useEffect(() => {
     const refresh = () => {
       if (document.visibilityState !== "visible") return;
-      loadData(deptFilter).catch(() => {});
+      loadData().catch(() => {});
     };
     const id = window.setInterval(refresh, 60_000);
     document.addEventListener("visibilitychange", refresh);
@@ -169,589 +110,313 @@ export default function MijnOverzicht() {
       window.clearInterval(id);
       document.removeEventListener("visibilitychange", refresh);
     };
-  }, [deptFilter]);
+  }, [loadData]);
 
-  function changeDeptFilter(value: Category | "") {
-    setDeptFilter(value);
-    localStorage.setItem("ht_dept_filter", value);
-    setRefreshing(true);
-    loadData(value).finally(() => setRefreshing(false));
-  }
-
-  async function claimTicket(ticketId: string) {
-    await ticketApi.claim(ticketId);
-    await loadData(deptFilter);
-  }
-
-  async function closeTicket(ticketId: string, ticketTitle: string) {
-    if (!window.confirm(`Ticket "${ticketTitle}" sluiten?`)) return;
-    await ticketApi.update(ticketId, { status: "closed" });
-    await loadData(deptFilter);
-  }
-
-  async function togglePin(ticket: Ticket) {
-    if (ticket.pinned) {
-      await ticketApi.unpin(ticket.id);
-    } else {
-      await ticketApi.pin(ticket.id);
+  const nuItems = useMemo<NuItem[]>(() => {
+    if (!overview) return [];
+    const gezien = new Set<string>();
+    const tickets: Ticket[] = [];
+    for (const t of [...(overview.urgent_tickets ?? []), ...overview.my_tickets]) {
+      if (gezien.has(t.id)) continue;
+      gezien.add(t.id);
+      tickets.push(t);
     }
-    await loadData(deptFilter);
-  }
-
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 150, tolerance: 5 } }),
-  );
-
-  function handleMyTicketsDragEnd(event: DragEndEvent) {
-    const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    if (!overview) return;
-    const tickets = overview.my_tickets;
-    const activeTicket = tickets.find((t) => t.id === active.id);
-    const overTicket = tickets.find((t) => t.id === over.id);
-    if (!activeTicket || !overTicket) return;
-    // Alleen herschikken binnen dezelfde prioriteit én pin-status.
-    if (activeTicket.priority !== overTicket.priority) return;
-    if (!!activeTicket.pinned !== !!overTicket.pinned) return;
-    const oldIndex = tickets.findIndex((t) => t.id === active.id);
-    const newIndex = tickets.findIndex((t) => t.id === over.id);
-    if (oldIndex < 0 || newIndex < 0) return;
-    const newOrder = arrayMove(tickets, oldIndex, newIndex);
-    setOverview({ ...overview, my_tickets: newOrder });
-    ticketApi.reorder(newOrder.map((t) => t.id)).catch(() => loadData(deptFilter));
-  }
-
-  async function completeRecurring(taskId: string, taskTitle: string) {
-    if (!window.confirm(`Taak "${taskTitle}" afronden?`)) return;
-    await recurringApi.complete(taskId);
-    await loadData(deptFilter);
-  }
+    const items: NuItem[] = [
+      ...tickets.map((t) => ({ soort: "ticket" as const, key: t.id, ticket: t })),
+      ...(overview.today_recurring ?? []).map((t) => ({ soort: "taak" as const, key: `taak-${t.id}`, taak: t })),
+    ];
+    // Urgent altijd bovenaan, daarna prioriteit, daarna het oudste eerst.
+    return items.sort((a, b) => {
+      const pa = a.soort === "ticket" ? a.ticket.priority : a.taak.priority;
+      const pb = b.soort === "ticket" ? b.ticket.priority : b.taak.priority;
+      if (PRIORITEIT_RANG[pa] !== PRIORITEIT_RANG[pb]) return PRIORITEIT_RANG[pa] - PRIORITEIT_RANG[pb];
+      const da = a.soort === "ticket" ? a.ticket.created_at : a.taak.next_run;
+      const db = b.soort === "ticket" ? b.ticket.created_at : b.taak.next_run;
+      return da.localeCompare(db);
+    });
+  }, [overview]);
 
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
       </div>
     );
   }
-
   if (!overview) return null;
 
-  const { user, stats, urgent_tickets = [], my_tickets, available_tickets, today_recurring = [], upcoming_recurring = [] } = overview;
+  const { user, available_tickets } = overview;
   const isManager = user.role === "admin" || user.role === "supervisor";
-  // Iedereen ziet alles, maar afvinken/claimen kan alleen binnen de eigen afdeling
-  const canActOn = (category: Category) => isManager || user.department === category;
-  const visibleToday = showAllToday ? today_recurring : today_recurring.slice(0, 3);
+  const magHandelen = (category: Category) => isManager || user.department === category;
 
-  // Filter "Toegewezen aan mij": urgente tickets beperken tot eigen tickets en
-  // de sectie met niet-toegewezen tickets verbergen. Herhalende taken zijn
-  // niet persoonsgebonden en blijven zichtbaar.
-  const visibleUrgent = assignedMe ? urgent_tickets.filter((t) => t.assigned_to === user.ha_user_id) : urgent_tickets;
-  const visibleAvailable = assignedMe ? [] : available_tickets;
+  const afgevinkt = (key: string) => actie?.id === key;
+  const tePakken = available_tickets.filter((t) => magHandelen(t.category));
+  const tePakkenZichtbaar = allesTonen ? tePakken : tePakken.slice(0, TE_PAKKEN_ZICHTBAAR);
+
+  const aantalVoorJou = nuItems.length;
+  const aantalTePakken = tePakken.length;
+
+  function kamerVan(locationId: string | null | undefined): string | undefined {
+    if (!locationId) return undefined;
+    return locations[locationId] ?? locationId;
+  }
+
+  function rondTicketAf(t: Ticket) {
+    const naam = kamerVan(t.location_id) ?? t.title;
+    plan(t.id, `${naam} afgerond`, () => ticketApi.update(t.id, { status: "closed" }));
+  }
+
+  function rondTaakAf(taak: UpcomingRecurring) {
+    const naam = kamerVan(taak.location_id) ?? taak.title;
+    plan(`taak-${taak.id}`, `${naam} afgerond`, () => recurringApi.complete(taak.id));
+  }
+
+  async function pakOp(t: Ticket) {
+    await ticketApi.claim(t.id);
+    await loadData();
+  }
+
+  /** Metaregel van een ticket in het blok NU: hier nooit "Van mij" — dat zegt
+   *  de sectiekop al. */
+  function metaNu(t: Ticket) {
+    const bezit = eigendom(t, user.ha_user_id, (id) => users[id] ?? id);
+    const prio = prioriteitWoord(t.priority);
+    return [
+      prio && (
+        <strong className={`font-semibold ${t.priority === "urgent" ? "text-urgent" : "text-high"}`}>
+          {prio}
+        </strong>
+      ),
+      bezit.soort === "ander" || bezit.soort === "vrij" ? bezit.label : null,
+      afdelingTekst(t.category, user.department),
+      subtaakFractie(t),
+      kamerTekst(t.location_id ? keycards[t.location_id] : undefined),
+      leeftijdTekst(t.created_at),
+    ].filter(Boolean);
+  }
+
+  /** In "Te pakken" nooit "Vrij" — dat is precies wat de sectiekop zegt. */
+  function metaTePakken(t: Ticket) {
+    const prio = prioriteitWoord(t.priority);
+    return [
+      prio && (
+        <strong className={`font-semibold ${t.priority === "urgent" ? "text-urgent" : "text-high"}`}>
+          {prio}
+        </strong>
+      ),
+      afdelingTekst(t.category, user.department),
+      subtaakFractie(t),
+      kamerTekst(t.location_id ? keycards[t.location_id] : undefined),
+      leeftijdTekst(t.created_at),
+    ].filter(Boolean);
+  }
+
+  function metaTaak(taak: UpcomingRecurring) {
+    const fractie = taak.subtask_total ? `${taak.subtask_done ?? 0}/${taak.subtask_total}` : null;
+    return [
+      afdelingTekst(taak.category, user.department),
+      fractie,
+      kamerTekst(taak.location_id ? keycards[taak.location_id] : undefined),
+      herhaalKort(taak.cron_expression, taak.interval_days),
+    ].filter(Boolean);
+  }
+
+  /** Herhaaltaak over meerdere kamers: eerste kamer op de regel, rest eronder. */
+  function kamersVanTaak(taak: UpcomingRecurring): { kamer?: string; occupied?: boolean | null; extra: ExtraKamer[] } {
+    if (taak.subtask_mode === "rooms" && taak.subtask_items?.length) {
+      const [eerste, ...rest] = taak.subtask_items;
+      return {
+        kamer: kamerVan(eerste),
+        occupied: keycards[eerste],
+        extra: rest.map((id) => ({ id, name: kamerVan(id) ?? id, occupied: keycards[id] })),
+      };
+    }
+    return {
+      kamer: kamerVan(taak.location_id),
+      occupied: taak.location_id ? keycards[taak.location_id] : undefined,
+      extra: [],
+    };
+  }
+
+  // De kop moet zeggen waarop de lijst écht gefilterd is: admins en
+  // supervisors krijgen van de server alle afdelingen, ook als ze zelf bij een
+  // afdeling horen.
+  const afdelingNaam =
+    !isManager && user.department ? AFDELING_LABELS[user.department].toLowerCase() : "alle afdelingen";
 
   return (
-    <div className={`space-y-6 transition-opacity ${refreshing ? "opacity-60" : ""}`}>
-
-      {/* Kop: begroeting + persoonlijke statistieken in één blok */}
-      <div className="bg-gradient-to-r from-blue-700 to-blue-500 rounded-2xl px-5 py-4 text-white shadow">
-        <div className="flex items-baseline justify-between gap-x-3 gap-y-0.5 flex-wrap">
-          <h1 className="text-lg font-bold">
-            {greeting()}, {user.display_name}
-          </h1>
-          <p className="text-blue-200 text-xs">
-            {format(new Date(), "EEEE d MMMM", { locale: nl })}
-            {" · "}
-            {ROLE_LABELS[user.role]}
-            {user.department ? ` · ${DEPT_LABELS[user.department]}` : ""}
-          </p>
-        </div>
-        <div className="grid grid-cols-3 gap-2 mt-3">
-          <HeaderStat
-            value={stats.my_open}
-            label="Mijn openstaand"
-            emptyLabel="Niets te doen"
-            onClick={() => navigate("/tickets?status=open,in_progress&assigned=me")}
-          />
-          <HeaderStat
-            value={stats.urgent}
-            label="Urgent"
-            urgent={stats.urgent > 0}
-            onClick={() => navigate("/tickets?priority=urgent&status=open,in_progress")}
-          />
-          <HeaderStat
-            value={today_recurring.length}
-            label="Herhalend vandaag"
-            emptyLabel="Geen taken"
-            onClick={() => todaySectionRef.current?.scrollIntoView({ behavior: "smooth" })}
-          />
-        </div>
-      </div>
-
-      {/* Afdelingsfilter — één horizontaal scrollbare regel */}
-      <div className="flex gap-2 overflow-x-auto scrollbar-none -mx-4 px-4">
-        <button
-          onClick={() => setAssignedMe(!assignedMe)}
-          className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
-            assignedMe
-              ? "bg-purple-600 text-white border-purple-600"
-              : "bg-white text-gray-600 border-gray-300 hover:border-purple-400"
-          }`}
-          title="Toon alleen tickets die aan jou zijn toegewezen"
-        >
-          {assignedMe && <span className="text-xs mr-1">✓</span>}
-          👤 Aan mij
-        </button>
-        {([["", "Alle afdelingen"], ...ALL_CATEGORIES.map((c) => [c, DEPT_LABELS[c]] as [Category, string])] as Array<[Category | "", string]>).map(([val, label]) => (
-          <button
-            key={val}
-            onClick={() => changeDeptFilter(val as Category | "")}
-            className={`shrink-0 whitespace-nowrap px-3 py-1.5 rounded-full border text-sm font-medium transition-all ${
-              deptFilter === val
-                ? "bg-blue-600 text-white border-blue-600"
-                : "bg-white text-gray-600 border-gray-300 hover:border-blue-400"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
-
-      {/* Urgente tickets — bewust niet inklapbaar */}
-      {visibleUrgent.length > 0 && (
-        <section>
-          <SectionHeader
-            icon="🚨"
-            title="Urgente tickets"
-            titleClass="text-red-700"
-            count={visibleUrgent.length}
-            badgeClass="bg-red-600 text-white"
-          />
-          <div className="space-y-2">
-            {visibleUrgent.map((t) => (
-              <UrgentTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} assigneeName={t.assigned_to ? users[t.assigned_to] || t.assigned_to : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
-            ))}
-          </div>
-        </section>
-      )}
-
-      {/* Herhalende taken vandaag */}
-      {today_recurring.length > 0 && (
-        <section ref={todaySectionRef}>
-          <SectionHeader
-            icon="🔁"
-            title="Herhalende taken vandaag"
-            count={today_recurring.length}
-            badgeClass="bg-purple-600 text-white"
-            collapsed={!showTodayTasks}
-            onToggle={() => setShowTodayTasks(!showTodayTasks)}
-          />
-          {showTodayTasks && (
-            <>
-              <div className="space-y-2">
-                {visibleToday.map((t) => (
-                  <RecurringTaskRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
-                ))}
-              </div>
-              {!showAllToday && today_recurring.length > 3 && (
-                <button
-                  onClick={() => setShowAllToday(true)}
-                  className="mt-2 text-sm text-blue-600 hover:underline w-full text-center py-1"
-                >
-                  +{today_recurring.length - 3} meer tonen
-                </button>
-              )}
-              {showAllToday && today_recurring.length > 3 && (
-                <button
-                  onClick={() => setShowAllToday(false)}
-                  className="mt-2 text-sm text-gray-500 hover:text-gray-700 hover:underline w-full text-center py-1"
-                >
-                  ▲ Minder tonen
-                </button>
-              )}
-            </>
-          )}
-        </section>
-      )}
-
-      {/* Mijn tickets */}
-      <section>
-        <SectionHeader
-          icon="🎫"
-          title="Mijn openstaande tickets"
-          count={my_tickets.length}
-          badgeClass="bg-blue-100 text-blue-700"
-          collapsed={!showMyTickets}
-          onToggle={() => setShowMyTickets(!showMyTickets)}
-          action={
-            <Link to="/tickets?assigned=me" className="text-sm text-blue-600 hover:underline">
-              Alle →
-            </Link>
-          }
+    <div className="space-y-6 max-w-3xl">
+      {/* Samenvatting: twee chips die filteren, niet navigeren */}
+      <div className="flex gap-2">
+        <FilterChip
+          actief={focus === "nu"}
+          onClick={() => setFocus(focus === "nu" ? null : "nu")}
+          label={`${aantalVoorJou} voor jou`}
         />
-        {showMyTickets && (
-          my_tickets.length === 0 ? (
-            <div className="card py-8 text-center text-gray-400">
-              <p className="text-2xl mb-1">✓</p>
-              <p className="text-sm">Geen openstaande tickets. Goed werk!</p>
-            </div>
+        <FilterChip
+          actief={focus === "pakken"}
+          onClick={() => setFocus(focus === "pakken" ? null : "pakken")}
+          label={`${aantalTePakken} te pakken`}
+        />
+      </div>
+
+      {focus !== "pakken" && (
+        <section>
+          <SectieKop>Nu</SectieKop>
+          {nuItems.length === 0 ? (
+            <LegeStaatNu
+              aantalTePakken={aantalTePakken}
+              afdeling={afdelingNaam}
+              onBekijk={() => {
+                setFocus(null);
+                tePakkenRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+              }}
+            />
           ) : (
-            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleMyTicketsDragEnd}>
-              <SortableContext items={my_tickets.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-                <div className="space-y-2">
-                  {my_tickets.map((t) => (
-                    <SortableMyTicketRow
-                      key={t.id}
-                      ticket={t}
-                      locationName={t.location_id ? locations[t.location_id] : undefined}
-                      occupied={t.location_id ? keycards[t.location_id] : undefined}
-                      onClose={() => closeTicket(t.id, t.title)}
-                      onTogglePin={() => togglePin(t)}
-                    />
-                  ))}
-                </div>
-              </SortableContext>
-            </DndContext>
-          )
-        )}
-      </section>
-
-      {/* Beschikbaar om op te pakken */}
-      {visibleAvailable.length > 0 && (
-        <section>
-          <SectionHeader
-            icon="🎫"
-            title="Beschikbaar om op te pakken"
-            count={visibleAvailable.length}
-            badgeClass="bg-blue-100 text-blue-700"
-            collapsed={!showAvailable}
-            onToggle={() => setShowAvailable(!showAvailable)}
-            action={
-              <Link to="/tickets?status=open" className="text-sm text-blue-600 hover:underline">
-                Alle open →
-              </Link>
-            }
-          />
-          {showAvailable && (
-            <div className="space-y-2">
-              {visibleAvailable.map((t) => (
-                <AvailableTicketRow key={t.id} ticket={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} onClaim={canActOn(t.category) ? () => claimTicket(t.id) : undefined} onClose={canActOn(t.category) ? () => closeTicket(t.id, t.title) : undefined} />
-              ))}
+            <div className="grid gap-2">
+              {nuItems.map((item) =>
+                item.soort === "ticket" ? (
+                  <WorkRow
+                    key={item.key}
+                    to={`/tickets/${item.ticket.id}`}
+                    priority={item.ticket.priority}
+                    kamer={kamerVan(item.ticket.location_id)}
+                    occupied={item.ticket.location_id ? keycards[item.ticket.location_id] : undefined}
+                    title={item.ticket.title}
+                    meta={afgevinkt(item.key) ? ["Klaar"] : metaNu(item.ticket)}
+                    done={afgevinkt(item.key)}
+                    actie={
+                      magHandelen(item.ticket.category) && !afgevinkt(item.key)
+                        ? { soort: "afronden", onAfronden: () => rondTicketAf(item.ticket), label: "Ticket afronden" }
+                        : { soort: "geen" }
+                    }
+                  />
+                ) : (
+                  <TaakRij
+                    key={item.key}
+                    taak={item.taak}
+                    kamers={kamersVanTaak(item.taak)}
+                    meta={afgevinkt(item.key) ? ["Klaar"] : metaTaak(item.taak)}
+                    done={afgevinkt(item.key)}
+                    magAfronden={magHandelen(item.taak.category) && !afgevinkt(item.key)}
+                    onAfronden={() => rondTaakAf(item.taak)}
+                  />
+                )
+              )}
             </div>
           )}
         </section>
       )}
 
-      {/* Aankomende herhalende taken */}
-      {upcoming_recurring.length > 0 && (
-        <section>
-          <SectionHeader
-            icon="🔁"
-            title="Aankomende taken"
-            count={upcoming_recurring.length}
-            badgeClass="bg-purple-100 text-purple-700"
-            collapsed={!showUpcoming}
-            onToggle={() => setShowUpcoming(!showUpcoming)}
-            action={
-              <Link to="/recurring" className="text-sm text-blue-600 hover:underline">Beheren →</Link>
-            }
-          />
-          {showUpcoming && (
-            <div className="space-y-2">
-              {upcoming_recurring.map((t) => (
-                <UpcomingRecurringRow key={t.id} task={t} locationName={t.location_id ? locations[t.location_id] : undefined} occupied={t.location_id ? keycards[t.location_id] : undefined} keycards={keycards} locations={locations} onComplete={canActOn(t.category) ? () => completeRecurring(t.id, t.title) : undefined} />
+      {focus !== "nu" && (
+        <section ref={tePakkenRef}>
+          <SectieKop>Te pakken · {afdelingNaam}</SectieKop>
+          {tePakken.length === 0 ? (
+            <p className="meta">Niets zonder eigenaar in {afdelingNaam}.</p>
+          ) : (
+            <div className="grid gap-2">
+              {tePakkenZichtbaar.map((t) => (
+                <WorkRow
+                  key={t.id}
+                  to={`/tickets/${t.id}`}
+                  priority={t.priority}
+                  kamer={kamerVan(t.location_id)}
+                  occupied={t.location_id ? keycards[t.location_id] : undefined}
+                  title={t.title}
+                  meta={metaTePakken(t)}
+                  actie={{ soort: "pakken", onPakken: () => pakOp(t) }}
+                />
               ))}
+              {!allesTonen && tePakken.length > TE_PAKKEN_ZICHTBAAR && (
+                <button
+                  onClick={() => setAllesTonen(true)}
+                  className="tap w-full rounded-[10px] border border-ink-12 bg-paper-raised text-meta font-semibold text-ink-70 hover:bg-ink-6 transition-colors"
+                >
+                  Nog {tePakken.length - TE_PAKKEN_ZICHTBAAR} tonen
+                </button>
+              )}
             </div>
           )}
         </section>
       )}
+
+      {actie && <UndoBar tekst={actie.label} onOngedaan={ongedaan} />}
     </div>
   );
 }
 
-function HeaderStat({
-  value, label, emptyLabel, urgent = false, onClick,
-}: {
-  value: number;
-  label: string;
-  emptyLabel?: string;
-  urgent?: boolean;
-  onClick?: () => void;
-}) {
+function SectieKop({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">{children}</p>
+  );
+}
+
+function FilterChip({ label, actief, onClick }: { label: string; actief: boolean; onClick: () => void }) {
   return (
     <button
       onClick={onClick}
-      className={`rounded-xl py-2 px-1 text-center transition-colors ${
-        urgent ? "bg-red-500/90 hover:bg-red-500" : "bg-white/15 hover:bg-white/25"
+      aria-pressed={actief}
+      className={`tap px-3.5 rounded-full text-meta transition-colors ${
+        actief
+          ? "bg-ink text-paper font-semibold"
+          : "bg-paper-raised border border-ink-12 text-ink-70 font-medium hover:bg-ink-6"
       }`}
     >
-      <p className={`text-2xl font-bold leading-tight ${urgent ? "animate-pulse" : ""}`}>{value}</p>
-      <p className={`text-[11px] font-medium leading-tight mt-0.5 ${urgent ? "text-red-100" : "text-blue-100"}`}>
-        {value === 0 && emptyLabel ? emptyLabel : label}
-      </p>
+      {label}
     </button>
   );
 }
 
-/** Uniforme sectiekop: icoon + titel + teller, optioneel inklapbaar en met actielink rechts. */
-function SectionHeader({
-  icon, title, titleClass = "text-gray-900", count, badgeClass = "bg-gray-100 text-gray-600", collapsed, onToggle, action,
-}: {
-  icon: string;
-  title: string;
-  titleClass?: string;
-  count?: number;
-  badgeClass?: string;
-  collapsed?: boolean;
-  onToggle?: () => void;
-  action?: ReactNode;
-}) {
-  const inner = (
-    <>
-      <span className="text-lg">{icon}</span>
-      <h2 className={`font-semibold ${titleClass}`}>{title}</h2>
-      {count !== undefined && (
-        <span className={`text-xs font-bold px-1.5 py-0.5 rounded-full ${badgeClass}`}>{count}</span>
-      )}
-      {onToggle && <span className="text-gray-400 text-sm">{collapsed ? "▼" : "▲"}</span>}
-    </>
-  );
+/**
+ * Een lege lijst is een moment waarop iemand iets kán doen. Dus geen
+ * felicitatie met een uitroepteken, maar het werk dat er ligt.
+ */
+function LegeStaatNu({
+  aantalTePakken, afdeling, onBekijk,
+}: { aantalTePakken: number; afdeling: string; onBekijk: () => void }) {
   return (
-    <div className="flex items-center justify-between mb-3">
-      {onToggle ? (
-        <button
-          onClick={onToggle}
-          className="flex items-center gap-2"
-          aria-expanded={!collapsed}
-          title={collapsed ? "Uitklappen" : "Inklappen"}
-        >
-          {inner}
-        </button>
+    <div className="rounded-[10px] border border-dashed border-ink-12 bg-paper-raised px-5 py-6">
+      <p className="text-[1.1875rem] font-semibold leading-snug text-ink">Niets voor jou op dit moment.</p>
+      {aantalTePakken > 0 ? (
+        <>
+          <p className="mt-1.5 text-[0.9375rem] text-ink-70">
+            Er ligt wel werk in {afdeling} dat niemand heeft.
+          </p>
+          <button
+            onClick={onBekijk}
+            className="mt-4 h-tapLg px-4 inline-flex items-center rounded-[10px] bg-ink text-paper text-[0.96875rem] font-semibold hover:bg-ink-70 transition-colors"
+          >
+            Bekijk wat er ligt ({aantalTePakken})
+          </button>
+        </>
       ) : (
-        <div className="flex items-center gap-2">{inner}</div>
+        <p className="mt-1.5 text-[0.9375rem] text-ink-70">Er ligt ook niets zonder eigenaar in {afdeling}.</p>
       )}
-      {action}
     </div>
   );
 }
 
-function formatNextRun(dateStr: string): string {
-  const date = parseUTC(dateStr);
-  const now = new Date();
-  const diffMs = date.getTime() - now.getTime();
-  const diffDays = Math.round(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return "Vandaag";
-  if (diffDays === 1) return "Morgen";
-  if (diffDays < 7) return `Over ${diffDays} dagen`;
-  return format(date, "dd-MM-yyyy", { locale: nl });
-}
-
-function ticketSubtaskCount(ticket: Ticket): { done: number; total: number } | undefined {
-  if (!ticket.subtasks || ticket.subtasks.length === 0) return undefined;
-  return {
-    done: ticket.subtasks.filter((s) => s.done).length,
-    total: ticket.subtasks.length,
-  };
-}
-
-function roomsModeExtras(
-  task: UpcomingRecurring,
-  locations?: Record<string, string>,
-  keycards?: Record<string, boolean | null>,
-): { main?: { name: string; occupied?: boolean | null }; extras: ExtraRoom[] } {
-  const isRoomsMode = task.subtask_mode === "rooms" && task.subtask_items && task.subtask_items.length > 0;
-  if (!isRoomsMode) return { extras: [] };
-  const ids = task.subtask_items!;
-  const [firstId, ...rest] = ids;
-  return {
-    main: { name: locations?.[firstId] ?? firstId, occupied: keycards?.[firstId] },
-    extras: rest.map((id) => ({ id, name: locations?.[id] ?? id, occupied: keycards?.[id] })),
-  };
-}
-
-function MyTicketRow({ ticket, locationName, occupied, onClose, onTogglePin }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void; onTogglePin: () => void }) {
-  return (
-    <OverviewRow
-      to={`/tickets/${ticket.id}`}
-      priority={ticket.priority}
-      roomName={locationName}
-      occupied={occupied}
-      title={ticket.title}
-      statusSlot={<StatusBadge status={ticket.status} />}
-      prioritySlot={<PriorityBadge priority={ticket.priority} />}
-      dateText={format(parseUTC(ticket.created_at), "dd-MM", { locale: nl })}
-      subtasks={ticketSubtaskCount(ticket)}
-      photoCount={ticket.photos?.length}
-      commentCount={ticket.comment_count}
-      onComplete={onClose}
-      completeTitle="Ticket sluiten"
-      pinned={ticket.pinned}
-      onTogglePin={onTogglePin}
-    />
-  );
-}
-
-function SortableMyTicketRow(props: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClose: () => void; onTogglePin: () => void }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: props.ticket.id });
-  const style: CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.6 : 1,
-    zIndex: isDragging ? 10 : undefined,
-    position: "relative",
-  };
-  return (
-    <div ref={setNodeRef} style={style} className="flex items-stretch gap-1">
-      <button
-        {...attributes}
-        {...listeners}
-        type="button"
-        aria-label="Versleep om volgorde te wijzigen"
-        title="Versleep om volgorde te wijzigen"
-        className="shrink-0 cursor-grab active:cursor-grabbing touch-none w-5 flex items-center justify-center text-gray-300 hover:text-gray-500 select-none"
-      >
-        <svg width="10" height="16" viewBox="0 0 10 16" fill="currentColor" aria-hidden="true">
-          <circle cx="2.5" cy="3" r="1.2" />
-          <circle cx="2.5" cy="8" r="1.2" />
-          <circle cx="2.5" cy="13" r="1.2" />
-          <circle cx="7.5" cy="3" r="1.2" />
-          <circle cx="7.5" cy="8" r="1.2" />
-          <circle cx="7.5" cy="13" r="1.2" />
-        </svg>
-      </button>
-      <div className="flex-1 min-w-0">
-        <MyTicketRow {...props} />
-      </div>
-    </div>
-  );
-}
-
-function UrgentTicketRow({ ticket, locationName, occupied, assigneeName, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; assigneeName?: string; onClose?: () => void }) {
-  return (
-    <OverviewRow
-      to={`/tickets/${ticket.id}`}
-      priority="urgent"
-      borderOverride="border-l-red-500"
-      containerClassName="bg-red-50"
-      roomName={locationName}
-      occupied={occupied}
-      titleIcon="🚨"
-      title={ticket.title}
-      assigneeName={assigneeName}
-      titleClassName="font-semibold text-red-900"
-      statusSlot={<StatusBadge status={ticket.status} />}
-      prioritySlot={<PriorityBadge priority={ticket.priority} />}
-      dateText={format(parseUTC(ticket.created_at), "dd-MM HH:mm", { locale: nl })}
-      dateClassName="text-red-400"
-      subtasks={ticketSubtaskCount(ticket)}
-      photoCount={ticket.photos?.length}
-      commentCount={ticket.comment_count}
-      onComplete={onClose}
-      completeTitle="Ticket sluiten"
-    />
-  );
-}
-
-function AvailableTicketRow({ ticket, locationName, occupied, onClaim, onClose }: { ticket: Ticket; locationName?: string; occupied?: boolean | null; onClaim?: () => void; onClose?: () => void }) {
-  const claimBtn = onClaim ? (
-    <button
-      onClick={(e) => { e.preventDefault(); onClaim(); }}
-      className="text-sm text-blue-600 font-medium border border-blue-200 rounded-lg px-3 py-1 hover:bg-blue-50 transition-colors"
-    >
-      Pakken
-    </button>
-  ) : undefined;
-  return (
-    <OverviewRow
-      to={`/tickets/${ticket.id}`}
-      priority={ticket.priority}
-      roomName={locationName}
-      occupied={occupied}
-      title={ticket.title}
-      statusSlot={<StatusBadge status={ticket.status} />}
-      prioritySlot={<PriorityBadge priority={ticket.priority} />}
-      dateText={format(parseUTC(ticket.created_at), "dd-MM", { locale: nl })}
-      subtasks={ticketSubtaskCount(ticket)}
-      photoCount={ticket.photos?.length}
-      commentCount={ticket.comment_count}
-      actionSlot={claimBtn}
-      onComplete={onClose}
-      completeTitle="Ticket sluiten"
-    />
-  );
-}
-
-function RecurringTaskRow({ task, locationName, occupied, keycards, locations, onComplete }: {
-  task: UpcomingRecurring;
-  locationName?: string;
-  occupied?: boolean | null;
-  keycards?: Record<string, boolean | null>;
-  locations?: Record<string, string>;
-  onComplete?: () => void;
+function TaakRij({
+  taak, kamers, meta, done, magAfronden, onAfronden,
+}: {
+  taak: UpcomingRecurring;
+  kamers: { kamer?: string; occupied?: boolean | null; extra: ExtraKamer[] };
+  meta: React.ReactNode[];
+  done: boolean;
+  magAfronden: boolean;
+  onAfronden: () => void;
 }) {
-  const nextRunDate = parseUTC(task.next_run);
-  const isOverdue = nextRunDate < new Date();
-  const rooms = roomsModeExtras(task, locations, keycards);
-  const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
-
-  const statusChip = isOverdue ? (
-    <span className="text-xs font-semibold bg-red-100 text-red-700 px-2 py-0.5 rounded-lg">Verlopen</span>
-  ) : (
-    <span className="text-xs font-semibold bg-green-100 text-green-700 px-2 py-0.5 rounded-lg">Vandaag</span>
-  );
-
   return (
-    <OverviewRow
-      to={`/recurring/${task.id}`}
-      priority={task.priority}
-      borderOverride={isOverdue ? "border-l-red-500" : "border-l-purple-400"}
-      containerClassName={isOverdue ? "bg-red-50" : ""}
-      roomName={displayRoom?.name}
-      occupied={displayRoom?.occupied}
-      extraRooms={rooms.extras}
-      titleIcon="🔁"
-      title={task.title}
-      titleClassName={isOverdue ? "text-red-900" : ""}
-      statusSlot={statusChip}
-      prioritySlot={<PriorityBadge priority={task.priority} />}
-      dateText={isOverdue ? format(nextRunDate, "HH:mm") : ""}
-      dateClassName={isOverdue ? "text-red-500" : "text-gray-400"}
-      subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
-      onComplete={onComplete}
-      completeTitle="Taak afronden"
-    />
-  );
-}
-
-function UpcomingRecurringRow({ task, locationName, occupied, keycards, locations, onComplete }: {
-  task: UpcomingRecurring;
-  locationName?: string;
-  occupied?: boolean | null;
-  keycards?: Record<string, boolean | null>;
-  locations?: Record<string, string>;
-  onComplete?: () => void;
-}) {
-  const rooms = roomsModeExtras(task, locations, keycards);
-  const displayRoom = rooms.main ?? (locationName ? { name: locationName, occupied } : undefined);
-  const herhalendBadge = <span className="badge bg-purple-100 text-purple-700">Herhalend</span>;
-
-  return (
-    <OverviewRow
-      to={`/recurring/${task.id}`}
-      priority={task.priority}
-      borderOverride="border-l-purple-400"
-      roomName={displayRoom?.name}
-      occupied={displayRoom?.occupied}
-      extraRooms={rooms.extras}
-      titleIcon="🔁"
-      title={task.title}
-      statusSlot={herhalendBadge}
-      prioritySlot={<PriorityBadge priority={task.priority} />}
-      dateText={formatNextRun(task.next_run)}
-      dateClassName="text-gray-500"
-      subtasks={task.subtask_total !== undefined ? { done: task.subtask_done ?? 0, total: task.subtask_total } : undefined}
-      onComplete={onComplete}
-      completeTitle="Taak afronden"
+    <WorkRow
+      to={`/recurring/${taak.id}`}
+      priority={taak.priority}
+      kamer={kamers.kamer}
+      occupied={kamers.occupied}
+      extraKamers={kamers.extra}
+      title={taak.title}
+      meta={meta}
+      done={done}
+      actie={magAfronden ? { soort: "afronden", onAfronden, label: "Taak afronden" } : { soort: "geen" }}
     />
   );
 }

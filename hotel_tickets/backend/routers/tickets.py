@@ -8,7 +8,7 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, status, Query, UploadFile, File
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, and_, case, delete, func
+from sqlalchemy import select, and_, or_, case, delete, func
 from pydantic import BaseModel, field_validator
 
 from ..database import get_db
@@ -16,6 +16,7 @@ from ..models import Ticket, TicketComment, TicketPin, TicketNotification, Notif
 from ..auth import RequireUser, CurrentUser
 from ..services.notifications import notify_ticket_assigned, notify_urgent_ticket, notify_new_department_ticket, notify_mention
 from ..services.ha_entities import sync_ticket_sensors
+from ..services.ha_client import get_areas
 from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
 
@@ -231,12 +232,30 @@ async def list_tickets(
     priority: Priority | None = Query(None),
     assigned_to: str | None = Query(None),
     location_id: str | None = Query(None),
+    q: str | None = Query(None),
     limit: int = Query(100, le=500),
     offset: int = Query(0),
 ):
     filters = []
     if category:
         filters.append(Ticket.category == category)
+    if q and q.strip():
+        # Zoeken op titel, omschrijving én kamernaam. De kamernaam staat in HA
+        # (areas), niet in de database: we vertalen de zoekterm eerst naar de
+        # bijbehorende area-id's en zoeken daar op location_id.
+        term = f"%{q.strip()}%"
+        zoek = [Ticket.title.ilike(term), Ticket.description.ilike(term)]
+        try:
+            areas = await get_areas()
+            area_ids = [
+                a["id"] for a in areas
+                if q.strip().lower() in (a.get("name") or "").lower()
+            ]
+            if area_ids:
+                zoek.append(Ticket.location_id.in_(area_ids))
+        except Exception as exc:  # HA niet bereikbaar — dan zonder kamernamen
+            logger.debug("Zoeken op kamernaam overgeslagen: %s", exc)
+        filters.append(or_(*zoek))
     if status_param:
         status_values = [s.strip() for s in status_param.split(",") if s.strip()]
         valid = [s for s in status_values if s in (e.value for e in Status)]
