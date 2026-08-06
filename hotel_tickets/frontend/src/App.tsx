@@ -484,6 +484,10 @@ export default function App() {
         </div>
       )}
 
+      {/* De onderbalk en de meldknop staan buiten deze div. Ze horen bij het
+          venster, niet bij de pagina — en de kennisbot pint deze div op de
+          zichtbare hoogte (body.kb-fit), waardoor iOS de balk mee omhoog trok
+          en het invoerveld eronder wegviel. */}
       <div data-app-root className="flex min-h-[100dvh]">
         {/* ── Desktop: rail van 64 px met de modules ───────────────────────── */}
         {/* z-50: een sticky element maakt een eigen stapelcontext, dus zonder
@@ -603,7 +607,10 @@ export default function App() {
           {/* Inhoud — max 1100 px, rijen links uitgelijnd */}
           <main
             className={`flex-1 px-4 py-6 w-full max-w-[1100px] ${
-              location.pathname === "/kennis" ? "" : "touch-keyboard-pb"
+              // De kennisbot vult de hoogte in plaats van te scrollen; dan moet
+              // deze laag een flexkolom zijn, anders heeft "vul de rest" geen
+              // betekenis.
+              location.pathname === "/kennis" ? "flex flex-col min-h-0" : "touch-keyboard-pb"
             } ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`}
           >
             {/* Modules die nog hun eigen schermen hebben houden op mobiel een
@@ -691,63 +698,64 @@ export default function App() {
           </main>
         </div>
 
-        {/* ── Mobiel: onderbalk van 56 px, horizontaal schuifbaar ─────────── */}
-        <nav
-          data-onderbalk
-          className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex overflow-x-auto scrollbar-none
-                     border-t border-ink-12 bg-paper-raised"
-          style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
-        >
-          {zichtbareOnderbalk.map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              // flex-1 vult de balk als alles past; min-w houdt het label leesbaar
-              // en laat de balk schuiven zodra er te veel items zijn.
-              className={({ isActive }) =>
-                `flex-1 shrink-0 min-w-[5.5rem] h-14 flex flex-col items-center justify-center gap-0.5
-                 px-1 text-[0.6875rem] font-medium transition-colors ${
-                  isActive ? (item.accent ?? "text-brand") : "text-ink-45"
-                }`
-              }
-            >
-              {({ isActive }) => (
-                <>
-                  <span className="relative leading-none" aria-hidden="true">
-                    {item.icon && <item.icon size={20} strokeWidth={isActive ? 2.25 : 1.75} />}
-                    {item.to === "/berichten" && ongelezen > 0 && (
-                      <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-urgent" />
-                    )}
-                  </span>
-                  <span className={`max-w-full truncate ${isActive ? "font-semibold" : ""}`}>
-                    {item.label}
-                  </span>
-                </>
-              )}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* Eén primaire actie: melden. Rechtsboven de onderbalk — binnen
-            duimbereik, buiten het rijgebied. */}
-        {toonMelden && (
-          <button
-            onClick={() => navigate("/tickets/new")}
-            title="Melden"
-            aria-label="Nieuw ticket melden"
-            // De meldknop is een handeling, geen huisstijl: hij krijgt de
-            // interactiekleur (`brand`), niet de donkere kopbalkkleur.
-            className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 rounded-full
-                       bg-brand text-[color:var(--on-brand,#fff)] shadow-lg active:scale-95 transition"
-            style={{
-              bottom: "calc(var(--onderbalk) + 1rem + var(--undo-lift, 0px))",
-            }}
-          >
-            <Plus size={26} strokeWidth={2} aria-hidden="true" />
-          </button>
-        )}
       </div>
+
+      {/* ── Mobiel: onderbalk van 56 px, horizontaal schuifbaar ─────────── */}
+      <nav
+        data-onderbalk
+        className="md:hidden fixed bottom-0 left-0 right-0 z-40 flex overflow-x-auto scrollbar-none
+                   border-t border-ink-12 bg-paper-raised"
+        style={{ paddingBottom: "env(safe-area-inset-bottom, 0px)" }}
+      >
+        {zichtbareOnderbalk.map((item) => (
+          <NavLink
+            key={item.to}
+            to={item.to}
+            end={item.end}
+            // flex-1 vult de balk als alles past; min-w houdt het label leesbaar
+            // en laat de balk schuiven zodra er te veel items zijn.
+            className={({ isActive }) =>
+              `flex-1 shrink-0 min-w-[5.5rem] h-14 flex flex-col items-center justify-center gap-0.5
+               px-1 text-[0.6875rem] font-medium transition-colors ${
+                isActive ? (item.accent ?? "text-brand") : "text-ink-45"
+              }`
+            }
+          >
+            {({ isActive }) => (
+              <>
+                <span className="relative leading-none" aria-hidden="true">
+                  {item.icon && <item.icon size={20} strokeWidth={isActive ? 2.25 : 1.75} />}
+                  {item.to === "/berichten" && ongelezen > 0 && (
+                    <span className="absolute -top-0.5 -right-1.5 w-2 h-2 rounded-full bg-urgent" />
+                  )}
+                </span>
+                <span className={`max-w-full truncate ${isActive ? "font-semibold" : ""}`}>
+                  {item.label}
+                </span>
+              </>
+            )}
+          </NavLink>
+        ))}
+      </nav>
+
+      {/* Eén primaire actie: melden. Rechtsboven de onderbalk — binnen
+          duimbereik, buiten het rijgebied. */}
+      {toonMelden && (
+        <button
+          onClick={() => navigate("/tickets/new")}
+          title="Melden"
+          aria-label="Nieuw ticket melden"
+          // De meldknop is een handeling, geen huisstijl: hij krijgt de
+          // interactiekleur (`brand`), niet de donkere kopbalkkleur.
+          className="fixed right-4 z-40 flex items-center justify-center w-14 h-14 rounded-full
+                     bg-brand text-[color:var(--on-brand,#fff)] shadow-lg active:scale-95 transition"
+          style={{
+            bottom: "calc(var(--onderbalk) + 1rem + var(--undo-lift, 0px))",
+          }}
+        >
+          <Plus size={26} strokeWidth={2} aria-hidden="true" />
+        </button>
+      )}
     </>
   );
 }
