@@ -119,6 +119,8 @@ class TicketEventType(str, PyEnum):
     closed = "closed"          # afgerond
     reopened = "reopened"      # heropend
     category = "category"      # naar een andere afdeling gezet
+    started = "started"        # in behandeling genomen
+    stopped = "stopped"        # terug van in behandeling naar open
 
 
 class TicketEvent(Base):
@@ -393,6 +395,11 @@ class LogObject(Base):
     # apparaat is vaak een merktype (Makita DHP482) — zonder dit veld vind je
     # dat nooit terug door op "boormachine" te zoeken.
     kind: Mapped[str | None] = mapped_column(String(100))
+    # Herkomst: wanneer gekocht en bij wie. Bij een garantieclaim of een
+    # vervangingsbegroting is dat de eerste vraag, en het antwoord staat nu nog
+    # in een ordner op kantoor.
+    purchase_date: Mapped[date | None] = mapped_column(Date)
+    supplier: Mapped[str | None] = mapped_column(String(255))
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
 

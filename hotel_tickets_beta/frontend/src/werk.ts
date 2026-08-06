@@ -56,6 +56,17 @@ export function eigendom(
   return { label: `Bij ${wie}`, soort: "ander" };
 }
 
+/**
+ * "In behandeling" stond bewust niet meer in de interface: van wie het werk is
+ * zei meer dan of iemand het al aangeraakt had. In de praktijk is het verschil
+ * er wel degelijk — een collega die eraan begónnen is, is iets anders dan een
+ * collega aan wie het is toegewezen. Het staat er daarom weer bij: als woord in
+ * de metaregel, en op het ticket zelf als knop die je kunt omzetten.
+ */
+export function bezigTekst(status: Ticket["status"]): string | null {
+  return status === "in_progress" ? "In behandeling" : null;
+}
+
 /** Alleen urgent en hoog krijgen een woord; normaal en laag zijn stilte. */
 export function prioriteitWoord(priority: Priority): string | null {
   if (priority === "urgent") return "Urgent";
@@ -113,6 +124,24 @@ export function herhaalKort(cron?: string, intervalDays?: number | null): string
     return `elke ${dagVanMaand}e van de maand`;
   }
   return "elke dag";
+}
+
+/**
+ * Onderhoudsinterval in woorden. "elke 30 dagen" is correct maar leest niet;
+ * "maandelijks" wel. Alleen de ronde getallen krijgen een woord — 91 dagen
+ * blijft "per kwartaal", 100 dagen blijft gewoon 100 dagen.
+ */
+export function intervalTekst(dagen: number): string {
+  const vast: Record<number, string> = {
+    1: "dagelijks",
+    7: "wekelijks",
+    14: "elke 2 weken",
+    30: "maandelijks",
+    91: "per kwartaal",
+    182: "halfjaarlijks",
+    365: "jaarlijks",
+  };
+  return vast[dagen] ?? `elke ${dagen} dagen`;
 }
 
 /** "kamer is vrij" is werkbare informatie; "Bezet" als losse pil niet. */

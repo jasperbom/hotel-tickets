@@ -3,6 +3,7 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ticketApi, locationApi, userApi, type Category, type Priority, type Ticket, type UserRole } from "../api/client";
 import TicketDetail from "./TicketDetail";
 import { WorkRow } from "../components/WorkRow";
+import { AfdelingChip } from "../components/AfdelingChip";
 import {
   AFDELING_LABELS, afdelingTekst, eigendom, leeftijdTekst,
   prioriteitWoord, subtaakFractie,
@@ -203,8 +204,11 @@ export default function TicketList() {
           {prio}
         </strong>
       ),
+      t.status === "in_progress" && (
+        <strong className="font-semibold text-brand">In behandeling</strong>
+      ),
       bezit.label,
-      afdelingTekst(t.category, mij.department),
+      afdelingTekst(t.category, mij.department) && <AfdelingChip category={t.category} />,
       subtaakFractie(t),
       leeftijdTekst(t.created_at),
     ].filter(Boolean);

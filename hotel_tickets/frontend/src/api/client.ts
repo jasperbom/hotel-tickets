@@ -171,7 +171,8 @@ export interface Comment {
 }
 
 export type TicketEventType =
-  | "created" | "assigned" | "unassigned" | "priority" | "closed" | "reopened" | "category";
+  | "created" | "assigned" | "unassigned" | "priority" | "closed" | "reopened" | "category"
+  | "started" | "stopped";
 
 export interface TicketEvent {
   id: string;
@@ -298,12 +299,18 @@ export interface LogObject {
   folder: string | null;
   /** Soort binnen de map: boormachine, ladder, airco. */
   kind: string | null;
+  /** ISO-datum (jjjj-mm-dd) van aanschaf. */
+  purchase_date: string | null;
+  supplier: string | null;
   is_active: boolean;
   created_at: string;
   last_check_at: string | null;
   open_tickets: number;
   overdue: boolean;
   schedule: string | null;
+  /** Onderhoudsinterval in dagen; achter de schermen een herhaaltaak. */
+  maintenance_interval_days: number | null;
+  next_check_at: string | null;
 }
 
 export interface LogEntry {

@@ -33,6 +33,26 @@ export default {
         high: { DEFAULT: "#8F5410", soft: "#FCF3E4" },   // uitsluitend prioriteit hoog
         done: { DEFAULT: "#2F6B46", soft: "#E8F1EB" },   // uitsluitend 'klaar'
         brand: "var(--brand, #2563eb)",                  // uitsluitend interactie
+        // Afdelingskleur: identiteit, geen urgentie. Een medewerker herkent
+        // "van wie is dit werk" aan de kleur van het plaatje voordat hij het
+        // woord leest. Alleen als zacht plaatje met donkere tekst gebruiken —
+        // een gevulde rode of amberen rand blijft van prioriteit.
+        afd: {
+          technical:    { DEFAULT: "#1D5C8F", soft: "#E6EFF6" },
+          housekeeping: { DEFAULT: "#7A4E9C", soft: "#F1EAF7" },
+          reception:    { DEFAULT: "#1F6F63", soft: "#E4F0EE" },
+          service:      { DEFAULT: "#9C5A1E", soft: "#F8EFE3" },
+          kitchen:      { DEFAULT: "#A03A57", soft: "#FAE9EE" },
+          sales:        { DEFAULT: "#3B5BA5", soft: "#EAEEF8" },
+          garden:       { DEFAULT: "#41702A", soft: "#EBF3E5" },
+        },
+        // Modulekleur voor de navigatie: zwembaden, fietsen en de kennisbot
+        // krijgen elk hun eigen accent, zodat de onderbalk niet één grijze rij is.
+        mod: {
+          zwembaden: "#0E7490",
+          fietsen:   "#2F6B46",
+          kennis:    "#7A4E9C",
+        },
         hotel: {
           50: "#f0f7ff",
           100: "#e0effe",

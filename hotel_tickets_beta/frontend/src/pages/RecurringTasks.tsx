@@ -1,11 +1,11 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
+import { ChevronDown, ChevronRight, X } from "lucide-react";
 import { recurringApi, locationApi, logbookApi, ticketApi, userApi, type LogObject, type RecurringTemplate, type Category, type Priority, type SubtaskMode, type UserRole } from "../api/client";
-import { herhaalKort } from "../werk";
-import RecurrenceEditor, { cronToHuman } from "../components/RecurrenceEditor";
+import { AFDELING_KORT, herhaalKort } from "../werk";
+import RecurrenceEditor from "../components/RecurrenceEditor";
 import AreaSelector from "../components/AreaSelector";
 import MultiAreaSelector from "../components/MultiAreaSelector";
-import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 import { BevestigKnop } from "../components/BevestigKnop";
 
 const DEFAULT_CRON = "0 8 * * *";
@@ -28,6 +28,7 @@ const EMPTY_FORM = {
   folder: "",
 };
 
+const INGEKLAPT_KEY = "hts.herhaal_mappen_dicht";
 const NO_FOLDER_KEY = "__no_folder__";
 const NO_FOLDER_LABEL = "Zonder map";
 
@@ -47,12 +48,14 @@ function folderKey(t: RecurringTemplate): string {
 }
 
 /**
- * Herhalend — twee gezichten, één scherm.
+ * Herhalend — dezelfde opbouw als de logboeken: mappen die je in- en uitklapt,
+ * met een zoekveld erboven. Er stond eerst een tweede lijst bovenop deze,
+ * gegroepeerd op herhaalpatroon ("elke wo", "elke 30 dagen"); dat zei niets
+ * over waar een taak thuishoorde en maakte het scherm dubbel zo lang.
  *
- * Voor een medewerker: een leeslijst van wat er terugkomt, gegroepeerd per
- * herhaalpatroon, met de kamers erbij. Geen afvinkknoppen — dat doe je op
- * Vandaag. Voor een admin: hetzelfde, plus de bewerkvelden en het signaal
- * "overgeslagen": een sjabloon waarvan exemplaren blijven openstaan, is óf
+ * Eén lijst dus, twee gezichten. Een medewerker leest hem alleen — afvinken
+ * doe je op Vandaag. Een leidinggevende krijgt "Wijzig" erbij, en het signaal
+ * "overgeslagen": een sjabloon waarvan exemplaren blijven openstaan is óf
  * onnodig óf er is te weinig personeel.
  */
 export default function RecurringTasks() {
@@ -63,13 +66,18 @@ export default function RecurringTasks() {
   const [loading, setLoading] = useState(true);
   const [form, setForm] = useState({ ...EMPTY_FORM });
   const [newSubtask, setNewSubtask] = useState("");
-  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>({});
+  const [collapsedFolders, setCollapsedFolders] = useState<Record<string, boolean>>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(INGEKLAPT_KEY) || "{}");
+    } catch {
+      return {};
+    }
+  });
   const [search, setSearch] = useState("");
   const [me, setMe] = useState<UserRole | null>(null);
   const [formError, setFormError] = useState("");
   // Open exemplaren per sjabloon: dat is het "overgeslagen"-signaal.
   const [openPerSjabloon, setOpenPerSjabloon] = useState<Record<string, number>>({});
-  const [beheerOpen, setBeheerOpen] = useState(false);
   const [objecten, setObjecten] = useState<LogObject[]>([]);
 
   useEffect(() => {
@@ -167,19 +175,11 @@ export default function RecurringTasks() {
     }
   }
 
-  async function toggleActive(template: RecurringTemplate) {
-    try {
-      const r = await recurringApi.update(template.id, { is_active: !template.is_active });
-      setTemplates((prev) => prev.map((t) => t.id === template.id ? r.data : t));
-    } catch (err) {
-      alert(apiErrorText(err));
-    }
-  }
-
   async function deleteTemplate(id: string) {
     try {
       await recurringApi.remove(id);
       setTemplates((prev) => prev.filter((t) => t.id !== id));
+      resetForm();
     } catch (err) {
       alert(apiErrorText(err));
     }
@@ -226,7 +226,7 @@ export default function RecurringTasks() {
     );
   }, [templates, search]);
 
-  const groupedTemplates = useMemo(() => {
+  const groepen = useMemo(() => {
     const groups = new Map<string, RecurringTemplate[]>();
     for (const t of filteredTemplates) {
       const key = folderKey(t);
@@ -242,23 +242,12 @@ export default function RecurringTasks() {
     return sortedKeys.map((key) => ({
       key,
       label: key === NO_FOLDER_KEY ? NO_FOLDER_LABEL : key,
-      templates: groups.get(key)!,
+      templates: groups.get(key)!.sort((a, b) => a.title.localeCompare(b.title, "nl")),
+      overgeslagen: groups.get(key)!.filter((t) => (openPerSjabloon[t.id] ?? 0) > 1).length,
     }));
-  }, [filteredTemplates]);
+  }, [filteredTemplates, openPerSjabloon]);
 
-  /** Leeslijst: gegroepeerd op herhaalpatroon in plaats van op map. */
-  const perPatroon = useMemo(() => {
-    const groepen = new Map<string, RecurringTemplate[]>();
-    for (const t of templates.filter((x) => x.is_active)) {
-      const label = herhaalKort(t.cron_expression, t.interval_days) ?? "onbekend";
-      const lijst = groepen.get(label) ?? [];
-      lijst.push(t);
-      groepen.set(label, lijst);
-    }
-    return [...groepen.entries()]
-      .map(([label, lijst]) => ({ label, lijst: lijst.sort((a, b) => a.title.localeCompare(b.title, "nl")) }))
-      .sort((a, b) => a.label.localeCompare(b.label, "nl"));
-  }, [templates]);
+  const zoekt = search.trim().length > 0;
 
   function kamersVan(t: RecurringTemplate): string {
     const ids = t.subtask_mode === "rooms" && t.subtask_items?.length
@@ -268,50 +257,141 @@ export default function RecurringTasks() {
   }
 
   function toggleFolder(key: string) {
-    setCollapsedFolders((prev) => ({ ...prev, [key]: !prev[key] }));
+    setCollapsedFolders((prev) => {
+      const nieuw = { ...prev, [key]: !prev[key] };
+      localStorage.setItem(INGEKLAPT_KEY, JSON.stringify(nieuw));
+      return nieuw;
+    });
   }
 
-  const leeslijst = (
+  /** Eén regel per sjabloon — dezelfde anatomie als een logboekobject. */
+  const rij = (t: RecurringTemplate) => {
+    const blijftLiggen = openPerSjabloon[t.id] ?? 0;
+    return (
+      <li key={t.id}>
+        <div className={`row min-h-[66px] ${t.is_active ? "" : "opacity-60"}`}>
+          <span className="flex-1 min-w-0">
+            <Link to={`/recurring/${t.id}`} className="block text-row text-ink hover:text-brand">
+              {t.title}
+            </Link>
+            <span className="meta">
+              {[
+                kamersVan(t) || null,
+                herhaalKort(t.cron_expression, t.interval_days),
+                AFDELING_KORT[t.category],
+                t.is_active ? null : "gepauzeerd",
+                t.nfc_tag_id ? "NFC" : null,
+              ].filter(Boolean).join(" · ")}
+              {blijftLiggen > 1 && (
+                <>
+                  <span className="text-ink-25"> · </span>
+                  <strong
+                    className="font-semibold text-high"
+                    title="Deze taak wordt herhaaldelijk niet afgerond"
+                  >
+                    {blijftLiggen}× overgeslagen
+                  </strong>
+                </>
+              )}
+            </span>
+          </span>
+          {isManager && canManage(t.category) && (
+            <button
+              onClick={() => startEdit(t)}
+              className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"
+            >
+              Wijzig
+            </button>
+          )}
+        </div>
+      </li>
+    );
+  };
+
+  /**
+   * De lijst: mappen, net als bij de logboeken. Tijdens het zoeken vervallen de
+   * mappen — je zoekt juist omdat je niet weet in welke map iets staat.
+   */
+  const lijst = (
     <div className="space-y-5 max-w-3xl">
-      {perPatroon.length === 0 ? (
-        <p className="meta">Er komt op dit moment niets terug.</p>
-      ) : (
-        perPatroon.map((groep) => (
-          <section key={groep.label}>
-            <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">{groep.label}</p>
+      {templates.length === 0 ? (
+        <div className="rounded-[10px] border border-dashed border-ink-12 bg-paper-raised px-5 py-6">
+          <p className="text-[1.1875rem] font-semibold text-ink">Er komt nog niets terug.</p>
+          <p className="mt-1.5 text-[0.9375rem] text-ink-70">
+            Een sjabloon maakt vanzelf een taak aan zodra hij aan de beurt is; afvinken
+            doe je op Vandaag.
+          </p>
+        </div>
+      ) : zoekt ? (
+        <section>
+          <p className="mb-2.5 font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+            {filteredTemplates.length} {filteredTemplates.length === 1 ? "resultaat" : "resultaten"}
+          </p>
+          {filteredTemplates.length === 0 ? (
+            <div className="rounded-[10px] border border-dashed border-ink-12 bg-paper-raised px-5 py-6">
+              <p className="text-[1.1875rem] font-semibold text-ink">Geen taak met “{search.trim()}”.</p>
+              <p className="mt-1.5 text-[0.9375rem] text-ink-70">
+                Gezocht in titels, omschrijvingen en mappen van alle {templates.length} sjablonen.
+              </p>
+            </div>
+          ) : (
             <ul className="grid gap-2">
-              {groep.lijst.map((t) => {
-                const blijftLiggen = openPerSjabloon[t.id] ?? 0;
-                return (
-                  <li key={t.id} className="row min-h-[66px]">
-                    <span className="flex-1 min-w-0">
-                      <span className="block text-row text-ink">{t.title}</span>
-                      <span className="meta">
-                        {kamersVan(t) || "geen kamer"}
-                        {blijftLiggen > 1 && (
-                          <>
-                            <span className="text-ink-25"> · </span>
-                            <strong className="font-semibold text-high" title="Deze taak wordt herhaaldelijk niet afgerond">
-                              {blijftLiggen}× overgeslagen
-                            </strong>
-                          </>
-                        )}
-                      </span>
-                    </span>
-                    {isManager && (
-                      <button
-                        onClick={() => startEdit(t)}
-                        className="shrink-0 h-tap px-3 rounded-[10px] border border-ink-12 text-ink-70 text-meta font-semibold hover:bg-ink-6"
-                      >
-                        Wijzig
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
+              {[...filteredTemplates].sort((a, b) => a.title.localeCompare(b.title, "nl")).map(rij)}
             </ul>
-          </section>
-        ))
+          )}
+        </section>
+      ) : (
+        groepen.map((groep) => {
+          const open = !collapsedFolders[groep.key];
+          return (
+            <section key={groep.key}>
+              <button
+                onClick={() => toggleFolder(groep.key)}
+                aria-expanded={open}
+                className="flex items-center gap-2 w-full min-h-tap text-left"
+              >
+                {open ? (
+                  <ChevronDown size={16} className="text-ink-45 shrink-0" aria-hidden="true" />
+                ) : (
+                  <ChevronRight size={16} className="text-ink-45 shrink-0" aria-hidden="true" />
+                )}
+                <span className="font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
+                  {groep.label}
+                </span>
+                <span className="meta ml-auto tabular-nums">
+                  {groep.overgeslagen > 0 && (
+                    <span className="text-high font-semibold">{groep.overgeslagen}× overgeslagen · </span>
+                  )}
+                  {groep.templates.length}
+                </span>
+              </button>
+              {open && <ul className="grid gap-2 mt-2">{groep.templates.map(rij)}</ul>}
+            </section>
+          );
+        })
+      )}
+    </div>
+  );
+
+  const zoekbalk = (
+    <div className="relative max-w-3xl">
+      <input
+        type="search"
+        inputMode="search"
+        placeholder="Zoek in taken (titel, omschrijving of map)"
+        value={search}
+        onChange={(e) => setSearch(e.target.value)}
+        className="w-full h-tap border border-ink-12 rounded-[10px] pl-3 pr-10 text-body bg-paper-raised
+                   text-ink placeholder:text-ink-45 focus:outline-none focus:ring-2 focus:ring-brand"
+      />
+      {search && (
+        <button
+          onClick={() => setSearch("")}
+          aria-label="Zoekopdracht wissen"
+          className="absolute right-1 top-1/2 -translate-y-1/2 tap text-ink-45 hover:text-ink"
+        >
+          <X size={18} aria-hidden="true" />
+        </button>
       )}
     </div>
   );
@@ -325,7 +405,8 @@ export default function RecurringTasks() {
           Wat er automatisch terugkomt. Afvinken doe je op Vandaag, zodra de taak
           aan de beurt is.
         </p>
-        {leeslijst}
+        {templates.length > 3 && zoekbalk}
+        {lijst}
       </div>
     );
   }
@@ -334,37 +415,14 @@ export default function RecurringTasks() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <h1 className="hidden md:block text-2xl font-bold text-ink">Herhalend</h1>
-        <button onClick={openNewForm} className="btn-primary whitespace-nowrap ml-auto">+ Nieuw sjabloon</button>
+        {!showForm && (
+          <button onClick={openNewForm} className="btn-primary whitespace-nowrap ml-auto">
+            + Nieuw sjabloon
+          </button>
+        )}
       </div>
 
-      {!showForm && leeslijst}
-
-      {/* Beheerlijst: dezelfde sjablonen, maar per map en met aan/uit en
-          verwijderen. Standaard ingeklapt zodat het scherm niet twee keer
-          dezelfde lijst toont. */}
-      {!showForm && (
-        <button
-          onClick={() => setBeheerOpen(!beheerOpen)}
-          className="flex items-center gap-2 w-full min-h-tap text-left pt-5 border-t border-ink-12"
-        >
-          <span className="font-mono text-xs uppercase tracking-[0.14em] text-ink-45">
-            Alle sjablonen · mappen, aan/uit, verwijderen
-          </span>
-          <span className="ml-auto meta">{beheerOpen ? "verbergen" : "tonen"}</span>
-        </button>
-      )}
-
-      {/* Zoekbalk */}
-      <div className={showForm || beheerOpen ? "relative" : "hidden"}>
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-45 pointer-events-none">🔍</span>
-        <input
-          type="search"
-          placeholder="Zoek in taken (titel, omschrijving of map)…"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="w-full border border-ink-12 rounded-lg pl-9 pr-3 py-2 text-sm bg-paper-raised focus:outline-none focus:ring-2 focus:ring-brand"
-        />
-      </div>
+      {!showForm && zoekbalk}
 
       {/* Formulier */}
       {showForm && (
@@ -564,107 +622,44 @@ export default function RecurringTasks() {
             </div>
           )}
 
-          <div className="flex gap-2">
+          {/* Pauzeren en verwijderen horen bij het sjabloon, niet in de lijst:
+              in een rij van dertig taken is een verwijderknop een ongeluk dat
+              staat te wachten. */}
+          <div className="flex flex-wrap items-center gap-2">
             <button onClick={saveTemplate} className="btn-primary">Opslaan</button>
             <button onClick={resetForm} className="btn-secondary">Annuleren</button>
+            {editId && (
+              <>
+                <button
+                  onClick={() => setForm({ ...form, is_active: !form.is_active })}
+                  className="btn-secondary ml-auto"
+                >
+                  {form.is_active ? "Pauzeren" : "Activeren"}
+                </button>
+                <BevestigKnop
+                  label="Verwijderen"
+                  vraag="Sjabloon verwijderen?"
+                  bevestigLabel="Ja, verwijder"
+                  onBevestig={() => deleteTemplate(editId)}
+                  className="h-tap px-4 inline-flex items-center rounded-[10px] text-meta font-semibold text-urgent hover:bg-urgent-soft"
+                />
+              </>
+            )}
           </div>
+          {editId && !form.is_active && (
+            <p className="meta">
+              Gepauzeerd — dit sjabloon maakt geen nieuwe taken aan tot je het weer
+              activeert. Opslaan legt dat vast.
+            </p>
+          )}
         </div>
       )}
 
-      {/* Beheerlijst per map */}
-      {!showForm && !beheerOpen ? null : loading ? (
+      {!showForm && (loading ? (
         <div className="flex items-center justify-center h-32">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-brand" />
         </div>
-      ) : templates.length === 0 ? (
-        <div className="card py-12 text-center text-ink-45">
-          Geen terugkerende taken. Maak een sjabloon aan.
-        </div>
-      ) : filteredTemplates.length === 0 ? (
-        <div className="card py-12 text-center text-ink-45">
-          Geen taken gevonden voor "{search}"
-        </div>
-      ) : (
-        <div className="space-y-5">
-          {groupedTemplates.map((group) => {
-            const collapsed = !!collapsedFolders[group.key];
-            const isNoFolder = group.key === NO_FOLDER_KEY;
-            return (
-              <div key={group.key} className="space-y-3">
-                <button
-                  type="button"
-                  onClick={() => toggleFolder(group.key)}
-                  className="w-full flex items-center gap-2 px-2 py-1 text-left hover:bg-ink-6 rounded-lg"
-                >
-                  <span className={`text-ink-45 transition-transform ${collapsed ? "" : "rotate-90"}`}>▶</span>
-                  <span className="text-lg shrink-0">{isNoFolder ? "📋" : "📁"}</span>
-                  <span className={`font-semibold ${isNoFolder ? "text-ink-45 italic" : "text-ink"}`}>
-                    {group.label}
-                  </span>
-                  <span className="text-xs bg-ink-6 text-ink-70 px-2 py-0.5 rounded-full">
-                    {group.templates.length}
-                  </span>
-                </button>
-                {!collapsed && (
-                  <div className="space-y-3 pl-2">
-                    {group.templates.map((t) => (
-                      <div key={t.id} className={`card overflow-hidden ${!t.is_active ? "opacity-60" : ""}`}>
-                        {/* Blauwe kamer-bar */}
-                        {t.location_id && locations[t.location_id] && t.subtask_mode !== "rooms" && (
-                          <div className="flex items-center gap-3 bg-brand text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
-                            <span className="text-lg">🚪</span>
-                            <span className="font-bold tracking-wide">{locations[t.location_id]}</span>
-                          </div>
-                        )}
-                        {t.subtask_mode === "rooms" && t.subtask_items && t.subtask_items.length > 0 && (
-                          <div className="flex items-center gap-3 bg-brand text-white px-4 py-2 -mx-4 -mt-4 mb-3" style={{ marginLeft: "-1rem", marginRight: "-1rem", marginTop: "-1rem", width: "calc(100% + 2rem)" }}>
-                            <span className="text-lg">🚪</span>
-                            <span className="font-bold tracking-wide">{t.subtask_items.length} kamers</span>
-                          </div>
-                        )}
-                        <div className="flex items-center gap-3">
-                          <span className="text-2xl shrink-0">🔁</span>
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 flex-wrap">
-                              <Link to={`/recurring/${t.id}`} className="font-medium hover:text-brand">{t.title}</Link>
-                              {!t.is_active && <span className="badge bg-ink-6 text-ink-45">Inactief</span>}
-                              {t.nfc_tag_id && <span className="text-xs font-mono bg-purple-100 text-purple-700 px-1 py-0.5 rounded">NFC</span>}
-                              {t.subtask_mode === "subtasks" && <span className="badge bg-ink-6 text-brand">☑️ Subtaken</span>}
-                              {t.subtask_mode === "rooms" && <span className="badge bg-ink-6 text-brand">🚪 Kamers</span>}
-                            </div>
-                            <div className="flex gap-1.5 mt-1 flex-wrap items-center">
-                              <CategoryBadge category={t.category} />
-                              <PriorityBadge priority={t.priority} />
-                              <span className="text-xs bg-ink-6 text-ink-70 px-1.5 py-0.5 rounded">🔁 {cronToHuman(t.cron_expression, t.interval_days)}</span>
-                            </div>
-                          </div>
-                          {canManage(t.category) && (
-                            <div className="flex gap-2 shrink-0">
-                              <button onClick={() => toggleActive(t)} className="text-sm text-ink-45 hover:text-ink-70">
-                                {t.is_active ? "Pauzeren" : "Activeren"}
-                              </button>
-                              <button onClick={() => startEdit(t)} className="text-sm text-brand hover:opacity-80">
-                                Bewerken
-                              </button>
-                              <BevestigKnop
-                                label="Verwijderen"
-                                vraag="Sjabloon verwijderen?"
-                                bevestigLabel="Ja, verwijder"
-                                onBevestig={() => deleteTemplate(t.id)}
-                                className="text-sm text-urgent hover:opacity-80"
-                              />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      ) : lijst)}
     </div>
   );
 }

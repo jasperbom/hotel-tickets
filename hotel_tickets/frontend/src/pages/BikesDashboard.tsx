@@ -351,7 +351,7 @@ function BikeCard({
   return (
     <button
       onClick={onClick}
-      className={`w-full text-left border rounded-xl p-3 transition-all hover:shadow-md active:scale-95 ${
+      className={`w-full text-left border rounded-xl p-3 overflow-hidden transition-all hover:shadow-md active:scale-95 ${
         bike.status === "maintenance"
           ? "border-orange-200 bg-orange-50"
           : keyGiven && !keyReturned
@@ -361,9 +361,14 @@ function BikeCard({
           : "border-ink-12 bg-paper-raised hover:border-ink-12"
       }`}
     >
-      <div className="flex items-center justify-between mb-1">
-        <span className="font-semibold text-sm">#{bike.number}</span>
-        <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${badgeClass}`}>
+      {/* Op een telefoon zijn deze kaartjes ~140 px breed. "Buiten gebruik"
+          naast het nummer paste daar niet en liep buiten de rand; het label
+          mag daarom krimpen en over twee regels vallen. */}
+      <div className="flex items-start justify-between gap-1.5 mb-1 min-w-0">
+        <span className="font-semibold text-sm shrink-0">#{bike.number}</span>
+        <span
+          className={`min-w-0 text-right text-[0.6875rem] leading-tight px-2 py-0.5 rounded-full font-medium ${badgeClass}`}
+        >
           {badgeLabel}
         </span>
       </div>
