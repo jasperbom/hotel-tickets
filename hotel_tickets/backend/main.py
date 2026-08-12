@@ -10,7 +10,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from .database import init_db
 from .scheduler import get_scheduler, load_all_templates, start_keycard_watcher, start_bike_key_watcher, start_interval_watcher, start_session_cleanup
 from .beta import BETA_MODE, SOURCE_DB_PATH, app_version
-from .routers import auth, tickets, users, locations, recurring, reports, integration, settings, nfc, pools, bikes, bike_reservations, bike_maintenance, bike_admin, knowledge, notifications, messages, beta, logbook
+from .routers import auth, tickets, users, locations, recurring, reports, integration, settings, nfc, pools, bikes, bike_reservations, bike_maintenance, bike_admin, knowledge, notifications, messages, beta, logbook, board
 
 logging.basicConfig(
     level=os.environ.get("LOG_LEVEL", "info").upper(),
@@ -132,6 +132,7 @@ app.include_router(notifications.router, prefix="/api")
 app.include_router(messages.router, prefix="/api")
 app.include_router(beta.router, prefix="/api")
 app.include_router(logbook.router, prefix="/api")
+app.include_router(board.router, prefix="/api")
 
 
 # Serve frontend (gebouwde React app)
