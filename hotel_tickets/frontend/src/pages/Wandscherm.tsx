@@ -351,27 +351,17 @@ function secties(kolom: BoardKolom): Sectie[] {
   const nieuw = rest.filter((t) => isNieuw(t.created_at));
   const overig = rest.filter((t) => !isNieuw(t.created_at));
 
+  const ticket = (t: BoardTicket) => <TicketRegel key={t.id} ticket={t} />;
+
   return [
     {
       id: "herhalend",
       titel: "Herhalende taken",
       regels: kolom.taken.map((t) => <TaakRegel key={`taak-${t.id}`} taak={t} />),
     },
-    {
-      id: "urgent",
-      titel: "Urgent",
-      regels: urgent.map((t) => <TicketRegel key={t.id} ticket={t} />),
-    },
-    {
-      id: "overig",
-      titel: "Andere taken",
-      regels: overig.map((t) => <TicketRegel key={t.id} ticket={t} />),
-    },
-    {
-      id: "nieuw",
-      titel: "Nieuw — afgelopen 24 uur",
-      regels: nieuw.map((t) => <TicketRegel key={t.id} ticket={t} />),
-    },
+    { id: "urgent", titel: "Urgent", regels: urgent.map(ticket) },
+    { id: "overig", titel: "Andere taken", regels: overig.map(ticket) },
+    { id: "nieuw", titel: "Nieuw — afgelopen 24 uur", regels: nieuw.map(ticket) },
   ];
 }
 
@@ -499,23 +489,61 @@ function usePassendeSecties(kolom: BoardKolom, lijsten: Sectie[]) {
  * regel het enige wat je krijgt. Daarom staan urgentie, eigenaar en status er
  * in kleur en vet tussen het grijs — niet als versiering, maar omdat dat de
  * drie dingen zijn waarop iemand vanaf de deur beslist of hij gaat lopen.
+ *
+ * Die delen staan niet achter elkaar met puntjes ertussen, maar verdeeld over
+ * de hele breedte van de regel. Een woordenrij moet je van links naar rechts
+ * lezen; kolommen scan je van boven naar beneden. De naam staat op elke regel
+ * op ongeveer dezelfde plek, dus wie zoekt "is er nog iets vrij?" kijkt één
+ * keer omlaag in plaats van vijf regels uit elkaar te pluizen. Een deel dat er
+ * niet is laat zijn kolom leeg in plaats van de rest op te schuiven — anders
+ * schuift de uitlijning per regel weer weg.
  */
-type MetaDeel = { tekst: string; klasse?: string } | null;
+type MetaDeel = {
+  tekst: string;
+  klasse?: string;
+  /**
+   * Mag over meerdere regels: voor een deel dat geen woord maar een lijst is
+   * (de kamers van een herhaaltaak). Zo'n lijst kan langer zijn dan de kolom
+   * breed is, en dan houdt "nooit smaller dan de inhoud" op te werken: hij
+   * zou tot de rand doorlopen en daar afgesneden worden. Afbreken kost een
+   * regel hoogte en bewaart alle kamernummers.
+   */
+  wikkel?: boolean;
+} | null;
+
+/**
+ * Breedteverhouding van de metakolommen. De meta-array van een regel loopt
+ * hiermee in de pas: even lang, dezelfde volgorde, `null` waar de kolom leeg
+ * blijft. Niet gelijk verdeeld — "In behandeling" heeft meer nodig dan
+ * "Spoed", en een kolom die te krap is kapt af terwijl de buurman leeg staat.
+ *
+ * Het is een verdeling van de vrije ruimte, geen keurslijf: een kolom wordt
+ * nooit smaller dan wat erin staat (`min-width: max-content`). Een lange naam
+ * duwt zijn buren dus een stukje op in plaats van "Marieke van Don…" te
+ * worden — op een bord is het afgekapte deel meestal net het stuk dat je
+ * zocht. Dat kost een beetje uitlijning op de regels waar het niet past, en
+ * dat is de goedkoopste van de twee.
+ */
+//                       urgentie eigenaar status voortgang leeftijd
+const TICKET_KOLOMMEN = [0.7,     1.25,    1.15,  0.55,     0.85];
+//                     voortgang kamers
+const TAAK_KOLOMMEN = [0.5,      1.5];
 
 function Regel({
-  rand, kamer, titel, meta, voorvoegsel,
+  rand, kamer, titel, meta, kolommen, voorvoegsel,
 }: {
   rand: "urgent" | "high" | null;
   kamer?: string | null;
   titel: string;
   meta: MetaDeel[];
+  /** Breedteverhouding per metakolom, even lang als `meta`. */
+  kolommen: number[];
   voorvoegsel?: string | null;
 }) {
   const randKlasse =
     rand === "urgent" ? "border-l-[0.25em] border-l-urgent pl-[0.6em]"
     : rand === "high" ? "border-l-[0.25em] border-l-high pl-[0.6em]"
     : "pl-[0.85em]";
-  const delen = meta.filter(Boolean) as Exclude<MetaDeel, null>[];
 
   return (
     <div className={`break-inside-avoid py-[0.45em] border-b border-ink-6 ${randKlasse}`}>
@@ -528,15 +556,28 @@ function Regel({
         )}
         <span className="text-[1.3em] leading-tight line-clamp-2">{titel}</span>
       </div>
-      {delen.length > 0 && (
-        <p className="text-[1em] text-ink-45 mt-[0.2em]">
-          {delen.map((d, i) => (
-            <span key={i}>
-              {i > 0 && <span className="text-ink-25"> · </span>}
-              <span className={d.klasse}>{d.tekst}</span>
+      {meta.some(Boolean) && (
+        // flex-wrap is de noodklep: past de regel echt niet meer op één lijn
+        // (smalle kolom, lange naam), dan valt het laatste deel eronder in
+        // plaats van weg te lopen achter de rand van het bord.
+        <div className="flex flex-wrap items-baseline gap-x-[0.5em] mt-[0.2em] text-[1em] text-ink-45">
+          {meta.map((d, i) => (
+            <span
+              key={i}
+              // De laatste kolom rechts uitgelijnd, zodat de regel net zo vlak
+              // eindigt als hij begint — anders bungelt de leeftijd ergens in
+              // het midden en oogt het bord scheef.
+              className={`${d?.wikkel ? "min-w-0" : "truncate"} ${
+                i === meta.length - 1 ? "text-right" : ""} ${d?.klasse ?? ""}`}
+              // Basis 0 + groeifactor: de vrije ruimte wordt over de kolommen
+              // verdeeld in plaats van achter het laatste woord te blijven
+              // liggen. min-width houdt de inhoud heel (zie boven).
+              style={{ flex: `${kolommen[i] ?? 1} 1 0%`, minWidth: d?.wikkel ? 0 : "max-content" }}
+            >
+              {d?.tekst}
             </span>
           ))}
-        </p>
+        </div>
       )}
     </div>
   );
@@ -551,6 +592,7 @@ function TicketRegel({ ticket }: { ticket: BoardTicket }) {
       rand={ticket.priority === "urgent" ? "urgent" : ticket.priority === "high" ? "high" : null}
       kamer={ticket.kamer}
       titel={ticket.title}
+      kolommen={TICKET_KOLOMMEN}
       meta={[
         // Urgentie eerst: in de lijst "Urgent" staan spoed en hoog door elkaar,
         // en dat verschil bepaalt of iemand nu loopt of straks.
@@ -583,9 +625,10 @@ function TaakRegel({ taak }: { taak: BoardTaak }) {
       voorvoegsel={taak.emoji}
       kamer={taak.kamer}
       titel={taak.title}
+      kolommen={TAAK_KOLOMMEN}
       meta={[
         fractie ? { tekst: fractie } : null,
-        kamers ? { tekst: kamers } : null,
+        kamers ? { tekst: kamers, wikkel: true } : null,
       ]}
     />
   );
