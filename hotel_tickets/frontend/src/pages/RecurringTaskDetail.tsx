@@ -5,6 +5,7 @@ import { nl } from "date-fns/locale";
 import { recurringApi, locationApi, ticketApi, userApi, parseUTC, type RecurringTemplate, type HistoryEntry, type ActiveTicket, type KeycardStatus, type UserRole } from "../api/client";
 import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 import { cronToHuman } from "../components/RecurrenceEditor";
+import KamerStatus from "../components/KamerStatus";
 
 export default function RecurringTaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -188,16 +189,7 @@ export default function RecurringTaskDetail() {
               <span className="text-2xl">🚪</span>
               <span className="text-xl font-bold tracking-wide">{locationName}</span>
             </div>
-            {keycard?.found && (
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-semibold ${
-                keycard.occupied
-                  ? "bg-orange-400 text-white"
-                  : "bg-green-400 text-white"
-              }`}>
-                <span>{keycard.occupied ? "🔑" : "🔓"}</span>
-                <span>{keycard.occupied ? "Bezet" : "Vrij"}</span>
-              </div>
-            )}
+            <KamerStatus bezet={keycard?.found ? keycard.occupied : null} />
           </div>
         </div>
       )}
@@ -365,11 +357,7 @@ export default function RecurringTaskDetail() {
                         <span className="text-sm font-medium text-ink">
                           🚪 {roomName ?? ticket.location_id ?? "Onbekende kamer"}
                         </span>
-                        {roomKeycard?.found && (
-                          roomKeycard.occupied
-                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-high-soft text-high">Bezet</span>
-                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-done-soft text-done">Vrij</span>
-                        )}
+                        <KamerStatus bezet={roomKeycard?.found ? roomKeycard.occupied : null} kort />
                       </div>
                     </div>
                     <button
@@ -395,11 +383,7 @@ export default function RecurringTaskDetail() {
                         <span className="text-sm font-medium text-ink">
                           🚪 {roomName ?? roomId}
                         </span>
-                        {roomKeycard?.found && (
-                          roomKeycard.occupied
-                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-high-soft text-high">Bezet</span>
-                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-done-soft text-done">Vrij</span>
-                        )}
+                        <KamerStatus bezet={roomKeycard?.found ? roomKeycard.occupied : null} kort />
                       </div>
                     </div>
                     <button

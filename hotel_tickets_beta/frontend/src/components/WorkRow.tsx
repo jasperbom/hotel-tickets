@@ -2,12 +2,13 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Check } from "lucide-react";
 import type { Priority } from "../api/client";
+import KamerStatus from "./KamerStatus";
 
 /**
  * Eén rij voor al het werk — op Vandaag, in Tickets, en straks in de modules
  * die hun rijen overnemen. Anatomie:
  *
- *   [rand 4px als urgent/hoog] [kamer 17px vet + bezet-stip] [titel 17px]
+ *   [rand 4px als urgent/hoog] [kamer 17px vet] [titel 17px]
  *                              [metaregel 14px grijs]              [actie]
  *
  * Maximaal vier elementen, vijf met actie. Het vijfde verdringt het vierde —
@@ -30,8 +31,6 @@ export interface WorkRowProps {
   /** Bepaalt uitsluitend de linkerrand: rood = urgent, amber = hoog, verder niets. */
   priority: Priority;
   kamer?: string | null;
-  /** true = bezet (gevulde stip), false = vrij (open stip), null/undefined = geen sensor */
-  occupied?: boolean | null;
   title: string;
   /** Onderdelen van de metaregel; worden met " · " aan elkaar gezet. */
   meta?: ReactNode[];
@@ -39,19 +38,6 @@ export interface WorkRowProps {
   done?: boolean;
   actie?: WorkRowActie;
   extraKamers?: ExtraKamer[];
-}
-
-function BezetStip({ occupied }: { occupied?: boolean | null }) {
-  if (occupied === null || occupied === undefined) return null;
-  return (
-    <span
-      aria-label={occupied ? "kamer is bezet" : "kamer is vrij"}
-      title={occupied ? "Kamer is bezet" : "Kamer is vrij"}
-      className={`w-2 h-2 rounded-full shrink-0 -translate-y-0.5 ${
-        occupied ? "bg-ink" : "border-[1.5px] border-ink"
-      }`}
-    />
-  );
 }
 
 /** Knop in een rij die zelf een link is: klik nooit laten doorlekken. */
@@ -69,7 +55,6 @@ export function WorkRow({
   geselecteerd = false,
   priority,
   kamer,
-  occupied,
   title,
   meta,
   done = false,
@@ -90,7 +75,6 @@ export function WorkRow({
               {kamer}
             </span>
           )}
-          <BezetStip occupied={occupied} />
           <span
             className={`text-row text-ink line-clamp-2 ${done ? "line-through text-ink-45" : ""}`}
           >
@@ -113,7 +97,7 @@ export function WorkRow({
             {extraKamers.map((k) => (
               <span key={k.id} className="flex items-baseline gap-1.5">
                 <span className="text-meta font-bold text-ink-70">{k.name}</span>
-                <BezetStip occupied={k.occupied} />
+                <KamerStatus bezet={k.occupied} kort />
               </span>
             ))}
           </div>

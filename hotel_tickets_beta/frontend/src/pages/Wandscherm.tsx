@@ -11,7 +11,7 @@ import { isNieuw, leeftijdBoard } from "../werk";
  *
  * Het is Vandaag, maar dan gelezen op vier meter afstand. Daarom hetzelfde
  * leesmodel als de rest van de app (kamer → positie, titel → grootte,
- * prioriteit → kleur, eigendom → woord, bezetting → stip), alleen met alles
+ * prioriteit → kleur, eigendom → woord, bezetting → label), alleen met alles
  * maal een schaalfactor. Een eigen ontwerp zou betekenen dat een monteur het bord
  * anders moet leren lezen dan zijn telefoon.
  *
@@ -501,26 +501,25 @@ function usePassendeSecties(kolom: BoardKolom, lijsten: Sectie[]) {
 /**
  * Staat de kamer leeg?
  *
- * Dezelfde taal als WorkRow in de app: gevuld = bezet, open ring = vrij,
- * niets = geen keycard-sensor. Op het bord hoort dit op de eerste regel,
- * direct achter het kamernummer, want het is geen eigenschap van het werk
- * maar van de kamer — en het is de laatste vraag vóór je gaat lopen.
+ * Hetzelfde label als KamerStatus in de app, maar in em: het bord schaalt
+ * alles met de schermbreedte mee en heeft daarom overal zijn eigen maatvoering.
+ * De woorden zijn wél dezelfde — wie het op zijn telefoon leest moet het op het
+ * bord herkennen.
  *
- * Bewust dezelfde vorm als in de app en niet het woord "vrij": dat woord staat
- * op de metaregel al voor een ticket dat niemand heeft opgepakt, en twee keer
- * "vrij" op één regel met twee betekenissen is erger dan een stip die je één
- * keer moet leren. Wel groter dan in de app — een stip van acht pixels bestaat
- * niet meer op vier meter afstand.
+ * Het staat op de eerste regel, direct achter het kamernummer: het is geen
+ * eigenschap van het werk maar van de kamer, en het is de laatste vraag vóór
+ * je gaat lopen.
  */
-function BezetStip({ bezet }: { bezet: boolean | null | undefined }) {
+function KamerStatus({ bezet }: { bezet: boolean | null | undefined }) {
   if (bezet === null || bezet === undefined) return null;
   return (
     <span
-      title={bezet ? "Kamer is bezet" : "Kamer is vrij"}
-      className={`w-[0.8em] h-[0.8em] rounded-full shrink-0 -translate-y-[0.1em] ${
-        bezet ? "bg-ink" : "border-[0.22em] border-ink"
+      className={`shrink-0 rounded-[0.25em] px-[0.4em] py-[0.05em] text-[0.85em] font-semibold ${
+        bezet ? "bg-ink-6 text-ink-45" : "bg-ink-12 text-ink"
       }`}
-    />
+    >
+      {bezet ? "kamer bezet" : "kamer vrij"}
+    </span>
   );
 }
 
@@ -575,14 +574,17 @@ function Regel({
 
   return (
     <div className={`break-inside-avoid py-[0.45em] border-b border-ink-6 ${randKlasse}`}>
-      <div className="flex items-baseline gap-[0.4em]">
+      {/* Kamer, bezetting en titel. flex-wrap omdat het label in een smalle
+          kolom de titel platdrukt tot losse lettergrepen: dan gaat de titel
+          liever een regel lager, over de volle breedte. */}
+      <div className="flex flex-wrap items-baseline gap-x-[0.4em]">
         {voorvoegsel && <span className="text-[1.3em] leading-tight shrink-0">{voorvoegsel}</span>}
         {kamer && (
           <span className="text-[1.3em] font-bold leading-tight shrink-0 max-w-[45%] truncate">
             {kamer}
           </span>
         )}
-        {kamer && <BezetStip bezet={bezet} />}
+        {kamer && <KamerStatus bezet={bezet} />}
         <span className="text-[1.3em] leading-tight line-clamp-2">{titel}</span>
       </div>
       {meta.some(Boolean) && (

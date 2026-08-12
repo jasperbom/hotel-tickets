@@ -1,8 +1,9 @@
 import type { ReactNode } from "react";
 import type { Category, Ticket } from "../api/client";
 import { AfdelingChip } from "./AfdelingChip";
+import KamerStatus from "./KamerStatus";
 import {
-  afdelingTekst, eigendom, kamerTekst, leeftijdTekst, prioriteitWoord, subtaakFractie,
+  afdelingTekst, eigendom, leeftijdTekst, prioriteitWoord, subtaakFractie,
 } from "../werk";
 
 /**
@@ -20,8 +21,14 @@ import {
  *   3. Van wie is het?        eigenaar, met nadruk als er een naam staat
  *   4. Van welke afdeling?    alleen als het niet de jouwe is
  *   5. Hoe ver is het?        subtaken
- *   6. Kan ik erin?           kamer bezet of vrij
+ *   6. Kan ik erin?           kamer vrij of bezet
  *   7. Hoe lang ligt het al?  leeftijd
+ *
+ * Punt 6 stond hier als de losse woorden "kamer is vrij" plus een stip naast
+ * het kamernummer. De stip is weg — die moest je leren in plaats van lezen —
+ * en de woorden staan er nu als label, hetzelfde label als op het ticket, het
+ * kamerscherm en het wandscherm. Op een telefoon past het niet naast het
+ * kamernummer: daar duwt het de titel van de regel af.
  *
  * Alleen 1, 2 en 3 krijgen nadruk. De rest is grijs — anders schreeuwt de hele
  * regel en valt er niets meer op.
@@ -68,7 +75,7 @@ export function werkMeta(
     ),
     afdelingTekst(ticket.category, eigenAfdeling) && <AfdelingChip category={ticket.category} />,
     subtaakFractie(ticket),
-    kamerTekst(keycard),
+    keycard != null && <KamerStatus bezet={keycard} />,
     leeftijdTekst(ticket.created_at),
   ].filter(Boolean);
 }

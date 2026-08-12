@@ -178,8 +178,8 @@ Het bord is verdeeld in vier lijsten met een kopje: **Herhalende taken**,
 Eén regel staat in precies één lijst; urgent gaat vóór nieuw, nieuw vóór de
 rest. Per regel staat wat je vanaf vier meter nodig hebt om te beslissen of je
 gaat lopen: urgentie, eigenaar, status en hoe lang hij al open staat. Achter
-het kamernummer staat of de kamer bezet is (keycard-sensor, zelfde stip als in
-de app: gevuld = bezet, open = vrij, niets = geen sensor).
+het kamernummer staat of de kamer bezet is: hetzelfde label als in de app
+("kamer vrij" / "kamer bezet"; geen keycard-sensor betekent geen label).
 
 Het bord scrollt niet: elke lijst toont wat er past en zet eronder hoeveel
 regels er nog zijn. Inkorten gaat om beurten bij de langste lijst, zodat

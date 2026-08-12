@@ -8,9 +8,10 @@ import { AfdelingChip } from "../components/AfdelingChip";
 import { UndoBar } from "../components/UndoBar";
 import { useUitgesteldeActie } from "../undo";
 import {
-  AFDELING_LABELS, afdelingTekst, herhaalKort, kamerTekst,
+  AFDELING_LABELS, afdelingTekst, herhaalKort,
 } from "../werk";
 import { werkMeta } from "../components/werkMeta";
+import KamerStatus from "../components/KamerStatus";
 
 /**
  * Vandaag — het startscherm.
@@ -196,6 +197,12 @@ export default function Vandaag() {
   };
 
   const keycardVan = (t: Ticket) => (t.location_id ? keycards[t.location_id] : undefined);
+  /**
+   * De kamer die op de regel zelf staat. Bij een taak over meerdere kamers is
+   * dat de eerste; de rest staat eronder met een eigen label, en dan hoort de
+   * eerste er niet zonder te staan.
+   */
+  const taakBezet = (taak: UpcomingRecurring) => kamersVanTaak(taak).occupied;
 
   function metaNu(t: Ticket) {
     // Onder "nu" staat al wat van jou is; "Van mij" zou daar een woord zijn
@@ -213,7 +220,7 @@ export default function Vandaag() {
     return [
       afdelingTekst(taak.category, user.department) && <AfdelingChip category={taak.category} />,
       fractie,
-      kamerTekst(taak.location_id ? keycards[taak.location_id] : undefined),
+      taakBezet(taak) != null && <KamerStatus bezet={taakBezet(taak)} />,
       herhaalKort(taak.cron_expression, taak.interval_days),
     ].filter(Boolean);
   }
@@ -281,7 +288,6 @@ export default function Vandaag() {
                     to={`/tickets/${item.ticket.id}`}
                     priority={item.ticket.priority}
                     kamer={kamerVan(item.ticket.location_id)}
-                    occupied={item.ticket.location_id ? keycards[item.ticket.location_id] : undefined}
                     title={item.ticket.title}
                     meta={afgevinkt(item.key) ? ["Klaar"] : metaNu(item.ticket)}
                     done={afgevinkt(item.key)}
@@ -335,7 +341,6 @@ export default function Vandaag() {
                   to={`/tickets/${t.id}`}
                   priority={t.priority}
                   kamer={kamerVan(t.location_id)}
-                  occupied={t.location_id ? keycards[t.location_id] : undefined}
                   title={t.title}
                   meta={metaTePakken(t)}
                   actie={{ soort: "pakken", onPakken: () => pakOp(t) }}
@@ -425,7 +430,6 @@ function TaakRij({
       to={`/recurring/${taak.id}`}
       priority={taak.priority}
       kamer={kamers.kamer}
-      occupied={kamers.occupied}
       extraKamers={kamers.extra}
       title={taak.title}
       meta={meta}

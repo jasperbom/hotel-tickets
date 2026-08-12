@@ -225,14 +225,6 @@ function KamerRij({ kamer, onOpen, actie }: { kamer: Kamer; onOpen: () => void; 
       <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3.5 text-left">
         <span className="flex items-baseline gap-2 min-w-0">
           <span className="text-[1.1875rem] font-bold text-ink truncate">{kamer.naam}</span>
-          {kamer.bezet !== null && (
-            <span
-              aria-hidden="true"
-              className={`w-2 h-2 rounded-full shrink-0 -translate-y-0.5 ${
-                kamer.bezet ? "bg-ink" : "border-[1.5px] border-ink"
-              }`}
-            />
-          )}
         </span>
         <span className="meta ml-auto shrink-0">{beschrijving}</span>
         {!actie && <ChevronRight size={18} className="text-ink-25 shrink-0" aria-hidden="true" />}

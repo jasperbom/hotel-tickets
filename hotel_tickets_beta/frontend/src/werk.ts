@@ -198,9 +198,3 @@ export function eersteControle(
     .sort();
   return data[0] ?? null;
 }
-
-/** "kamer is vrij" is werkbare informatie; "Bezet" als losse pil niet. */
-export function kamerTekst(occupied: boolean | null | undefined): string | null {
-  if (occupied === false) return "kamer is vrij";
-  return null;
-}

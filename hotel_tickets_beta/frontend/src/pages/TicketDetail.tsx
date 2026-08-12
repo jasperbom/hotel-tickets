@@ -6,6 +6,7 @@ import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUT
 import { Camera, Check, ChevronLeft, Clock, MoreHorizontal } from "lucide-react";
 import { AFDELING_KORT, AFDELING_LABELS, bezigTekst, eigendom, leeftijdTekst, prioriteitWoord } from "../werk";
 import { MentionTextarea, renderWithMentions } from "../components/MentionTextarea";
+import KamerStatus from "../components/KamerStatus";
 
 const PRIO_WOORD: Record<string, string> = {
   urgent: "urgent", high: "hoog", medium: "normaal", low: "laag",
@@ -433,15 +434,7 @@ export default function TicketDetail({
       {/* Kamer, titel, één metaregel */}
       <div className="flex items-baseline gap-2.5 flex-wrap">
         {locationName && <h1 className="text-3xl font-bold text-ink leading-none">{locationName}</h1>}
-        {kamerBezet !== null && (
-          <span className="flex items-baseline gap-1.5">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${kamerBezet ? "bg-ink" : "border-[1.5px] border-ink"}`}
-              aria-hidden="true"
-            />
-            <span className="meta">{kamerBezet ? "Bezet" : "Vrij"}</span>
-          </span>
-        )}
+        <KamerStatus bezet={kamerBezet} />
       </div>
       {editingField === "title" ? (
         <input
