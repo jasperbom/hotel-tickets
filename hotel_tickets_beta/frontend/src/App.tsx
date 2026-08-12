@@ -29,6 +29,7 @@ import WachtwoordWijzigen from "./pages/WachtwoordWijzigen";
 import Apparaten from "./pages/Apparaten";
 import Meldingen from "./pages/Meldingen";
 import Login from "./pages/Login";
+import Wandscherm from "./pages/Wandscherm";
 import { userApi, bikesModuleApi, brandingApi, betaApi, ticketApi, hasSessionToken, clearSessionToken, sessionsApi, type UserRole, type BikesModuleRoles, type BetaStatus } from "./api/client";
 import { saveLastRoute } from "./lastRoute";
 import { useOngelezen } from "./ongelezen";
@@ -103,6 +104,7 @@ const MODULES: ModuleConfig[] = [
       { to: "/recurring", label: "Herhalend" },
       { to: "/berichten", label: "Berichten" },
       { to: "/reports", label: "Rapportage", restricted: "adminOrSupervisor" },
+      { to: "/wandscherm", label: "Wandscherm", restricted: "adminOrSupervisor" },
     ],
   },
   {
@@ -459,6 +461,13 @@ export default function App() {
     return <Login />;
   }
 
+  // Het wandscherm vult het hele scherm: geen rail, geen onderbalk, geen
+  // betabalk. Alles wat je niet kunt aanraken vanaf vier meter is ruis, en de
+  // navigatie zou alleen maar uitnodigen om het scherm van de muur te halen.
+  if (location.pathname === "/wandscherm") {
+    return <Wandscherm />;
+  }
+
   const schermTitel = SCHERMTITELS[location.pathname] ?? afgeleideTitel(location.pathname, activeModule);
 
   // Tekst op de merkkleur wordt berekend in plaats van gegokt: bij een lichte
@@ -809,6 +818,7 @@ const SCHERMTITELS: Record<string, string> = {
   "/kamers": "Kamers",
   "/logboeken": "Logboeken",
   "/meer": "Meer",
+  "/wandscherm": "Wandscherm",
   "/berichten": "Berichten",
   "/recurring": "Herhalend",
   "/reports": "Rapportage",

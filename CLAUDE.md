@@ -50,15 +50,17 @@ hotel-tickets/
 │   │   │   ├── locations.py     # HA areas sync
 │   │   │   ├── recurring.py     # Template beheer
 │   │   │   ├── beta.py          # Beta-status + productiedata kopiëren
+│   │   │   ├── board.py         # Wandscherm: één verzoek, alles opgelost
 │   │   │   └── reports.py       # Analytics, CSV/Excel export
 │   │   └── services/
 │   │       ├── ha_client.py     # HA Supervisor API client
 │   │       ├── notifications.py # Push / persistent / e-mail
+│   │       ├── vandaag.py       # Herhaaltaken van vandaag (Vandaag + wandscherm)
 │   │       └── ha_entities.py   # Sensor state updates in HA
 │   └── frontend/                # React + TypeScript + Vite + Tailwind
 │       └── src/
 │           ├── api/client.ts    # Axios client + alle types
-│           ├── pages/           # MijnOverzicht, TicketList, TicketDetail, ...
+│           ├── pages/           # MijnOverzicht, TicketList, TicketDetail, Wandscherm, ...
 │           └── components/      # TicketCard, StatusBadge, RecurrenceEditor, ...
 └── custom_component/
     └── hotel_tickets/           # HA custom component
@@ -154,6 +156,31 @@ De Vite dev server proxiet `/api/*` automatisch naar `localhost:8080` (zie
   op de loginpagina is wachtwoord `dev` geldig voor elke bestaande gebruikersnaam
 - Gebruikersrollen worden opgeslagen in de `user_roles` tabel (niet in HA zelf)
 - Eerste keer inloggen: medewerker krijgt automatisch rol `technician`
+
+## Wandscherm
+
+Een read-only bord voor een scherm aan de muur (werkplaats, huishoudkantoor):
+`#/wandscherm`, buiten de app-shell, ververst zichzelf elke 30 seconden en
+vraagt een wake lock aan zodat een tablet niet in slaap valt.
+
+De URL is de instelling — het scherm hangt op een vaste plek en niemand klikt
+er iets aan:
+
+| Parameter | Betekenis |
+|---|---|
+| `?afdeling=technical` | één afdeling (zonder parameter: de afdeling van het ingelogde account) |
+| `?afdeling=technical,housekeeping` | meerdere kolommen |
+| `?afdeling=all` | alle afdelingen; lege afdelingen vallen weg |
+| `?schaal=1.4` | grondmaat maal 1,4 (bereik 0,6–2) voor een scherm dat verder weg hangt |
+
+Het bord scrollt niet: elke kolom toont wat er past en zet eronder hoeveel
+regels er nog zijn. Een tablet aan de muur logt gewoon in met een eigen
+medewerkersaccount; de sessie schuift mee bij gebruik en verloopt dus niet.
+
+Alles komt uit één verzoek (`GET /api/board`) met kamernamen en medewerkers al
+ingevuld — een half gevuld bord op slechte wifi is erger dan een bord dat een
+minuut oud is. Bij een storing blijft de laatste stand staan en zegt de
+koptekst hoe oud die is.
 
 ## Rollen & rechten
 

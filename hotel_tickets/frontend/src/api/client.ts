@@ -510,6 +510,54 @@ export const recurringApi = {
   activeTickets: (id: string) => api.get<ActiveTicket[]>(`/recurring/${id}/active-tickets`),
 };
 
+// --- Wandscherm ---
+
+/** Eén ticketregel op het bord; kamer en naam zijn serverzijdig al opgelost. */
+export interface BoardTicket {
+  id: string;
+  title: string;
+  priority: Priority;
+  status: Status;
+  kamer: string | null;
+  toegewezen_aan: string | null;
+  created_at: string;
+  comment_count: number;
+  subtask_done: number | null;
+  subtask_total: number | null;
+}
+
+export interface BoardTaak {
+  id: string;
+  title: string;
+  priority: Priority;
+  emoji: string | null;
+  kamer: string | null;
+  kamers: string[];
+  subtask_done: number | null;
+  subtask_total: number | null;
+}
+
+export interface BoardKolom {
+  afdeling: Category;
+  label: string;
+  tickets: BoardTicket[];
+  /** Aantal regels dat niet meer op het bord past. */
+  verborgen: number;
+  taken: BoardTaak[];
+  tellers: { open: number; urgent: number; afgerond_vandaag: number };
+}
+
+export interface Board {
+  gegenereerd_op: string;
+  kolommen: BoardKolom[];
+}
+
+export const boardApi = {
+  /** `afdelingen`: komma-gescheiden lijst, "all", of leeg (eigen afdeling). */
+  get: (afdelingen?: string) =>
+    api.get<Board>("/board", { params: afdelingen ? { afdelingen } : undefined }),
+};
+
 export interface IntegrationStatus {
   installed: boolean;
   installed_version: string | null;

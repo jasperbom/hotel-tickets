@@ -45,6 +45,7 @@ export default function Meer({
         <Regel label="Logboeken" onClick={() => navigate("/logboeken")} />
         <Regel label="Herhalende taken" onClick={() => navigate("/recurring")} />
         {magRapportage && <Regel label="Rapportage" onClick={() => navigate("/reports")} />}
+        {magRapportage && <Regel label="Wandscherm" onClick={() => navigate("/wandscherm")} />}
       </div>
 
       <section>
