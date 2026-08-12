@@ -29,7 +29,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from ..auth import CurrentUser, RequireUser, get_current_user
 from ..database import get_db
 from ..models import BoardKey, Category, Role, Status, Ticket, TicketComment, UserRole
-from ..services.ha_client import get_areas
+from ..services.ha_client import get_areas, get_keycard_states
 from ..services.vandaag import herhaaltaken
 
 router = APIRouter(prefix="/board", tags=["board"])
@@ -157,6 +157,13 @@ async def get_board(
         areas = {a["id"]: a["name"] for a in await get_areas()}
     except Exception:
         areas = {}
+    # Bezetting van de kamers, ook in één keer. Valt hij weg, dan staat er bij
+    # geen enkele kamer iets — een bord dat "vrij" zegt op grond van een sensor
+    # die niet antwoordde, stuurt iemand voor niets naar boven.
+    try:
+        bezetting = await get_keycard_states()
+    except Exception:
+        bezetting = {}
     medewerkers = {
         u.ha_user_id: u.display_name
         for u in (await db.execute(select(UserRole))).scalars().all()
@@ -197,6 +204,7 @@ async def get_board(
                 "priority": t.priority,
                 "status": t.status,
                 "kamer": areas.get(t.location_id) or t.location_id,
+                "kamer_bezet": bezetting.get(t.location_id) if t.location_id else None,
                 "toegewezen_aan": medewerkers.get(t.assigned_to) if t.assigned_to else None,
                 "created_at": t.created_at.isoformat(),
                 "comment_count": commentaren.get(t.id, 0),
@@ -211,8 +219,13 @@ async def get_board(
             "priority": t["priority"],
             "emoji": t.get("emoji"),
             "kamer": areas.get(t.get("location_id")) or t.get("location_id"),
-            "kamers": [areas.get(k) or k for k in t.get("subtask_items", [])]
-                      if t.get("subtask_mode") == "rooms" else [],
+            "kamer_bezet": bezetting.get(t["location_id"]) if t.get("location_id") else None,
+            # Naam én bezetting per kamer: op het bord kleurt elke kamer van
+            # een schoonmaakronde apart, net als in de app.
+            "kamers": [
+                {"naam": areas.get(k) or k, "bezet": bezetting.get(k)}
+                for k in t.get("subtask_items", [])
+            ] if t.get("subtask_mode") == "rooms" else [],
             "subtask_done": t.get("subtask_done"),
             "subtask_total": t.get("subtask_total"),
         } for t in taken_vandaag]

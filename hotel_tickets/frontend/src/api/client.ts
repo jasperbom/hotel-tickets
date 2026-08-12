@@ -527,11 +527,20 @@ export interface BoardTicket {
   priority: Priority;
   status: Status;
   kamer: string | null;
+  /** Keycard: true = bezet, false = vrij, null = geen (bruikbare) sensor. */
+  kamer_bezet: boolean | null;
   toegewezen_aan: string | null;
   created_at: string;
   comment_count: number;
   subtask_done: number | null;
   subtask_total: number | null;
+}
+
+/** Eén kamer van een schoonmaakronde op het bord. */
+export interface BoardKamer {
+  naam: string;
+  /** Keycard: true = bezet, false = vrij, null = geen (bruikbare) sensor. */
+  bezet: boolean | null;
 }
 
 export interface BoardTaak {
@@ -540,7 +549,9 @@ export interface BoardTaak {
   priority: Priority;
   emoji: string | null;
   kamer: string | null;
-  kamers: string[];
+  /** Keycard: true = bezet, false = vrij, null = geen (bruikbare) sensor. */
+  kamer_bezet: boolean | null;
+  kamers: BoardKamer[];
   subtask_done: number | null;
   subtask_total: number | null;
 }

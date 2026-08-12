@@ -199,8 +199,31 @@ export function eersteControle(
   return data[0] ?? null;
 }
 
-/** "kamer is vrij" is werkbare informatie; "Bezet" als losse pil niet. */
-export function kamerTekst(occupied: boolean | null | undefined): string | null {
-  if (occupied === false) return "kamer is vrij";
+/**
+ * De kleur van het kamernummer: rood = bezet, groen = vrij, gewoon zwart =
+ * geen keycard-sensor.
+ *
+ * Dit stond eerst als los label naast de kamer ("kamer vrij"), en daarvóór als
+ * stip. Het probleem van een label is niet dat het onduidelijk is maar dat het
+ * een tweede plek is: in één kaart stond de kamer op regel één en zijn
+ * toestand ergens anders. De kamer is nu zijn eigen bericht.
+ *
+ * Let op bij het lezen van de rest van dit bestand: prioriteit was tot nu toe
+ * de enige dimensie met kleur. Rood betekent op een werkregel ook "urgent" en
+ * groen ook "klaar", dus een rood kamernummer op een spoedmelding is twee keer
+ * rood met twee betekenissen. Daarom draagt de kleur nooit de hele boodschap:
+ * er staat altijd een tekst voor schermlezers naast, en urgentie houdt zijn
+ * eigen kanalen (de linkerrand en het woord).
+ */
+export function kamerKleur(bezet: boolean | null | undefined): string {
+  if (bezet === true) return "text-urgent";
+  if (bezet === false) return "text-done";
+  return "";
+}
+
+/** Wat de kleur zegt, voor wie hem niet ziet. */
+export function kamerToestand(bezet: boolean | null | undefined): string | null {
+  if (bezet === true) return "kamer is bezet";
+  if (bezet === false) return "kamer is vrij";
   return null;
 }

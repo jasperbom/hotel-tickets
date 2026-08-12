@@ -5,6 +5,7 @@ import { nl } from "date-fns/locale";
 import { recurringApi, locationApi, ticketApi, userApi, parseUTC, type RecurringTemplate, type HistoryEntry, type ActiveTicket, type KeycardStatus, type UserRole } from "../api/client";
 import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 import { cronToHuman } from "../components/RecurrenceEditor";
+import { kamerKleur, kamerToestand } from "../werk";
 
 export default function RecurringTaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -182,23 +183,20 @@ export default function RecurringTaskDetail() {
 
       {/* Kamer-banner (enkelvoudig/subtaken) */}
       {!isRoomsMode && locationName && (
-        <div className="rounded-xl overflow-hidden border border-ink-12">
-          <div className="flex items-center justify-between bg-brand text-white px-5 py-3">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🚪</span>
-              <span className="text-xl font-bold tracking-wide">{locationName}</span>
-            </div>
-            {keycard?.found && (
-              <div className={`flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-semibold ${
-                keycard.occupied
-                  ? "bg-orange-400 text-white"
-                  : "bg-green-400 text-white"
-              }`}>
-                <span>{keycard.occupied ? "🔑" : "🔓"}</span>
-                <span>{keycard.occupied ? "Bezet" : "Vrij"}</span>
-              </div>
-            )}
-          </div>
+        <div className="rounded-xl border border-ink-12 bg-paper-raised px-5 py-3">
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">🚪</span>
+            <span
+              className={`text-xl font-bold tracking-wide ${
+                kamerKleur(keycard?.found ? keycard.occupied : null) || "text-ink"
+              }`}
+            >
+              {locationName}
+              {keycard?.found && (
+                <span className="sr-only">, {kamerToestand(keycard.occupied)}</span>
+              )}
+            </span>
+          </span>
         </div>
       )}
 
@@ -362,14 +360,16 @@ export default function RecurringTaskDetail() {
                   <div key={ticket.id} className="flex items-center gap-3 p-3 border border-ink-12 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-ink">
+                        <span
+                          className={`text-sm font-medium ${
+                            kamerKleur(roomKeycard?.found ? roomKeycard.occupied : null) || "text-ink"
+                          }`}
+                        >
                           🚪 {roomName ?? ticket.location_id ?? "Onbekende kamer"}
+                          {roomKeycard?.found && (
+                            <span className="sr-only">, {kamerToestand(roomKeycard.occupied)}</span>
+                          )}
                         </span>
-                        {roomKeycard?.found && (
-                          roomKeycard.occupied
-                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-high-soft text-high">Bezet</span>
-                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-done-soft text-done">Vrij</span>
-                        )}
                       </div>
                     </div>
                     <button
@@ -392,14 +392,16 @@ export default function RecurringTaskDetail() {
                   <div key={roomId} className="flex items-center gap-3 p-3 border border-ink-12 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-ink">
+                        <span
+                          className={`text-sm font-medium ${
+                            kamerKleur(roomKeycard?.found ? roomKeycard.occupied : null) || "text-ink"
+                          }`}
+                        >
                           🚪 {roomName ?? roomId}
+                          {roomKeycard?.found && (
+                            <span className="sr-only">, {kamerToestand(roomKeycard.occupied)}</span>
+                          )}
                         </span>
-                        {roomKeycard?.found && (
-                          roomKeycard.occupied
-                            ? <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-high-soft text-high">Bezet</span>
-                            : <span className="text-xs font-semibold px-1.5 py-0.5 rounded bg-done-soft text-done">Vrij</span>
-                        )}
                       </div>
                     </div>
                     <button

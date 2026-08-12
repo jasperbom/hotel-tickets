@@ -177,7 +177,10 @@ Het bord is verdeeld in vier lijsten met een kopje: **Herhalende taken**,
 **Urgent** (spoed én hoog), **Andere taken** en **Nieuw — afgelopen 24 uur**.
 Eén regel staat in precies één lijst; urgent gaat vóór nieuw, nieuw vóór de
 rest. Per regel staat wat je vanaf vier meter nodig hebt om te beslissen of je
-gaat lopen: urgentie, eigenaar, status en hoe lang hij al open staat.
+gaat lopen: urgentie, eigenaar, status en hoe lang hij al open staat. Of de
+kamer bezet is zegt het kamernummer zelf, in dezelfde kleur als in de app:
+rood = bezet, groen = vrij, zwart = geen keycard-sensor (`kamerKleur` in
+`werk.ts`). Ook de kamers van een herhaalronde kleuren mee.
 
 Het bord scrollt niet: elke lijst toont wat er past en zet eronder hoeveel
 regels er nog zijn. Inkorten gaat om beurten bij de langste lijst, zodat
@@ -186,8 +189,8 @@ met veel werk krijgt een bredere kolom dan een rustige, en is die kolom breed
 genoeg dan lopen de lijsten in twee kolommen door. Een tablet aan de muur logt gewoon in met een eigen
 medewerkersaccount; de sessie schuift mee bij gebruik en verloopt dus niet.
 
-Alles komt uit één verzoek (`GET /api/board`) met kamernamen en medewerkers al
-ingevuld — een half gevuld bord op slechte wifi is erger dan een bord dat een
+Alles komt uit één verzoek (`GET /api/board`) met kamernamen, medewerkers en
+kamerbezetting al ingevuld — een half gevuld bord op slechte wifi is erger dan een bord dat een
 minuut oud is. Bij een storing blijft de laatste stand staan en zegt de
 koptekst hoe oud die is.
 

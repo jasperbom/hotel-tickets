@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUTC, type Ticket, type Comment, type TicketEvent, type UserRole, type Priority, type Status, type KeycardStatus, type Role, type Category } from "../api/client";
 import { Camera, Check, ChevronLeft, Clock, MoreHorizontal } from "lucide-react";
-import { AFDELING_KORT, AFDELING_LABELS, bezigTekst, eigendom, leeftijdTekst, prioriteitWoord } from "../werk";
+import { AFDELING_KORT, AFDELING_LABELS, bezigTekst, eigendom, kamerKleur, kamerToestand, leeftijdTekst, prioriteitWoord } from "../werk";
 import { MentionTextarea, renderWithMentions } from "../components/MentionTextarea";
 
 const PRIO_WOORD: Record<string, string> = {
@@ -432,15 +432,13 @@ export default function TicketDetail({
 
       {/* Kamer, titel, één metaregel */}
       <div className="flex items-baseline gap-2.5 flex-wrap">
-        {locationName && <h1 className="text-3xl font-bold text-ink leading-none">{locationName}</h1>}
-        {kamerBezet !== null && (
-          <span className="flex items-baseline gap-1.5">
-            <span
-              className={`w-2.5 h-2.5 rounded-full ${kamerBezet ? "bg-ink" : "border-[1.5px] border-ink"}`}
-              aria-hidden="true"
-            />
-            <span className="meta">{kamerBezet ? "Bezet" : "Vrij"}</span>
-          </span>
+        {locationName && (
+          <h1 className={`text-3xl font-bold leading-none ${kamerKleur(kamerBezet) || "text-ink"}`}>
+            {locationName}
+            {kamerToestand(kamerBezet) && (
+              <span className="sr-only">, {kamerToestand(kamerBezet)}</span>
+            )}
+          </h1>
         )}
       </div>
       {editingField === "title" ? (

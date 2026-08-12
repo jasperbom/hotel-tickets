@@ -8,7 +8,7 @@ import { AfdelingChip } from "../components/AfdelingChip";
 import { UndoBar } from "../components/UndoBar";
 import { useUitgesteldeActie } from "../undo";
 import {
-  AFDELING_LABELS, afdelingTekst, herhaalKort, kamerTekst,
+  AFDELING_LABELS, afdelingTekst, herhaalKort,
 } from "../werk";
 import { werkMeta } from "../components/werkMeta";
 
@@ -200,12 +200,12 @@ export default function Vandaag() {
   function metaNu(t: Ticket) {
     // Onder "nu" staat al wat van jou is; "Van mij" zou daar een woord zijn
     // dat niets toevoegt.
-    return werkMeta(t, { ...metaOpties, keycard: keycardVan(t), verbergEigenNaam: true });
+    return werkMeta(t, { ...metaOpties, verbergEigenNaam: true });
   }
 
   /** In "te pakken" heeft per definitie niemand het opgepakt. */
   function metaTePakken(t: Ticket) {
-    return werkMeta(t, { ...metaOpties, keycard: keycardVan(t) });
+    return werkMeta(t, metaOpties);
   }
 
   function metaTaak(taak: UpcomingRecurring) {
@@ -213,7 +213,6 @@ export default function Vandaag() {
     return [
       afdelingTekst(taak.category, user.department) && <AfdelingChip category={taak.category} />,
       fractie,
-      kamerTekst(taak.location_id ? keycards[taak.location_id] : undefined),
       herhaalKort(taak.cron_expression, taak.interval_days),
     ].filter(Boolean);
   }
@@ -281,7 +280,7 @@ export default function Vandaag() {
                     to={`/tickets/${item.ticket.id}`}
                     priority={item.ticket.priority}
                     kamer={kamerVan(item.ticket.location_id)}
-                    occupied={item.ticket.location_id ? keycards[item.ticket.location_id] : undefined}
+                    occupied={keycardVan(item.ticket)}
                     title={item.ticket.title}
                     meta={afgevinkt(item.key) ? ["Klaar"] : metaNu(item.ticket)}
                     done={afgevinkt(item.key)}
@@ -335,7 +334,7 @@ export default function Vandaag() {
                   to={`/tickets/${t.id}`}
                   priority={t.priority}
                   kamer={kamerVan(t.location_id)}
-                  occupied={t.location_id ? keycards[t.location_id] : undefined}
+                  occupied={keycardVan(t)}
                   title={t.title}
                   meta={metaTePakken(t)}
                   actie={{ soort: "pakken", onPakken: () => pakOp(t) }}

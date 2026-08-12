@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { ChevronRight } from "lucide-react";
 import { locationApi, ticketApi, userApi, type Category, type Ticket } from "../api/client";
+import { kamerKleur, kamerToestand } from "../werk";
 
 /**
  * Kamers — het scherm dat de keycard-integratie uitbetaalt.
@@ -211,8 +212,9 @@ function SectieKop({ children }: { children: React.ReactNode }) {
 
 function KamerRij({ kamer, onOpen, actie }: { kamer: Kamer; onOpen: () => void; actie?: React.ReactNode }) {
   const urgentRand = kamer.urgent > 0 ? "row--urgent" : "";
+  // "Bezet" stond hier ook nog eens in woorden, terwijl de kamernaam het al
+  // zegt en de kop erboven de rijen al op vrij/bezet sorteert.
   const beschrijving = [
-    kamer.bezet === true ? "Bezet" : kamer.bezet === false ? "Vrij" : null,
     kamer.urgent > 0
       ? `${kamer.urgent} urgent`
       : kamer.tickets.length > 0
@@ -224,15 +226,14 @@ function KamerRij({ kamer, onOpen, actie }: { kamer: Kamer; onOpen: () => void; 
     <div className={`row ${urgentRand} min-h-[66px]`}>
       <button onClick={onOpen} className="flex-1 min-w-0 flex items-center gap-3.5 text-left">
         <span className="flex items-baseline gap-2 min-w-0">
-          <span className="text-[1.1875rem] font-bold text-ink truncate">{kamer.naam}</span>
-          {kamer.bezet !== null && (
-            <span
-              aria-hidden="true"
-              className={`w-2 h-2 rounded-full shrink-0 -translate-y-0.5 ${
-                kamer.bezet ? "bg-ink" : "border-[1.5px] border-ink"
-              }`}
-            />
-          )}
+          <span
+            className={`text-[1.1875rem] font-bold truncate ${kamerKleur(kamer.bezet) || "text-ink"}`}
+          >
+            {kamer.naam}
+            {kamerToestand(kamer.bezet) && (
+              <span className="sr-only">, {kamerToestand(kamer.bezet)}</span>
+            )}
+          </span>
         </span>
         <span className="meta ml-auto shrink-0">{beschrijving}</span>
         {!actie && <ChevronRight size={18} className="text-ink-25 shrink-0" aria-hidden="true" />}
