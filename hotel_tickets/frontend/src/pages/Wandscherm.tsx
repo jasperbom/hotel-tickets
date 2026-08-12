@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { boardApi, type Board, type BoardKolom, type BoardTaak, type BoardTicket } from "../api/client";
-import { isNieuw, kamerKleur, leeftijdBoard } from "../werk";
+import { boardApi, type Board, type BoardKolom, type BoardTaak, type BoardTicket, type Category } from "../api/client";
+import { AFDELING_KORT, isNieuw, kamerKleur, leeftijdBoard } from "../werk";
 
 /**
  * Wandscherm — één scherm aan de muur in de werkplaats of het
@@ -351,7 +351,9 @@ function secties(kolom: BoardKolom): Sectie[] {
   const nieuw = rest.filter((t) => isNieuw(t.created_at));
   const overig = rest.filter((t) => !isNieuw(t.created_at));
 
-  const ticket = (t: BoardTicket) => <TicketRegel key={t.id} ticket={t} />;
+  const ticket = (t: BoardTicket) => (
+    <TicketRegel key={t.id} ticket={t} afdeling={kolom.afdeling} />
+  );
 
   return [
     {
@@ -593,7 +595,7 @@ function Regel({
   );
 }
 
-function TicketRegel({ ticket }: { ticket: BoardTicket }) {
+function TicketRegel({ ticket, afdeling }: { ticket: BoardTicket; afdeling: Category }) {
   const fractie =
     ticket.subtask_total ? `${ticket.subtask_done ?? 0}/${ticket.subtask_total}` : null;
 
@@ -612,11 +614,11 @@ function TicketRegel({ ticket }: { ticket: BoardTicket }) {
         : null,
         // Op een bord telt "van wie is dit" zwaarder dan op je eigen telefoon:
         // niemand leest hier "van mij", iedereen leest een naam. Een naam krijgt
-        // daarom nadruk; "Niemand" is de afwezigheid daarvan en blijft grijs.
-        // Niet "Vrij" — dat woord gaat op dit bord over de kamer.
+        // daarom nadruk; heeft niemand het opgepakt, dan staat er de afdeling
+        // die het moet doen — grijs, want dat is nog geen antwoord op "wie".
         ticket.toegewezen_aan
           ? { tekst: ticket.toegewezen_aan, klasse: "font-semibold text-ink" }
-          : { tekst: "Niemand" },
+          : { tekst: AFDELING_KORT[afdeling] },
         ticket.status === "in_progress"
           ? { tekst: "In behandeling", klasse: "font-semibold text-brand" }
           : null,

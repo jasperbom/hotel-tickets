@@ -333,7 +333,9 @@ export default function TicketDetail({
   const metaregel = [
     prioriteitWoord(ticket.priority),
     bezigTekst(ticket.status),
-    AFDELING_KORT[ticket.category],
+    // bezit.label is bij werk zonder eigenaar zélf de afdeling; dan hoeft hij
+    // er niet nog een keer los voor te staan.
+    bezit.soort === "afdeling" ? null : AFDELING_KORT[ticket.category],
     bezit.label,
     leeftijdTekst(ticket.created_at, isAf ? 999 : 3),
   ].filter(Boolean).join(" · ");
