@@ -182,6 +182,18 @@ ingevuld — een half gevuld bord op slechte wifi is erger dan een bord dat een
 minuut oud is. Bij een storing blijft de laatste stand staan en zegt de
 koptekst hoe oud die is.
 
+**Kioskcodes** (`?sleutel=hbk.…`) — een tv, Chromecast of tablet die niet kan
+inloggen. Een admin maakt er een aan bij Instellingen → Wandschermen; de code
+is één keer zichtbaar (tabel `board_keys` bewaart alleen een SHA-256-hash) en
+geeft uitsluitend toegang tot `GET /api/board`. Met een sleutel in de URL
+monteert `main.tsx` de app-shell helemaal niet, zodat de profiel- en
+huisstijlverzoeken van App geen 401 opleveren en de tv niet op de loginpagina
+belandt. Intrekken kan per scherm.
+
+Casten naar een Chromecast gaat via DashCast — zie
+[docs/wandscherm-casten.md](docs/wandscherm-casten.md) voor het waarom en de
+service `hotel_tickets.cast_wandscherm`.
+
 ## Rollen & rechten
 
 | Rol | Ziet | Wijzigt | Admin functies |
@@ -205,11 +217,13 @@ koptekst hoe oud die is.
 - **log_objects** — dingen met een logboek (installatie/apparaat/gereedschap), met map, soort, aankoopdatum en leverancier
 - **log_entries** — onwisbare regels per object; corrigeren is een nieuwe regel, verwijderen bestaat niet
 - **sessions** — server-side loginsessies (intrekbaar + meeschuivend); alleen een SHA-256-hash van het token
+- **board_keys** — kioskcodes voor wandschermen die niet kunnen inloggen; alleen een SHA-256-hash
 - **login_bans** — mislukte inlogpogingen / IP-blokkades loginpagina
 
 ## HA integratie
 
 - **Service:** `hotel_tickets.create_ticket` — aanroepbaar vanuit automaties
+- **Service:** `hotel_tickets.cast_wandscherm` — zet het bord op een Chromecast via DashCast
 - **Sensoren:** `sensor.hotel_tickets_open`, `sensor.hotel_tickets_technical_open`, etc.
 - **Notificaties:** via `notify.<device>` service en `persistent_notification.create`
 - **Locaties:** HA areas worden gebruikt als locatiekoppeling voor tickets

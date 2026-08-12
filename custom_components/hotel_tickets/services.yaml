@@ -110,3 +110,50 @@ navigate:
       example: "Er zijn 3 nieuwe technische tickets"
       selector:
         text:
+
+cast_wandscherm:
+  name: Wandscherm casten
+  description: >-
+    Zet het wandscherm op een Chromecast via DashCast. Een Chromecast kan geen
+    webpagina openen — DashCast is de receiver-app die dat wel doet. De URL
+    moet een kioskcode bevatten (Instellingen → Wandschermen) en bereikbaar
+    zijn vanaf het Chromecast-apparaat zelf. Vereist de Google Cast integratie.
+  fields:
+    url:
+      name: URL
+      description: >-
+        De volledige wandscherm-URL met kioskcode, via het LAN-adres van Home
+        Assistant op de addonpoort (http, geen ingress-pad).
+      required: true
+      example: "http://192.168.1.10:8080/#/wandscherm?sleutel=hbk.xxxx&afdeling=technical&schaal=1.3"
+      selector:
+        text:
+    entity_id:
+      name: Chromecast
+      description: >-
+        De media_player van de Chromecast. Werkt zolang de naam in Home
+        Assistant gelijk is aan de naam van het apparaat zelf; is hij hernoemd,
+        vul dan 'device_name' in.
+      required: false
+      example: "media_player.werkplaats"
+      selector:
+        entity:
+          domain: media_player
+    device_name:
+      name: Apparaatnaam
+      description: >-
+        De naam van de Chromecast zoals die in de Google Home-app staat.
+        Overschrijft de naam die uit entity_id komt.
+      required: false
+      example: "Werkplaats"
+      selector:
+        text:
+    force:
+      name: Forceren
+      description: >-
+        Ook opnieuw laden als DashCast al dezelfde URL toont. Uit laten staat
+        gelijk aan "niets doen als het al goed staat".
+      required: false
+      default: true
+      selector:
+        boolean:

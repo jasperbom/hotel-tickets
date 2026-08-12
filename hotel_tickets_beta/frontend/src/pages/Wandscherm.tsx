@@ -23,6 +23,7 @@ import { leeftijdTekst } from "../werk";
  *   #/wandscherm?afdeling=technical,housekeeping
  *   #/wandscherm?afdeling=all
  *   #/wandscherm?schaal=1.4                   groter, voor een verder scherm
+ *   #/wandscherm?sleutel=hbk.…                scherm zonder login (kiosk)
  */
 
 const VERVERS_MS = 30_000;
@@ -118,10 +119,14 @@ function useKlok(): Date {
 export default function Wandscherm() {
   const params = new URLSearchParams(window.location.hash.split("?")[1] ?? "");
   const afdeling = params.get("afdeling") ?? params.get("afdelingen") ?? undefined;
+  // Kioskcode: een scherm dat niet kan inloggen (Chromecast, TV-stick, tablet
+  // die niemand meer aanraakt). Zie Instellingen → Wandschermen.
+  const sleutel = params.get("sleutel") ?? undefined;
   const schaal = leesSchaal(params.get("schaal"));
 
   const [board, setBoard] = useState<Board | null>(null);
   const [fout, setFout] = useState(false);
+  const [afgewezen, setAfgewezen] = useState(false);
   const [laatstGelukt, setLaatstGelukt] = useState<Date | null>(null);
   const nu = useKlok();
   const breed = useBreed();
@@ -131,17 +136,22 @@ export default function Wandscherm() {
 
   const laden = useCallback(async () => {
     try {
-      const r = await boardApi.get(afdeling);
+      const r = await boardApi.get(afdeling, sleutel);
       setBoard(r.data);
       setLaatstGelukt(new Date());
       setFout(false);
-    } catch {
+      setAfgewezen(false);
+    } catch (err) {
       // Bij een storing blijft het laatste bord staan — een leeg bord aan de
       // muur leest als "niets te doen", en dat is een gevaarlijker leugen dan
       // een bord dat een paar minuten oud is. De koptekst zegt hoe oud.
       setFout(true);
+      // Een geweigerde kioskcode is geen storing die overwaait: dan moet er
+      // iemand naar Instellingen. Blijven pogen heeft geen zin, dus zeg het.
+      const status = (err as { response?: { status?: number } })?.response?.status;
+      if (status === 401 || status === 403) setAfgewezen(true);
     }
-  }, [afdeling]);
+  }, [afdeling, sleutel]);
 
   useEffect(() => {
     laden();
@@ -181,6 +191,7 @@ export default function Wandscherm() {
         kolommen={kolommen}
         laatstGelukt={laatstGelukt}
         fout={fout}
+        afgewezen={afgewezen}
         bezig={board === null && !fout}
       />
 
@@ -190,10 +201,17 @@ export default function Wandscherm() {
         }`}
       >
         {board === null && !fout && (
-          <p className="text-[1.5em] text-ink-45">Bord wordt geladen…</p>
+          <p className="col-span-full text-[1.5em] text-ink-45">Bord wordt geladen…</p>
+        )}
+        {board === null && fout && (
+          <p className="col-span-full text-[1.5em] text-ink-45">
+            {afgewezen
+              ? "Dit scherm mag het bord niet lezen. Maak een nieuwe kioskcode aan bij Instellingen → Wandschermen."
+              : "Geen verbinding met de app."}
+          </p>
         )}
         {board !== null && kolommen.length === 0 && (
-          <p className="text-[1.5em] text-ink-45">
+          <p className="col-span-full text-[1.5em] text-ink-45">
             {alle.length === 0 ? "Geen afdelingen gekozen." : "Niets open."}
           </p>
         )}
@@ -202,7 +220,9 @@ export default function Wandscherm() {
         ))}
       </main>
 
-      {uitwegZichtbaar && (
+      {/* Een kioskscherm heeft geen app om naar terug te gaan: daar zou de
+          knop alleen maar op de loginpagina uitkomen. */}
+      {uitwegZichtbaar && !sleutel && (
         <button
           onClick={() => navigate("/")}
           className="fixed bottom-[1em] right-[1em] px-[1em] py-[0.5em] rounded-[0.5em]
@@ -217,12 +237,13 @@ export default function Wandscherm() {
 }
 
 function Kop({
-  nu, kolommen, laatstGelukt, fout, bezig,
+  nu, kolommen, laatstGelukt, fout, afgewezen, bezig,
 }: {
   nu: Date;
   kolommen: BoardKolom[];
   laatstGelukt: Date | null;
   fout: boolean;
+  afgewezen: boolean;
   bezig: boolean;
 }) {
   const titel = kolommen.length === 1 ? kolommen[0].label : "Openstaand werk";
@@ -240,13 +261,17 @@ function Kop({
       <h1 className="text-[2em] font-bold leading-none">{titel}</h1>
 
       <div className="flex items-baseline gap-[0.9em] text-[1.1em] text-ink-70">
-        <Teller aantal={open} label="open" />
+        {kolommen.length > 0 && <Teller aantal={open} label="open" />}
         {urgent > 0 && <Teller aantal={urgent} label="urgent" kleur="text-urgent" />}
         {klaar > 0 && <Teller aantal={klaar} label="vandaag klaar" kleur="text-done" />}
       </div>
 
       <div className="ml-auto flex items-baseline gap-[0.8em]">
-        {verouderd && (
+        {afgewezen ? (
+          <span className="text-[1em] font-semibold text-urgent">
+            Kioskcode ingetrokken
+          </span>
+        ) : verouderd && (
           <span className="text-[1em] font-semibold text-urgent">
             Geen verbinding — bord is {Math.round(seconden! / 60)} min oud
           </span>

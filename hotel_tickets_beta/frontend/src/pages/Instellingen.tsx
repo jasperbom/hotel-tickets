@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import {
-  userApi, integrationApi, systemSettingsApi, logbookApi, locationApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi, authApi, sessionsApi, betaApi, parseUTC,
+  userApi, integrationApi, systemSettingsApi, logbookApi, locationApi, poolApi, bikesModuleApi, bikeAdminApi, brandingApi, loginBrandingApi, recurringApi, knowledgeApi, authApi, sessionsApi, betaApi, boardApi, parseUTC,
   type UserRole, type Role, type Category, type IntegrationStatus, type PoolConfigItem, type BikesModuleRoles,
   type RecurringTemplate, type KnowledgeAiSettings, type LoginBranding, type LoginBan, type Session,
-  type BetaStatus, type BetaCopyResult, type LogObject, type LogObjectType,
+  type BetaStatus, type BetaCopyResult, type LogObject, type LogObjectType, type BoardKey,
 } from "../api/client";
 import { BevestigKnop } from "../components/BevestigKnop";
 import AreaSelector from "../components/AreaSelector";
@@ -253,6 +253,173 @@ function BeveiligingPanel() {
               <button onClick={() => removeBan(b.ip)} className="text-sm text-brand hover:underline shrink-0">
                 {b.banned ? "Blokkade opheffen" : "Teller wissen"}
               </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Section>
+  );
+}
+
+/** Het deel achter de hostnaam — voor beide varianten hetzelfde. */
+function wandschermPad(code: string): string {
+  return `#/wandscherm?sleutel=${code}&afdeling=technical`;
+}
+
+/** Werkt in deze browser, om het bord meteen te bekijken. */
+function wandschermTestUrl(code: string): string {
+  return window.location.origin + window.location.pathname + wandschermPad(code);
+}
+
+/**
+ * Voor een scherm dat niet in deze browser draait.
+ *
+ * De URL hierboven loopt via de ingress van Home Assistant, en dat pad hoort
+ * bij de sessie van wie hem opent — een tv of Chromecast komt daar niet
+ * binnen. Zo'n scherm moet rechtstreeks naar de addonpoort, en dus is het
+ * IP-adres iets dat alleen jij weet.
+ */
+function wandschermKioskUrl(code: string): string {
+  return `http://<ip-van-home-assistant>:8080/${wandschermPad(code)}`;
+}
+
+function WandschermenPanel() {
+  const [keys, setKeys] = useState<BoardKey[] | null>(null);
+  const [label, setLabel] = useState("");
+  const [bezig, setBezig] = useState(false);
+  const [fout, setFout] = useState<string | null>(null);
+  // De code is er precies één keer. Zolang hij hier staat kan hij gekopieerd
+  // worden; daarna is hij weg — ook voor ons.
+  const [nieuw, setNieuw] = useState<{ label: string; code: string } | null>(null);
+  const [gekopieerd, setGekopieerd] = useState(false);
+
+  useEffect(() => {
+    boardApi.listKeys().then((r) => setKeys(r.data)).catch(() => setKeys([]));
+  }, []);
+
+  async function maak() {
+    if (!label.trim() || bezig) return;
+    setBezig(true);
+    setFout(null);
+    try {
+      const r = await boardApi.createKey(label.trim());
+      const { code, ...rest } = r.data;
+      setKeys((prev) => [...(prev ?? []), rest]);
+      setNieuw({ label: rest.label, code });
+      setGekopieerd(false);
+      setLabel("");
+    } catch (err) {
+      setFout(apiErrorText(err, "Aanmaken mislukt"));
+    } finally {
+      setBezig(false);
+    }
+  }
+
+  async function verwijder(id: string) {
+    await boardApi.removeKey(id);
+    setKeys((prev) => (prev ?? []).filter((k) => k.id !== id));
+  }
+
+  if (!keys) return null;
+
+  return (
+    <Section title="Wandschermen — kioskcodes">
+      <p className="text-xs text-ink-45">
+        Een scherm aan de muur (tv, tablet, Chromecast) kan niet inloggen. Geef zo'n scherm een
+        eigen code: die geeft uitsluitend leestoegang tot het bord — geen tickets wijzigen, geen
+        andere pagina's. Je ziet de code één keer; kwijt is een nieuwe aanmaken. Intrekken doe je
+        hier, en dan is het scherm binnen een halve minuut leeg.
+      </p>
+
+      {nieuw && (
+        <div className="rounded-lg border border-done bg-done-soft p-3 space-y-2">
+          <p className="text-sm font-medium text-ink">
+            Code voor “{nieuw.label}” — kopieer hem nu, hierna is hij niet meer op te vragen.
+          </p>
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-ink-70">Voor een tv, tablet of Chromecast</p>
+            <p className="font-mono text-xs break-all bg-paper-raised rounded p-2 border border-ink-12">
+              {wandschermKioskUrl(nieuw.code)}
+            </p>
+            <p className="text-xs text-ink-45">
+              Vul het IP-adres van Home Assistant in. Zo'n scherm kan niet via de ingress binnen —
+              daarvoor moet poort 8080 openstaan in de addonconfiguratie.
+            </p>
+          </div>
+
+          <div className="space-y-1">
+            <p className="text-xs font-medium text-ink-70">Om het nu even zelf te bekijken</p>
+            <p className="font-mono text-xs break-all bg-paper-raised rounded p-2 border border-ink-12">
+              {wandschermTestUrl(nieuw.code)}
+            </p>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <button
+              onClick={() => {
+                navigator.clipboard?.writeText(wandschermKioskUrl(nieuw.code)).then(
+                  () => setGekopieerd(true),
+                  () => setGekopieerd(false),
+                );
+              }}
+              className="px-3 min-h-tap rounded-[10px] bg-blue-600 text-white text-sm font-medium"
+            >
+              {gekopieerd ? "Gekopieerd" : "Kiosk-URL kopiëren"}
+            </button>
+            <button
+              onClick={() => setNieuw(null)}
+              className="px-3 min-h-tap rounded-[10px] border border-ink-12 text-sm"
+            >
+              Klaar
+            </button>
+          </div>
+          <p className="text-xs text-ink-45">
+            Pas <span className="font-mono">afdeling=</span> aan naar de afdeling(en) van dit scherm
+            — meerdere met komma's, of <span className="font-mono">all</span>. Hangt het scherm ver
+            weg, zet er dan <span className="font-mono">&amp;schaal=1.4</span> achter.
+          </p>
+        </div>
+      )}
+
+      <div className="flex flex-wrap gap-2">
+        <input
+          value={label}
+          onChange={(e) => setLabel(e.target.value)}
+          onKeyDown={(e) => { if (e.key === "Enter") maak(); }}
+          placeholder="Naam van het scherm, bijv. Werkplaats"
+          className="flex-1 min-w-[12rem] px-3 min-h-tap rounded-[10px] border border-ink-12 text-sm"
+        />
+        <button
+          onClick={maak}
+          disabled={!label.trim() || bezig}
+          className="px-4 min-h-tap rounded-[10px] bg-blue-600 text-white text-sm font-medium disabled:opacity-40"
+        >
+          Code aanmaken
+        </button>
+      </div>
+      {fout && <p className="text-sm text-urgent">{fout}</p>}
+
+      {keys.length === 0 ? (
+        <p className="text-sm text-ink-45">Nog geen wandschermen.</p>
+      ) : (
+        <div className="divide-y divide-ink-6">
+          {keys.map((k) => (
+            <div key={k.id} className="py-2 flex flex-wrap items-center gap-3">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium text-ink truncate">{k.label}</p>
+                <p className="text-xs text-ink-45 truncate">
+                  {k.last_seen_at
+                    ? `actief ${sessieGeleden(k.last_seen_at)}${k.last_ip ? ` · ${k.last_ip}` : ""}`
+                    : "nog nooit gebruikt"}
+                </p>
+              </div>
+              <BevestigKnop
+                label="Intrekken"
+                vraag="Dit scherm gaat op zwart."
+                bevestigLabel="Intrekken"
+                onBevestig={() => verwijder(k.id)}
+                className="text-sm text-urgent hover:underline shrink-0"
+              />
             </div>
           ))}
         </div>
@@ -2316,6 +2483,7 @@ export default function Instellingen() {
           <MedewerkersBeheer isAdmin={isAdmin} />
           {isAdmin && <ActieveSessiesPanel />}
           {isAdmin && <BeveiligingPanel />}
+          {isAdmin && <WandschermenPanel />}
         </div>
       )}
 
