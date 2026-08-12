@@ -81,6 +81,54 @@ async def get_users() -> list[dict]:
     return persons
 
 
+async def get_keycard_states() -> dict[str, bool]:
+    """
+    Bezetting van alle kamers in één keer: {area_id: bezet}.
+
+    Per kamer heet de sensor `binary_sensor.<area_id>_keycard` (zie
+    routers/locations.py): 'on' = sleutel in de houder, dus bezet.
+
+    Voor één kamer bestaat get_sensor_state al, maar het wandscherm vraagt naar
+    dertig kamers tegelijk en doet dat elke halve minuut opnieuw. Dat zijn
+    dertig verzoeken aan Home Assistant voor een bord dat er één hoort te doen.
+    Deze template-call geeft alleen de keycard-sensoren terug — één verzoek,
+    een handvol regels antwoord, ongeacht hoe groot het hotel is.
+
+    Kamers zonder sensor of met een sensor die niets weet ('unavailable')
+    ontbreken in het antwoord: "geen sensor" is iets anders dan "vrij", en dat
+    verschil hoort niet onderweg verloren te gaan.
+    """
+    import json as _json
+    # [14:-8] knipt 'binary_sensor.' en '_keycard' eraf; endswith/replace zijn
+    # in HA-templates net wat wisselvalliger dan gewoon snijden.
+    template = (
+        "{%- set ns = namespace(r=[]) -%}"
+        "{%- for s in states.binary_sensor -%}"
+        "{%- if s.entity_id[-8:] == '_keycard' -%}"
+        "{%- set ns.r = ns.r + [{'id': s.entity_id[14:-8], 'state': s.state}] -%}"
+        "{%- endif -%}"
+        "{%- endfor -%}"
+        "{{ ns.r | tojson }}"
+    )
+    async with aiohttp.ClientSession() as session:
+        async with session.post(
+            f"{HA_API}/template",
+            headers=_headers(),
+            json={"template": template},
+        ) as resp:
+            if resp.status != 200:
+                return {}
+            try:
+                rijen = _json.loads(await resp.text())
+            except Exception:
+                return {}
+    return {
+        r["id"]: r["state"] == "on"
+        for r in rijen
+        if r.get("id") and r.get("state") in ("on", "off")
+    }
+
+
 async def get_sensor_state(entity_id: str) -> dict | None:
     """Haal de staat van een HA entiteit op. Geeft None als de entiteit niet bestaat."""
     async with aiohttp.ClientSession() as session:

@@ -527,6 +527,8 @@ export interface BoardTicket {
   priority: Priority;
   status: Status;
   kamer: string | null;
+  /** Keycard: true = bezet, false = vrij, null = geen (bruikbare) sensor. */
+  kamer_bezet: boolean | null;
   toegewezen_aan: string | null;
   created_at: string;
   comment_count: number;
@@ -540,6 +542,8 @@ export interface BoardTaak {
   priority: Priority;
   emoji: string | null;
   kamer: string | null;
+  /** Keycard: true = bezet, false = vrij, null = geen (bruikbare) sensor. */
+  kamer_bezet: boolean | null;
   kamers: string[];
   subtask_done: number | null;
   subtask_total: number | null;

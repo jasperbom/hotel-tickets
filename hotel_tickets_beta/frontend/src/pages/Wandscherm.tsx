@@ -11,8 +11,8 @@ import { isNieuw, leeftijdBoard } from "../werk";
  *
  * Het is Vandaag, maar dan gelezen op vier meter afstand. Daarom hetzelfde
  * leesmodel als de rest van de app (kamer → positie, titel → grootte,
- * prioriteit → kleur, eigendom → woord), alleen met alles maal een
- * schaalfactor. Een eigen ontwerp zou betekenen dat een monteur het bord
+ * prioriteit → kleur, eigendom → woord, bezetting → stip), alleen met alles
+ * maal een schaalfactor. Een eigen ontwerp zou betekenen dat een monteur het bord
  * anders moet leren lezen dan zijn telefoon.
  *
  * De URL is de instelling — het scherm hangt op een vaste plek en heeft geen
@@ -498,6 +498,32 @@ function usePassendeSecties(kolom: BoardKolom, lijsten: Sectie[]) {
  * niet is laat zijn kolom leeg in plaats van de rest op te schuiven — anders
  * schuift de uitlijning per regel weer weg.
  */
+/**
+ * Staat de kamer leeg?
+ *
+ * Dezelfde taal als WorkRow in de app: gevuld = bezet, open ring = vrij,
+ * niets = geen keycard-sensor. Op het bord hoort dit op de eerste regel,
+ * direct achter het kamernummer, want het is geen eigenschap van het werk
+ * maar van de kamer — en het is de laatste vraag vóór je gaat lopen.
+ *
+ * Bewust dezelfde vorm als in de app en niet het woord "vrij": dat woord staat
+ * op de metaregel al voor een ticket dat niemand heeft opgepakt, en twee keer
+ * "vrij" op één regel met twee betekenissen is erger dan een stip die je één
+ * keer moet leren. Wel groter dan in de app — een stip van acht pixels bestaat
+ * niet meer op vier meter afstand.
+ */
+function BezetStip({ bezet }: { bezet: boolean | null | undefined }) {
+  if (bezet === null || bezet === undefined) return null;
+  return (
+    <span
+      title={bezet ? "Kamer is bezet" : "Kamer is vrij"}
+      className={`w-[0.8em] h-[0.8em] rounded-full shrink-0 -translate-y-[0.1em] ${
+        bezet ? "bg-ink" : "border-[0.22em] border-ink"
+      }`}
+    />
+  );
+}
+
 type MetaDeel = {
   tekst: string;
   klasse?: string;
@@ -530,10 +556,12 @@ const TICKET_KOLOMMEN = [0.7,     1.25,    1.15,  0.55,     0.85];
 const TAAK_KOLOMMEN = [0.5,      1.5];
 
 function Regel({
-  rand, kamer, titel, meta, kolommen, voorvoegsel,
+  rand, kamer, bezet, titel, meta, kolommen, voorvoegsel,
 }: {
   rand: "urgent" | "high" | null;
   kamer?: string | null;
+  /** Keycard van die kamer: true = bezet, false = vrij, null = geen sensor. */
+  bezet?: boolean | null;
   titel: string;
   meta: MetaDeel[];
   /** Breedteverhouding per metakolom, even lang als `meta`. */
@@ -554,6 +582,7 @@ function Regel({
             {kamer}
           </span>
         )}
+        {kamer && <BezetStip bezet={bezet} />}
         <span className="text-[1.3em] leading-tight line-clamp-2">{titel}</span>
       </div>
       {meta.some(Boolean) && (
@@ -591,6 +620,7 @@ function TicketRegel({ ticket }: { ticket: BoardTicket }) {
     <Regel
       rand={ticket.priority === "urgent" ? "urgent" : ticket.priority === "high" ? "high" : null}
       kamer={ticket.kamer}
+      bezet={ticket.kamer_bezet}
       titel={ticket.title}
       kolommen={TICKET_KOLOMMEN}
       meta={[
@@ -624,6 +654,7 @@ function TaakRegel({ taak }: { taak: BoardTaak }) {
       rand={taak.priority === "urgent" ? "urgent" : taak.priority === "high" ? "high" : null}
       voorvoegsel={taak.emoji}
       kamer={taak.kamer}
+      bezet={taak.kamer_bezet}
       titel={taak.title}
       kolommen={TAAK_KOLOMMEN}
       meta={[
