@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { boardApi, type Board, type BoardKolom, type BoardTaak, type BoardTicket } from "../api/client";
-import { leeftijdTekst } from "../werk";
+import { isNieuw, leeftijdBoard } from "../werk";
 
 /**
  * Wandscherm — één scherm aan de muur in de werkplaats of het
@@ -95,16 +95,39 @@ function useBeweging(msZichtbaar = 4000): boolean {
   return zichtbaar;
 }
 
-/** Breed genoeg voor twee kolommen naast elkaar? Op een staande tablet niet. */
-function useBreed(): boolean {
-  const [breed, setBreed] = useState(() => window.innerWidth >= 1400);
+function useVensterBreedte(): number {
+  const [breedte, setBreedte] = useState(() => window.innerWidth);
   useEffect(() => {
-    const mq = window.matchMedia("(min-width: 1400px)");
-    const luister = () => setBreed(mq.matches);
-    mq.addEventListener("change", luister);
-    return () => mq.removeEventListener("change", luister);
+    const meet = () => setBreedte(window.innerWidth);
+    window.addEventListener("resize", meet);
+    return () => window.removeEventListener("resize", meet);
   }, []);
-  return breed;
+  return breedte;
+}
+
+/**
+ * Hoeveel kolommen krijgt één afdeling voor zijn lijsten?
+ *
+ * Vier kopjes onder elkaar kosten ruimte die anders naar regels ging. Is de
+ * afdelingskolom breed genoeg, dan lopen de lijsten naast elkaar door — dan
+ * past ongeveer het dubbele aan werk op hetzelfde scherm. Onder die breedte
+ * wordt elke titel een woordenslang van drie regels en schiet je er niets mee
+ * op.
+ */
+const MIN_SUBKOLOM = 620;
+
+/**
+ * Kolombreedte naar rato van het werk dat erin staat.
+ *
+ * Bij gelijke kolommen staat de huishouding half leeg terwijl de technische
+ * dienst regels moet weglaten — het bord toont dan minder werk dan er ruimte
+ * is. De drukste afdeling krijgt daarom de meeste breedte, maar begrensd:
+ * een rustige afdeling blijft leesbaar in plaats van een streepje te worden.
+ */
+function kolomGewichten(kolommen: BoardKolom[]): number[] {
+  const werk = kolommen.map((k) => Math.max(1, k.taken.length + k.tickets.length));
+  const gemiddeld = werk.reduce((a, b) => a + b, 0) / werk.length;
+  return werk.map((n) => Math.min(2, Math.max(0.65, n / gemiddeld)));
 }
 
 function useKlok(): Date {
@@ -129,7 +152,7 @@ export default function Wandscherm() {
   const [afgewezen, setAfgewezen] = useState(false);
   const [laatstGelukt, setLaatstGelukt] = useState<Date | null>(null);
   const nu = useKlok();
-  const breed = useBreed();
+  const vensterBreedte = useVensterBreedte();
   const uitwegZichtbaar = useBeweging();
   const navigate = useNavigate();
   useSchermWakker();
@@ -166,16 +189,22 @@ export default function Wandscherm() {
   // stand van het bord dat je hebt opgehangen. Bij meerdere afdelingen is een
   // lege kolom alleen maar ruimte die de rest kleiner maakt.
   const kolommen = alle.length > 1 ? alle.filter(heeftWerk) : alle;
-  // Bij één afdeling is een enkele kolom over 1600 px onleesbaar breed; die
-  // splitsen we in twee. Op een staande tablet juist niet — daar wordt elke
-  // titel dan een woordenslang van drie regels.
   const enkel = kolommen.length === 1;
-  const tweekoloms = enkel && breed;
   // Drie afdelingen naast elkaar vraagt om een breed scherm; anders twee.
-  const kolomKlasse =
-    enkel ? "grid-cols-1"
-    : kolommen.length === 2 || !breed ? "grid-cols-2"
-    : "grid-cols-3";
+  const perRij = enkel ? 1 : Math.min(kolommen.length, vensterBreedte < 1400 ? 2 : 3);
+  // Ongelijke breedtes alleen als alle afdelingen op één rij staan; over twee
+  // rijen zouden de kolommen niet meer onder elkaar uitlijnen.
+  const gewichten = kolommen.length === perRij ? kolomGewichten(kolommen) : null;
+  const somGewicht = gewichten ? gewichten.reduce((a, b) => a + b, 0) : perRij;
+  const kolomStijl = gewichten
+    ? { gridTemplateColumns: gewichten.map((g) => `${g}fr`).join(" ") }
+    : { gridTemplateColumns: `repeat(${perRij}, minmax(0, 1fr))` };
+
+  // 1,5em padding links en rechts, 2em tussen de afdelingen — bij een
+  // grondmaat van ruwweg 22 px.
+  const beschikbaar = vensterBreedte - 66 - 44 * (perRij - 1);
+  const kolomBreedte = (i: number) =>
+    beschikbaar * ((gewichten ? gewichten[i] : 1) / somGewicht);
 
   return (
     // Alle maten op deze pagina staan in em; hier staat de grondmaat. Die
@@ -196,9 +225,12 @@ export default function Wandscherm() {
       />
 
       <main
-        className={`flex-1 min-h-0 grid items-stretch gap-x-[2em] gap-y-[1.5em] p-[1.5em] ${
-          kolomKlasse
-        }`}
+        // auto-rows-fr: zonder vaste rijhoogte groeit de rij mee met zijn
+        // inhoud, en dan bijt het inkorten zichzelf in de staart — elke regel
+        // die eraf gaat maakt de kolom lager, waardoor er weer een regel af
+        // moet. Het bord stopte dan halverwege met een half leeg scherm.
+        className="flex-1 min-h-0 grid auto-rows-fr items-stretch gap-x-[2em] gap-y-[1.5em] p-[1.5em]"
+        style={kolomStijl}
       >
         {board === null && !fout && (
           <p className="col-span-full text-[1.5em] text-ink-45">Bord wordt geladen…</p>
@@ -215,8 +247,15 @@ export default function Wandscherm() {
             {alle.length === 0 ? "Geen afdelingen gekozen." : "Niets open."}
           </p>
         )}
-        {kolommen.map((k) => (
-          <Kolom key={k.afdeling} kolom={k} tweekoloms={tweekoloms} toonLabel={!enkel} />
+        {kolommen.map((k, i) => (
+          <Kolom
+            key={k.afdeling}
+            kolom={k}
+            // Twee lijstkolommen naast elkaar zodra deze afdeling daar breed
+            // genoeg voor is — dat scheelt vier kopjes aan verticale ruimte.
+            tweekoloms={kolomBreedte(i) >= MIN_SUBKOLOM * 2}
+            toonLabel={!enkel}
+          />
         ))}
       </main>
 
@@ -297,23 +336,57 @@ function Teller({ aantal, label, kleur = "text-ink" }: { aantal: number; label: 
   );
 }
 
+/**
+ * De vier lijsten op het bord, in vaste volgorde.
+ *
+ * Eén regel staat in precies één lijst: urgent gaat vóór nieuw, nieuw vóór de
+ * rest. Zonder die volgorde zou een urgente melding van vanochtend twee keer
+ * op het bord staan, en dan telt niemand het bord meer na.
+ */
+type Sectie = { id: string; titel: string; regels: React.ReactNode[] };
+
+function secties(kolom: BoardKolom): Sectie[] {
+  const urgent = kolom.tickets.filter((t) => t.priority === "urgent" || t.priority === "high");
+  const rest = kolom.tickets.filter((t) => t.priority !== "urgent" && t.priority !== "high");
+  const nieuw = rest.filter((t) => isNieuw(t.created_at));
+  const overig = rest.filter((t) => !isNieuw(t.created_at));
+
+  return [
+    {
+      id: "herhalend",
+      titel: "Herhalende taken",
+      regels: kolom.taken.map((t) => <TaakRegel key={`taak-${t.id}`} taak={t} />),
+    },
+    {
+      id: "urgent",
+      titel: "Urgent",
+      regels: urgent.map((t) => <TicketRegel key={t.id} ticket={t} />),
+    },
+    {
+      id: "overig",
+      titel: "Andere taken",
+      regels: overig.map((t) => <TicketRegel key={t.id} ticket={t} />),
+    },
+    {
+      id: "nieuw",
+      titel: "Nieuw — afgelopen 24 uur",
+      regels: nieuw.map((t) => <TicketRegel key={t.id} ticket={t} />),
+    },
+  ];
+}
+
 function Kolom({
   kolom, tweekoloms, toonLabel,
 }: {
   kolom: BoardKolom;
-  /** Eén afdeling op het bord: de rijen in twee kolommen naast elkaar. */
+  /** Eén afdeling op het bord: de lijsten in twee kolommen naast elkaar. */
   tweekoloms: boolean;
   toonLabel: boolean;
 }) {
-  const regels = [
-    ...kolom.taken.map((t) => <TaakRegel key={`taak-${t.id}`} taak={t} />),
-    ...kolom.tickets.map((t) => <TicketRegel key={t.id} ticket={t} />),
-  ];
-  const { lijstRef, past } = usePassendAantal(kolom);
-  const zichtbaar = regels.slice(0, past);
-  // Alles wat niet op het bord past: wat de server al inkortte plus wat er hier
-  // afvalt. Eén getal, want vanaf de deur is het verschil niet interessant.
-  const verborgen = kolom.verborgen + (regels.length - zichtbaar.length);
+  const alle = secties(kolom).filter((sec) => sec.regels.length > 0);
+  const restIndex = Math.max(0, alle.findIndex((sec) => sec.id === "overig"));
+  const { lijstRef, limieten } = usePassendeSecties(kolom, alle);
+  const leeg = alle.length === 0;
 
   return (
     <section className="min-w-0 flex flex-col min-h-0">
@@ -329,19 +402,37 @@ function Kolom({
         </h2>
       )}
 
-      {regels.length === 0 ? (
+      {leeg ? (
         <p className="text-[1.3em] text-ink-45 py-[0.5em]">Niets open.</p>
       ) : (
         <div
           ref={lijstRef}
           className={`flex-1 min-h-0 overflow-hidden ${tweekoloms ? "columns-2 gap-x-[2em]" : ""}`}
         >
-          {zichtbaar}
-          {verborgen > 0 && (
-            <p className="text-[1em] text-ink-45 pt-[0.4em]">
-              + nog {verborgen} {verborgen === 1 ? "regel" : "regels"}
-            </p>
-          )}
+          {alle.map((sec, i) => {
+            const limiet = limieten[i] ?? sec.regels.length;
+            const verborgen = sec.regels.length - limiet
+              // Wat de server al inkortte hoort bij de lijst die de bovengrens
+              // van 30 raakte: normaal "Andere taken", maar bij dertig urgente
+              // meldingen bestaat die lijst niet en zou het getal verdwijnen.
+              + (i === restIndex ? kolom.verborgen : 0);
+            return (
+              <div key={sec.id} className="break-inside-avoid-column mb-[0.9em] last:mb-0">
+                <h3 className="flex items-baseline gap-[0.5em] mb-[0.15em]">
+                  <span className="text-[0.95em] font-semibold uppercase tracking-[0.08em] text-ink-45">
+                    {sec.titel}
+                  </span>
+                  <span className="text-[0.95em] text-ink-25 tabular-nums">{sec.regels.length}</span>
+                </h3>
+                {sec.regels.slice(0, limiet)}
+                {verborgen > 0 && (
+                  <p className="text-[0.95em] text-ink-45 pt-[0.3em]">
+                    + nog {verborgen} {verborgen === 1 ? "regel" : "regels"}
+                  </p>
+                )}
+              </div>
+            );
+          })}
         </div>
       )}
     </section>
@@ -349,58 +440,82 @@ function Kolom({
 }
 
 /**
- * Hoeveel regels passen er in de kolom?
+ * Hoeveel regels past elke lijst?
  *
  * Een bord aan de muur scrollt niet, dus alles wat eronder valt is onzichtbaar
  * — en onzichtbaar werk op een werkbord is erger dan geen bord. Daarom knippen
- * we bewust af en zetten we eronder hoeveel er nog is.
+ * we bewust af en zetten we per lijst hoeveel er nog is.
  *
- * Het aantal wordt niet uitgerekend maar uitgeprobeerd: render alles, en zolang
- * de inhoud hoger is dan de kolom gaat er één regel af. Rijen zijn niet even
+ * Het inkorten gaat om beurten bij de langste lijst, niet onderaan het bord:
+ * anders zou "Nieuw" als laatste lijst compleet verdwijnen zodra de technische
+ * dienst een drukke week heeft, en dat is precies de lijst waar iemand op kijkt.
+ * Elke niet-lege lijst houdt daarom minstens één regel.
+ *
+ * De aantallen worden niet berekend maar uitgeprobeerd: rijen zijn niet even
  * hoog (een lange titel loopt over twee regels) en de lettergrootte hangt aan
- * de schermbreedte; een berekening zou beide moeten nabootsen. Tijdens het
- * inkorten is de overloop al weggeknipt door overflow-hidden, dus je ziet er
- * niets van.
+ * de schermbreedte. Tijdens het inkorten is de overloop al weggeknipt door
+ * overflow-hidden, dus je ziet er niets van.
  */
-function usePassendAantal(kolom: BoardKolom) {
+function usePassendeSecties(kolom: BoardKolom, lijsten: Sectie[]) {
   const lijstRef = useRef<HTMLDivElement>(null);
-  const totaal = kolom.taken.length + kolom.tickets.length;
-  const [past, setPast] = useState(totaal);
+  const vol = lijsten.map((sec) => sec.regels.length);
+  const [limieten, setLimieten] = useState<number[]>(vol);
 
   // Opnieuw vanaf alles beginnen zodra de inhoud of het venster verandert —
   // anders blijft een bord dat ooit vol stond te weinig regels tonen.
-  useLayoutEffect(() => setPast(totaal), [kolom, totaal]);
+  const vorm = vol.join(",");
+  useLayoutEffect(() => setLimieten(vol.slice()), [kolom, vorm]);
   useEffect(() => {
-    const opnieuw = () => setPast(totaal);
+    const opnieuw = () => setLimieten(vol.slice());
     window.addEventListener("resize", opnieuw);
     return () => window.removeEventListener("resize", opnieuw);
-  }, [totaal]);
+  }, [vorm]);
 
   useLayoutEffect(() => {
     const el = lijstRef.current;
     if (!el) return;
     // +1 px speling: sub-pixelafronding maakte anders altijd één regel weg.
-    if (el.scrollHeight > el.clientHeight + 1 && past > 1) setPast(past - 1);
+    if (el.scrollHeight <= el.clientHeight + 1) return;
+
+    // Haal er één af bij de langste lijst die er nog eentje kan missen.
+    let langste = -1;
+    limieten.forEach((n, i) => {
+      if (n > 1 && (langste === -1 || n > limieten[langste])) langste = i;
+    });
+    if (langste === -1) return;
+    const volgende = limieten.slice();
+    volgende[langste] -= 1;
+    setLimieten(volgende);
   });
 
-  return { lijstRef, past };
+  return { lijstRef, limieten };
 }
 
-/** Dezelfde anatomie als WorkRow, alleen in em zodat de schaal alles meeneemt. */
+/**
+ * Dezelfde anatomie als WorkRow, alleen in em zodat de schaal alles meeneemt.
+ *
+ * De metaregel is op het bord bewust minder stil dan in de app. Op je telefoon
+ * open je een ticket om te zien hoe het ervoor staat; vanaf vier meter is deze
+ * regel het enige wat je krijgt. Daarom staan urgentie, eigenaar en status er
+ * in kleur en vet tussen het grijs — niet als versiering, maar omdat dat de
+ * drie dingen zijn waarop iemand vanaf de deur beslist of hij gaat lopen.
+ */
+type MetaDeel = { tekst: string; klasse?: string } | null;
+
 function Regel({
   rand, kamer, titel, meta, voorvoegsel,
 }: {
   rand: "urgent" | "high" | null;
   kamer?: string | null;
   titel: string;
-  meta: (string | null)[];
+  meta: MetaDeel[];
   voorvoegsel?: string | null;
 }) {
   const randKlasse =
     rand === "urgent" ? "border-l-[0.25em] border-l-urgent pl-[0.6em]"
     : rand === "high" ? "border-l-[0.25em] border-l-high pl-[0.6em]"
     : "pl-[0.85em]";
-  const delen = meta.filter(Boolean) as string[];
+  const delen = meta.filter(Boolean) as Exclude<MetaDeel, null>[];
 
   return (
     <div className={`break-inside-avoid py-[0.45em] border-b border-ink-6 ${randKlasse}`}>
@@ -414,11 +529,11 @@ function Regel({
         <span className="text-[1.3em] leading-tight line-clamp-2">{titel}</span>
       </div>
       {delen.length > 0 && (
-        <p className="text-[1em] text-ink-45 mt-[0.15em]">
+        <p className="text-[1em] text-ink-45 mt-[0.2em]">
           {delen.map((d, i) => (
             <span key={i}>
               {i > 0 && <span className="text-ink-25"> · </span>}
-              {d}
+              <span className={d.klasse}>{d.tekst}</span>
             </span>
           ))}
         </p>
@@ -428,7 +543,6 @@ function Regel({
 }
 
 function TicketRegel({ ticket }: { ticket: BoardTicket }) {
-  const leeftijd = leeftijdTekst(ticket.created_at);
   const fractie =
     ticket.subtask_total ? `${ticket.subtask_done ?? 0}/${ticket.subtask_total}` : null;
 
@@ -438,12 +552,22 @@ function TicketRegel({ ticket }: { ticket: BoardTicket }) {
       kamer={ticket.kamer}
       titel={ticket.title}
       meta={[
+        // Urgentie eerst: in de lijst "Urgent" staan spoed en hoog door elkaar,
+        // en dat verschil bepaalt of iemand nu loopt of straks.
+        ticket.priority === "urgent" ? { tekst: "Spoed", klasse: "font-semibold text-urgent" }
+        : ticket.priority === "high" ? { tekst: "Hoog", klasse: "font-semibold text-high" }
+        : null,
         // Op een bord telt "van wie is dit" zwaarder dan op je eigen telefoon:
-        // niemand leest hier "van mij", iedereen leest een naam.
-        ticket.toegewezen_aan ?? "Vrij",
-        ticket.status === "in_progress" ? "In behandeling" : null,
-        fractie,
-        leeftijd,
+        // niemand leest hier "van mij", iedereen leest een naam. Een naam krijgt
+        // daarom nadruk; "Vrij" is de afwezigheid daarvan en blijft grijs.
+        ticket.toegewezen_aan
+          ? { tekst: ticket.toegewezen_aan, klasse: "font-semibold text-ink" }
+          : { tekst: "Vrij" },
+        ticket.status === "in_progress"
+          ? { tekst: "In behandeling", klasse: "font-semibold text-brand" }
+          : null,
+        fractie ? { tekst: fractie } : null,
+        { tekst: leeftijdBoard(ticket.created_at) },
       ]}
     />
   );
@@ -459,7 +583,10 @@ function TaakRegel({ taak }: { taak: BoardTaak }) {
       voorvoegsel={taak.emoji}
       kamer={taak.kamer}
       titel={taak.title}
-      meta={["Vandaag", fractie, kamers]}
+      meta={[
+        fractie ? { tekst: fractie } : null,
+        kamers ? { tekst: kamers } : null,
+      ]}
     />
   );
 }

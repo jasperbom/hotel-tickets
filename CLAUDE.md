@@ -173,8 +173,17 @@ er iets aan:
 | `?afdeling=all` | alle afdelingen; lege afdelingen vallen weg |
 | `?schaal=1.4` | grondmaat maal 1,4 (bereik 0,6–2) voor een scherm dat verder weg hangt |
 
-Het bord scrollt niet: elke kolom toont wat er past en zet eronder hoeveel
-regels er nog zijn. Een tablet aan de muur logt gewoon in met een eigen
+Het bord is verdeeld in vier lijsten met een kopje: **Herhalende taken**,
+**Urgent** (spoed én hoog), **Andere taken** en **Nieuw — afgelopen 24 uur**.
+Eén regel staat in precies één lijst; urgent gaat vóór nieuw, nieuw vóór de
+rest. Per regel staat wat je vanaf vier meter nodig hebt om te beslissen of je
+gaat lopen: urgentie, eigenaar, status en hoe lang hij al open staat.
+
+Het bord scrollt niet: elke lijst toont wat er past en zet eronder hoeveel
+regels er nog zijn. Inkorten gaat om beurten bij de langste lijst, zodat
+"Nieuw" niet als laatste compleet verdwijnt in een drukke week. Een afdeling
+met veel werk krijgt een bredere kolom dan een rustige, en is die kolom breed
+genoeg dan lopen de lijsten in twee kolommen door. Een tablet aan de muur logt gewoon in met een eigen
 medewerkersaccount; de sessie schuift mee bij gebruik en verloopt dus niet.
 
 Alles komt uit één verzoek (`GET /api/board`) met kamernamen en medewerkers al

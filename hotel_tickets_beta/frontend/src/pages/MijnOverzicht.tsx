@@ -8,9 +8,9 @@ import { AfdelingChip } from "../components/AfdelingChip";
 import { UndoBar } from "../components/UndoBar";
 import { useUitgesteldeActie } from "../undo";
 import {
-  AFDELING_LABELS, afdelingTekst, eigendom, herhaalKort, kamerTekst,
-  leeftijdTekst, prioriteitWoord, subtaakFractie,
+  AFDELING_LABELS, afdelingTekst, herhaalKort, kamerTekst,
 } from "../werk";
+import { werkMeta } from "../components/werkMeta";
 
 /**
  * Vandaag — het startscherm.
@@ -189,43 +189,23 @@ export default function Vandaag() {
 
   /** Metaregel van een ticket in het blok NU: hier nooit "Van mij" — dat zegt
    *  de sectiekop al. */
+  const metaOpties = {
+    mij: user.ha_user_id,
+    naamVan: (id: string) => users[id] ?? id,
+    eigenAfdeling: user.department,
+  };
+
+  const keycardVan = (t: Ticket) => (t.location_id ? keycards[t.location_id] : undefined);
+
   function metaNu(t: Ticket) {
-    const bezit = eigendom(t, user.ha_user_id, (id) => users[id] ?? id);
-    const prio = prioriteitWoord(t.priority);
-    return [
-      prio && (
-        <strong className={`font-semibold ${t.priority === "urgent" ? "text-urgent" : "text-high"}`}>
-          {prio}
-        </strong>
-      ),
-      t.status === "in_progress" && (
-        <strong className="font-semibold text-brand">In behandeling</strong>
-      ),
-      bezit.soort === "ander" || bezit.soort === "vrij" ? bezit.label : null,
-      afdelingTekst(t.category, user.department) && <AfdelingChip category={t.category} />,
-      subtaakFractie(t),
-      kamerTekst(t.location_id ? keycards[t.location_id] : undefined),
-      leeftijdTekst(t.created_at),
-    ].filter(Boolean);
+    // Onder "nu" staat al wat van jou is; "Van mij" zou daar een woord zijn
+    // dat niets toevoegt.
+    return werkMeta(t, { ...metaOpties, keycard: keycardVan(t), verbergEigenNaam: true });
   }
 
-  /** In "Te pakken" nooit "Vrij" — dat is precies wat de sectiekop zegt. */
+  /** In "te pakken" heeft per definitie niemand het opgepakt. */
   function metaTePakken(t: Ticket) {
-    const prio = prioriteitWoord(t.priority);
-    return [
-      prio && (
-        <strong className={`font-semibold ${t.priority === "urgent" ? "text-urgent" : "text-high"}`}>
-          {prio}
-        </strong>
-      ),
-      t.status === "in_progress" && (
-        <strong className="font-semibold text-brand">In behandeling</strong>
-      ),
-      afdelingTekst(t.category, user.department) && <AfdelingChip category={t.category} />,
-      subtaakFractie(t),
-      kamerTekst(t.location_id ? keycards[t.location_id] : undefined),
-      leeftijdTekst(t.created_at),
-    ].filter(Boolean);
+    return werkMeta(t, { ...metaOpties, keycard: keycardVan(t) });
   }
 
   function metaTaak(taak: UpcomingRecurring) {

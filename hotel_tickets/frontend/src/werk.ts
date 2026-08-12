@@ -77,13 +77,38 @@ export function prioriteitWoord(priority: Priority): string | null {
 }
 
 /**
- * Leeftijd, maar pas vanaf dag drie — daarvóór is het ruis. "17-07" zei
- * niemand iets; "3 dagen open" wel.
+ * Leeftijd in de metaregel.
+ *
+ * Stond eerst op dag drie: daarvóór was het ruis, want "17-07" zei niemand
+ * iets. Maar hoe lang iets al ligt is nu juist wat je wil weten voordat je
+ * kiest wat je oppakt, en dan is dag twee al laat. Vanaf dag één dus — en de
+ * eerste dag blijft stil, want alles wat vandaag binnenkomt is even oud.
  */
-export function leeftijdTekst(createdAt: string, vanafDagen = 3): string | null {
+export function leeftijdTekst(createdAt: string, vanafDagen = 1): string | null {
   const dagen = Math.floor((Date.now() - parseUTC(createdAt).getTime()) / 86_400_000);
   if (dagen < vanafDagen) return null;
-  return `${dagen} dagen open`;
+  return dagen === 1 ? "1 dag open" : `${dagen} dagen open`;
+}
+
+/**
+ * Leeftijd voor het wandscherm, ook binnen de eerste dag.
+ *
+ * Op een bord aan de muur is "20 min open" wél informatie: dat is het verschil
+ * tussen een melding waar iemand mee bezig moet zijn en eentje die net binnen
+ * is. In de app blijft de eerste dag stil — daar staat de lijst al op volgorde.
+ */
+export function leeftijdBoard(createdAt: string): string {
+  const minuten = Math.floor((Date.now() - parseUTC(createdAt).getTime()) / 60_000);
+  if (minuten < 60) return `${Math.max(0, minuten)} min open`;
+  const uren = Math.floor(minuten / 60);
+  if (uren < 24) return uren === 1 ? "1 uur open" : `${uren} uur open`;
+  const dagen = Math.floor(uren / 24);
+  return dagen === 1 ? "1 dag open" : `${dagen} dagen open`;
+}
+
+/** Binnen 24 uur binnengekomen — de "Nieuw"-lijst op het wandscherm. */
+export function isNieuw(createdAt: string): boolean {
+  return Date.now() - parseUTC(createdAt).getTime() < 86_400_000;
 }
 
 /** Afdeling alleen benoemen als het niet je eigen afdeling is. */
