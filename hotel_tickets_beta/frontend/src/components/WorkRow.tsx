@@ -98,7 +98,7 @@ export function WorkRow({
           </span>
         </div>
         {metaDelen.length > 0 && (
-          <p className="meta mt-[3px]">
+          <p className="meta mt-1">
             {metaDelen.map((deel, i) => (
               <span key={i}>
                 {i > 0 && <span className="text-ink-25"> · </span>}
@@ -109,7 +109,7 @@ export function WorkRow({
         )}
         {/* Herhaaltaak over meerdere kamers: de rest onder de hoofdregel */}
         {extraKamers && extraKamers.length > 0 && (
-          <div className="mt-1.5 flex flex-wrap gap-x-3 gap-y-1">
+          <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1">
             {extraKamers.map((k) => (
               <span key={k.id} className="flex items-baseline gap-1.5">
                 <span className="text-meta font-bold text-ink-70">{k.name}</span>

@@ -3,11 +3,8 @@ import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { ticketApi, locationApi, userApi, type Category, type Priority, type Ticket, type UserRole } from "../api/client";
 import TicketDetail from "./TicketDetail";
 import { WorkRow } from "../components/WorkRow";
-import { AfdelingChip } from "../components/AfdelingChip";
-import {
-  AFDELING_LABELS, afdelingTekst, eigendom, leeftijdTekst,
-  prioriteitWoord, subtaakFractie,
-} from "../werk";
+import { AFDELING_LABELS } from "../werk";
+import { werkMeta } from "../components/werkMeta";
 
 /**
  * Tickets — de lijst met filters.
@@ -228,22 +225,11 @@ export default function TicketList() {
   /** Op Tickets staat het eigendomswoord er wél altijd: deze lijst mengt
    *  werk van iedereen. */
   function meta(t: Ticket) {
-    const bezit = eigendom(t, mij.id, (id) => users[id] ?? id);
-    const prio = prioriteitWoord(t.priority);
-    return [
-      prio && (
-        <strong className={`font-semibold ${t.priority === "urgent" ? "text-urgent" : "text-high"}`}>
-          {prio}
-        </strong>
-      ),
-      t.status === "in_progress" && (
-        <strong className="font-semibold text-brand">In behandeling</strong>
-      ),
-      bezit.label,
-      afdelingTekst(t.category, mij.department) && <AfdelingChip category={t.category} />,
-      subtaakFractie(t),
-      leeftijdTekst(t.created_at),
-    ].filter(Boolean);
+    return werkMeta(t, {
+      mij: mij.id,
+      naamVan: (id) => users[id] ?? id,
+      eigenAfdeling: mij.department,
+    });
   }
 
   /** Shift-klik selecteert een reeks; gewone klik opent ernaast. */
