@@ -612,10 +612,11 @@ function TicketRegel({ ticket }: { ticket: BoardTicket }) {
         : null,
         // Op een bord telt "van wie is dit" zwaarder dan op je eigen telefoon:
         // niemand leest hier "van mij", iedereen leest een naam. Een naam krijgt
-        // daarom nadruk; "Vrij" is de afwezigheid daarvan en blijft grijs.
+        // daarom nadruk; "Niemand" is de afwezigheid daarvan en blijft grijs.
+        // Niet "Vrij" — dat woord gaat op dit bord over de kamer.
         ticket.toegewezen_aan
           ? { tekst: ticket.toegewezen_aan, klasse: "font-semibold text-ink" }
-          : { tekst: "Vrij" },
+          : { tekst: "Niemand" },
         ticket.status === "in_progress"
           ? { tekst: "In behandeling", klasse: "font-semibold text-brand" }
           : null,

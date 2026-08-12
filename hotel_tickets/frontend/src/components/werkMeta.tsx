@@ -62,8 +62,8 @@ export function werkMeta(
       <strong className="font-semibold text-brand">In behandeling</strong>
     ),
     eigenaarZichtbaar && (
-      // "Vrij" is de afwezigheid van een eigenaar en blijft daarom grijs; een
-      // naam is een antwoord en krijgt gewicht.
+      // "Niemand" is de afwezigheid van een eigenaar en blijft daarom grijs;
+      // een naam is een antwoord en krijgt gewicht.
       bezit.soort === "vrij"
         ? bezit.label
         : <strong className="font-semibold text-ink">{bezit.label}</strong>

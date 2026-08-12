@@ -52,7 +52,10 @@ export function eigendom(
   naam?: (id: string) => string,
 ): Eigendom {
   if (ticket.status === "closed") return { label: "Klaar", soort: "af" };
-  if (!ticket.assigned_to) return { label: "Vrij", soort: "vrij" };
+  // "Niemand" en niet "Vrij": vrij is in een hotel wat een kámer is, en sinds
+  // het kamernummer zijn bezetting in kleur draagt stond op één regel twee keer
+  // hetzelfde woord met twee betekenissen. Het toewijsmenu zei al "Niemand".
+  if (!ticket.assigned_to) return { label: "Niemand", soort: "vrij" };
   if (ticket.assigned_to === mij) return { label: "Van mij", soort: "mij" };
   const wie = naam ? naam(ticket.assigned_to) : ticket.assigned_to;
   return { label: `Bij ${wie}`, soort: "ander" };
