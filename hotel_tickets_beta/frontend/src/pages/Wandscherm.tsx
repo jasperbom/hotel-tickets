@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { boardApi, type Board, type BoardKolom, type BoardTaak, type BoardTicket } from "../api/client";
-import { isNieuw, leeftijdBoard } from "../werk";
+import { isNieuw, kamerKleur, leeftijdBoard } from "../werk";
 
 /**
  * Wandscherm — één scherm aan de muur in de werkplaats of het
@@ -11,8 +11,8 @@ import { isNieuw, leeftijdBoard } from "../werk";
  *
  * Het is Vandaag, maar dan gelezen op vier meter afstand. Daarom hetzelfde
  * leesmodel als de rest van de app (kamer → positie, titel → grootte,
- * prioriteit → kleur, eigendom → woord, bezetting → label), alleen met alles
- * maal een schaalfactor. Een eigen ontwerp zou betekenen dat een monteur het bord
+ * prioriteit → kleur, eigendom → woord, bezetting → kleur van de kamer),
+ * alleen met alles maal een schaalfactor. Een eigen ontwerp zou betekenen dat een monteur het bord
  * anders moet leren lezen dan zijn telefoon.
  *
  * De URL is de instelling — het scherm hangt op een vaste plek en heeft geen
@@ -498,33 +498,9 @@ function usePassendeSecties(kolom: BoardKolom, lijsten: Sectie[]) {
  * niet is laat zijn kolom leeg in plaats van de rest op te schuiven — anders
  * schuift de uitlijning per regel weer weg.
  */
-/**
- * Staat de kamer leeg?
- *
- * Hetzelfde label als KamerStatus in de app, maar in em: het bord schaalt
- * alles met de schermbreedte mee en heeft daarom overal zijn eigen maatvoering.
- * De woorden zijn wél dezelfde — wie het op zijn telefoon leest moet het op het
- * bord herkennen.
- *
- * Het staat op de eerste regel, direct achter het kamernummer: het is geen
- * eigenschap van het werk maar van de kamer, en het is de laatste vraag vóór
- * je gaat lopen.
- */
-function KamerStatus({ bezet }: { bezet: boolean | null | undefined }) {
-  if (bezet === null || bezet === undefined) return null;
-  return (
-    <span
-      className={`shrink-0 rounded-[0.25em] px-[0.4em] py-[0.05em] text-[0.85em] font-semibold ${
-        bezet ? "bg-ink-6 text-ink-45" : "bg-ink-12 text-ink"
-      }`}
-    >
-      {bezet ? "kamer bezet" : "kamer vrij"}
-    </span>
-  );
-}
-
 type MetaDeel = {
-  tekst: string;
+  /** Meestal een woord; de kamerlijst is een rij gekleurde kamernamen. */
+  tekst: React.ReactNode;
   klasse?: string;
   /**
    * Mag over meerdere regels: voor een deel dat geen woord maar een lijst is
@@ -574,17 +550,20 @@ function Regel({
 
   return (
     <div className={`break-inside-avoid py-[0.45em] border-b border-ink-6 ${randKlasse}`}>
-      {/* Kamer, bezetting en titel. flex-wrap omdat het label in een smalle
-          kolom de titel platdrukt tot losse lettergrepen: dan gaat de titel
-          liever een regel lager, over de volle breedte. */}
-      <div className="flex flex-wrap items-baseline gap-x-[0.4em]">
+      <div className="flex items-baseline gap-[0.4em]">
         {voorvoegsel && <span className="text-[1.3em] leading-tight shrink-0">{voorvoegsel}</span>}
         {kamer && (
-          <span className="text-[1.3em] font-bold leading-tight shrink-0 max-w-[45%] truncate">
+          // Rood = bezet, groen = vrij. Op vier meter is kleur het enige wat
+          // je nog los ziet van de tekst; een woord erbij zou de titel van de
+          // regel duwen in een smalle kolom.
+          <span
+            className={`text-[1.3em] font-bold leading-tight shrink-0 max-w-[45%] truncate ${
+              kamerKleur(bezet) || "text-ink"
+            }`}
+          >
             {kamer}
           </span>
         )}
-        {kamer && <KamerStatus bezet={bezet} />}
         <span className="text-[1.3em] leading-tight line-clamp-2">{titel}</span>
       </div>
       {meta.some(Boolean) && (
@@ -649,7 +628,18 @@ function TicketRegel({ ticket }: { ticket: BoardTicket }) {
 
 function TaakRegel({ taak }: { taak: BoardTaak }) {
   const fractie = taak.subtask_total ? `${taak.subtask_done ?? 0}/${taak.subtask_total}` : null;
-  const kamers = taak.kamers.length > 0 ? taak.kamers.join(", ") : null;
+  // De kamers van een ronde krijgen dezelfde kleur als een kamer op regel één:
+  // wie het bord leest ziet zo in één oogopslag waar hij nú naar binnen kan.
+  const kamers = taak.kamers.length === 0 ? null : (
+    <>
+      {taak.kamers.map((k, i) => (
+        <span key={k.naam}>
+          {i > 0 && ", "}
+          <span className={kamerKleur(k.bezet)}>{k.naam}</span>
+        </span>
+      ))}
+    </>
+  );
 
   return (
     <Regel

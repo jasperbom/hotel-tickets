@@ -1,5 +1,5 @@
 name: "Hotel Ticket System (Beta)"
-version: "1.5.63"
+version: "1.5.64"
 slug: "hotel_tickets_beta"
 description: "Testomgeving van het Hotel Ticket System — eigen database, kopieerbare productiedata, geen meldingen"
 url: "https://github.com/jasperbom/hotel-tickets"

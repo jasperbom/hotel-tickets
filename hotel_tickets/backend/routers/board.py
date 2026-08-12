@@ -220,8 +220,12 @@ async def get_board(
             "emoji": t.get("emoji"),
             "kamer": areas.get(t.get("location_id")) or t.get("location_id"),
             "kamer_bezet": bezetting.get(t["location_id"]) if t.get("location_id") else None,
-            "kamers": [areas.get(k) or k for k in t.get("subtask_items", [])]
-                      if t.get("subtask_mode") == "rooms" else [],
+            # Naam én bezetting per kamer: op het bord kleurt elke kamer van
+            # een schoonmaakronde apart, net als in de app.
+            "kamers": [
+                {"naam": areas.get(k) or k, "bezet": bezetting.get(k)}
+                for k in t.get("subtask_items", [])
+            ] if t.get("subtask_mode") == "rooms" else [],
             "subtask_done": t.get("subtask_done"),
             "subtask_total": t.get("subtask_total"),
         } for t in taken_vandaag]

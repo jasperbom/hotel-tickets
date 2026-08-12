@@ -177,9 +177,10 @@ Het bord is verdeeld in vier lijsten met een kopje: **Herhalende taken**,
 **Urgent** (spoed én hoog), **Andere taken** en **Nieuw — afgelopen 24 uur**.
 Eén regel staat in precies één lijst; urgent gaat vóór nieuw, nieuw vóór de
 rest. Per regel staat wat je vanaf vier meter nodig hebt om te beslissen of je
-gaat lopen: urgentie, eigenaar, status en hoe lang hij al open staat. Achter
-het kamernummer staat of de kamer bezet is: hetzelfde label als in de app
-("kamer vrij" / "kamer bezet"; geen keycard-sensor betekent geen label).
+gaat lopen: urgentie, eigenaar, status en hoe lang hij al open staat. Of de
+kamer bezet is zegt het kamernummer zelf, in dezelfde kleur als in de app:
+rood = bezet, groen = vrij, zwart = geen keycard-sensor (`kamerKleur` in
+`werk.ts`). Ook de kamers van een herhaalronde kleuren mee.
 
 Het bord scrollt niet: elke lijst toont wat er past en zet eronder hoeveel
 regels er nog zijn. Inkorten gaat om beurten bij de langste lijst, zodat

@@ -5,7 +5,7 @@ import { nl } from "date-fns/locale";
 import { recurringApi, locationApi, ticketApi, userApi, parseUTC, type RecurringTemplate, type HistoryEntry, type ActiveTicket, type KeycardStatus, type UserRole } from "../api/client";
 import { CategoryBadge, PriorityBadge } from "../components/StatusBadge";
 import { cronToHuman } from "../components/RecurrenceEditor";
-import KamerStatus from "../components/KamerStatus";
+import { kamerKleur, kamerToestand } from "../werk";
 
 export default function RecurringTaskDetail() {
   const { id } = useParams<{ id: string }>();
@@ -183,14 +183,20 @@ export default function RecurringTaskDetail() {
 
       {/* Kamer-banner (enkelvoudig/subtaken) */}
       {!isRoomsMode && locationName && (
-        <div className="rounded-xl overflow-hidden border border-ink-12">
-          <div className="flex items-center justify-between bg-brand text-white px-5 py-3">
-            <div className="flex items-center gap-3">
-              <span className="text-2xl">🚪</span>
-              <span className="text-xl font-bold tracking-wide">{locationName}</span>
-            </div>
-            <KamerStatus bezet={keycard?.found ? keycard.occupied : null} />
-          </div>
+        <div className="rounded-xl border border-ink-12 bg-paper-raised px-5 py-3">
+          <span className="flex items-center gap-3">
+            <span className="text-2xl">🚪</span>
+            <span
+              className={`text-xl font-bold tracking-wide ${
+                kamerKleur(keycard?.found ? keycard.occupied : null) || "text-ink"
+              }`}
+            >
+              {locationName}
+              {keycard?.found && (
+                <span className="sr-only">, {kamerToestand(keycard.occupied)}</span>
+              )}
+            </span>
+          </span>
         </div>
       )}
 
@@ -354,10 +360,16 @@ export default function RecurringTaskDetail() {
                   <div key={ticket.id} className="flex items-center gap-3 p-3 border border-ink-12 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-ink">
+                        <span
+                          className={`text-sm font-medium ${
+                            kamerKleur(roomKeycard?.found ? roomKeycard.occupied : null) || "text-ink"
+                          }`}
+                        >
                           🚪 {roomName ?? ticket.location_id ?? "Onbekende kamer"}
+                          {roomKeycard?.found && (
+                            <span className="sr-only">, {kamerToestand(roomKeycard.occupied)}</span>
+                          )}
                         </span>
-                        <KamerStatus bezet={roomKeycard?.found ? roomKeycard.occupied : null} kort />
                       </div>
                     </div>
                     <button
@@ -380,10 +392,16 @@ export default function RecurringTaskDetail() {
                   <div key={roomId} className="flex items-center gap-3 p-3 border border-ink-12 rounded-xl">
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="text-sm font-medium text-ink">
+                        <span
+                          className={`text-sm font-medium ${
+                            kamerKleur(roomKeycard?.found ? roomKeycard.occupied : null) || "text-ink"
+                          }`}
+                        >
                           🚪 {roomName ?? roomId}
+                          {roomKeycard?.found && (
+                            <span className="sr-only">, {kamerToestand(roomKeycard.occupied)}</span>
+                          )}
                         </span>
-                        <KamerStatus bezet={roomKeycard?.found ? roomKeycard.occupied : null} kort />
                       </div>
                     </div>
                     <button

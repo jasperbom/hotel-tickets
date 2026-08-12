@@ -536,6 +536,13 @@ export interface BoardTicket {
   subtask_total: number | null;
 }
 
+/** Eén kamer van een schoonmaakronde op het bord. */
+export interface BoardKamer {
+  naam: string;
+  /** Keycard: true = bezet, false = vrij, null = geen (bruikbare) sensor. */
+  bezet: boolean | null;
+}
+
 export interface BoardTaak {
   id: string;
   title: string;
@@ -544,7 +551,7 @@ export interface BoardTaak {
   kamer: string | null;
   /** Keycard: true = bezet, false = vrij, null = geen (bruikbare) sensor. */
   kamer_bezet: boolean | null;
-  kamers: string[];
+  kamers: BoardKamer[];
   subtask_done: number | null;
   subtask_total: number | null;
 }
