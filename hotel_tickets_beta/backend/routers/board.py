@@ -9,17 +9,26 @@ verversing betekent vier kansen dat het scherm half gevuld blijft staan.
 Het scherm toont dezelfde dag als Vandaag: dezelfde herhaaltaken (via
 services/vandaag.py) en dezelfde regel dat tickets uit een herhaalsjabloon niet
 los meetellen — die staan al als taakregel op het bord.
-"""
-import json
-from datetime import date, datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+Toegang kan op twee manieren:
+  * een gewone ingelogde medewerker die het bord even bekijkt;
+  * een kioskcode in de URL, voor een scherm dat niet kan inloggen (een
+    Chromecast, een TV-stick, een tablet die niemand elke maand aanraakt).
+    Die code geeft uitsluitend leestoegang tot dit ene endpoint.
+"""
+import hashlib
+import json
+import secrets
+from datetime import date, datetime, timedelta, timezone
+
+from fastapi import APIRouter, Depends, HTTPException, Query, Request
+from pydantic import BaseModel
 from sqlalchemy import and_, case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from ..auth import RequireUser
+from ..auth import CurrentUser, RequireUser, get_current_user
 from ..database import get_db
-from ..models import Category, Status, Ticket, TicketComment, UserRole
+from ..models import BoardKey, Category, Role, Status, Ticket, TicketComment, UserRole
 from ..services.ha_client import get_areas
 from ..services.vandaag import herhaaltaken
 
@@ -28,6 +37,14 @@ router = APIRouter(prefix="/board", tags=["board"])
 # Hoeveel regels een kolom hoogstens teruggeeft. Een wandscherm dat 80 tickets
 # toont is geen wandscherm meer; wie meer wil zien pakt zijn telefoon.
 MAX_PER_KOLOM = 30
+
+# Herkenbaar aan de voorkant, zodat een code in een logregel of een URL meteen
+# thuis te brengen is.
+KIOSK_PREFIX = "hbk."
+
+# Niet bij elke verversing schrijven: een scherm haalt het bord elke 30
+# seconden op, en "voor het laatst gezien" hoeft niet op de seconde te kloppen.
+LAST_SEEN_THROTTLE = timedelta(minutes=5)
 
 AFDELING_LABELS: dict[Category, str] = {
     Category.technical: "Technische dienst",
@@ -48,6 +65,45 @@ _PRIORITEIT_SORT = case(
 )
 
 
+def _hash_key(code: str) -> str:
+    return hashlib.sha256(code.encode()).hexdigest()
+
+
+async def _kiosk_key(db: AsyncSession, code: str, ip: str | None) -> BoardKey | None:
+    """Zoek de kioskcode op en stempel 'voor het laatst gezien'."""
+    if not code.startswith(KIOSK_PREFIX):
+        return None
+    result = await db.execute(select(BoardKey).where(BoardKey.key_hash == _hash_key(code)))
+    key = result.scalar_one_or_none()
+    if not key:
+        return None
+    nu = datetime.now(timezone.utc)
+    laatst = key.last_seen_at
+    if laatst is not None and laatst.tzinfo is None:
+        laatst = laatst.replace(tzinfo=timezone.utc)
+    if laatst is None or nu - laatst > LAST_SEEN_THROTTLE:
+        key.last_seen_at = nu
+        key.last_ip = ip
+    return key
+
+
+async def board_kijker(
+    request: Request,
+    sleutel: str | None = Query(None, description="Kioskcode van een scherm dat niet kan inloggen"),
+    db: AsyncSession = Depends(get_db),
+) -> CurrentUser | None:
+    """Wie mag het bord zien: een medewerker, of een scherm met een kioskcode.
+
+    Geeft None terug voor een kioskscherm — dat heeft geen eigen afdeling, dus
+    dan moet de URL zeggen welke afdelingen erop staan.
+    """
+    if sleutel:
+        if await _kiosk_key(db, sleutel, request.client.host if request.client else None):
+            return None
+        raise HTTPException(status_code=401, detail="Onbekende kioskcode")
+    return await get_current_user(request, db)
+
+
 def _subtaak_fractie(ticket: Ticket) -> tuple[int, int] | None:
     if not ticket.subtasks:
         return None
@@ -62,7 +118,7 @@ def _subtaak_fractie(ticket: Ticket) -> tuple[int, int] | None:
 
 @router.get("")
 async def get_board(
-    user: RequireUser,
+    kijker: CurrentUser | None = Depends(board_kijker),
     db: AsyncSession = Depends(get_db),
     afdelingen: str | None = Query(
         None,
@@ -89,8 +145,8 @@ async def get_board(
                 gekozen.append(cat)
         if not gekozen:
             gekozen = list(Category)
-    elif user.department:
-        gekozen = [user.department]
+    elif kijker is not None and kijker.department:
+        gekozen = [kijker.department]
     else:
         gekozen = list(Category)
 
@@ -187,3 +243,58 @@ async def get_board(
         "gegenereerd_op": datetime.now(timezone.utc).isoformat(),
         "kolommen": kolommen,
     }
+
+
+# ── Kioskcodes beheren (admin) ───────────────────────────────────────────────
+
+class BoardKeyCreate(BaseModel):
+    label: str
+
+
+def _require_admin(user: CurrentUser) -> None:
+    if user.role != Role.admin:
+        raise HTTPException(403, "Alleen admins beheren kioskcodes")
+
+
+def _key_dict(k: BoardKey) -> dict:
+    return {
+        "id": k.id,
+        "label": k.label,
+        "created_at": k.created_at.isoformat(),
+        "created_by": k.created_by,
+        "last_seen_at": k.last_seen_at.isoformat() if k.last_seen_at else None,
+        "last_ip": k.last_ip,
+    }
+
+
+@router.get("/keys")
+async def list_keys(user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    rows = (await db.execute(select(BoardKey).order_by(BoardKey.created_at))).scalars().all()
+    return [_key_dict(k) for k in rows]
+
+
+@router.post("/keys")
+async def create_key(data: BoardKeyCreate, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    """Maak een kioskcode aan. De code komt hier één keer terug en nooit meer."""
+    _require_admin(user)
+    label = data.label.strip()
+    if not label:
+        raise HTTPException(422, "Geef het scherm een naam, bijvoorbeeld 'Werkplaats'")
+
+    code = KIOSK_PREFIX + secrets.token_urlsafe(32)
+    key = BoardKey(label=label, key_hash=_hash_key(code), created_by=user.ha_user_id)
+    db.add(key)
+    await db.flush()
+    return {**_key_dict(key), "code": code}
+
+
+@router.delete("/keys/{key_id}")
+async def delete_key(key_id: str, user: RequireUser, db: AsyncSession = Depends(get_db)):
+    _require_admin(user)
+    result = await db.execute(select(BoardKey).where(BoardKey.id == key_id))
+    key = result.scalar_one_or_none()
+    if not key:
+        raise HTTPException(404, "Kioskcode bestaat niet")
+    await db.delete(key)
+    return {"ok": True}

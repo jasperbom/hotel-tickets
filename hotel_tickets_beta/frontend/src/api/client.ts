@@ -28,7 +28,15 @@ api.interceptors.response.use(
   (error) => {
     const status = error?.response?.status;
     const url: string = error?.config?.url || "";
-    if (status === 401 && !url.includes("/auth/login") && !window.location.hash.startsWith("#/login")) {
+    const opWandscherm = window.location.hash.startsWith("#/wandscherm");
+    if (
+      status === 401 &&
+      !url.includes("/auth/login") &&
+      !window.location.hash.startsWith("#/login") &&
+      // Een scherm aan de muur kan niet inloggen; daar hoort de melding op het
+      // bord zelf te komen in plaats van een inlogformulier.
+      !opWandscherm
+    ) {
       window.location.hash = "#/login";
     }
     return Promise.reject(error);
@@ -552,10 +560,31 @@ export interface Board {
   kolommen: BoardKolom[];
 }
 
+/** Een scherm dat niet kan inloggen; de code zelf is alleen bij aanmaken zichtbaar. */
+export interface BoardKey {
+  id: string;
+  label: string;
+  created_at: string;
+  created_by: string;
+  last_seen_at: string | null;
+  last_ip: string | null;
+}
+
 export const boardApi = {
-  /** `afdelingen`: komma-gescheiden lijst, "all", of leeg (eigen afdeling). */
-  get: (afdelingen?: string) =>
-    api.get<Board>("/board", { params: afdelingen ? { afdelingen } : undefined }),
+  /**
+   * `afdelingen`: komma-gescheiden lijst, "all", of leeg (eigen afdeling).
+   * `sleutel`: kioskcode, voor een scherm zonder ingelogde medewerker.
+   */
+  get: (afdelingen?: string, sleutel?: string) =>
+    api.get<Board>("/board", {
+      params: {
+        ...(afdelingen ? { afdelingen } : {}),
+        ...(sleutel ? { sleutel } : {}),
+      },
+    }),
+  listKeys: () => api.get<BoardKey[]>("/board/keys"),
+  createKey: (label: string) => api.post<BoardKey & { code: string }>("/board/keys", { label }),
+  removeKey: (id: string) => api.delete(`/board/keys/${id}`),
 };
 
 export interface IntegrationStatus {

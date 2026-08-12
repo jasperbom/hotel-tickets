@@ -473,6 +473,33 @@ class Session(Base):
     ip: Mapped[str | None] = mapped_column(String(64))
 
 
+class BoardKey(Base):
+    """Kioskcode voor een wandscherm dat niet kan inloggen.
+
+    Een Chromecast, een TV-stick of een scherm in de werkplaats heeft geen
+    medewerker die elke maand een wachtwoord intikt. Zo'n scherm krijgt een
+    eigen code in de URL, die uitsluitend het bord mag lezen (``GET /api/board``)
+    — geen tickets wijzigen, geen andere pagina, geen medewerkersgegevens
+    buiten de namen die al op het bord staan.
+
+    Net als bij sessies wordt alleen een SHA-256-hash bewaard: de code zelf zie
+    je één keer, bij het aanmaken. Kwijt is opnieuw aanmaken, en dat is de
+    bedoeling — een code die je kunt terugkijken is een code die blijft
+    rondslingeren."""
+    __tablename__ = "board_keys"
+
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=new_uuid)
+    key_hash: Mapped[str] = mapped_column(String(64), unique=True, index=True, nullable=False)
+    # Waar hangt dit scherm? Puur voor herkenning in de lijst.
+    label: Mapped[str] = mapped_column(String(120), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=lambda: datetime.now(timezone.utc))
+    created_by: Mapped[str] = mapped_column(String(255), nullable=False)
+    # Wanneer heeft dit scherm voor het laatst het bord opgehaald? Een scherm
+    # dat er al drie dagen niet meer is, hangt scheef of staat uit.
+    last_seen_at: Mapped[datetime | None] = mapped_column(DateTime)
+    last_ip: Mapped[str | None] = mapped_column(String(64))
+
+
 # ── Kennisbank / bot module ──────────────────────────────────────────────────────
 
 class KnowledgeQuestionStatus(str, PyEnum):
