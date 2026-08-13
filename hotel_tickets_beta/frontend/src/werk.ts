@@ -42,17 +42,21 @@ export const AFDELING_LABELS: Record<Category, string> = {
 
 export type Eigendom = {
   label: string;
-  /** af = klaar, vrij = niemand, mij = van mij, ander = bij een collega */
-  soort: "af" | "vrij" | "mij" | "ander";
+  /** af = klaar, afdeling = nog van niemand, mij = van mij, ander = collega */
+  soort: "af" | "afdeling" | "mij" | "ander";
 };
 
 export function eigendom(
-  ticket: Pick<Ticket, "status" | "assigned_to">,
+  ticket: Pick<Ticket, "status" | "assigned_to" | "category">,
   mij: string,
   naam?: (id: string) => string,
 ): Eigendom {
   if (ticket.status === "closed") return { label: "Klaar", soort: "af" };
-  if (!ticket.assigned_to) return { label: "Vrij", soort: "vrij" };
+  // Heeft niemand het opgepakt, dan is het van de afdeling. Hier stond eerst
+  // "Vrij" en daarna "Niemand", en dat waren allebei antwoorden op de vraag
+  // wie het níet heeft. De afdeling is het antwoord op wie het wél moet doen,
+  // en dat is wat je van een werkregel wil weten.
+  if (!ticket.assigned_to) return { label: AFDELING_KORT[ticket.category], soort: "afdeling" };
   if (ticket.assigned_to === mij) return { label: "Van mij", soort: "mij" };
   const wie = naam ? naam(ticket.assigned_to) : ticket.assigned_to;
   return { label: `Bij ${wie}`, soort: "ander" };

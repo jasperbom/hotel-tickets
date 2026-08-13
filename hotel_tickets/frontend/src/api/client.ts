@@ -502,6 +502,8 @@ export const userApi = {
 export const locationApi = {
   list: () => api.get<Location[]>("/locations/"),
   keycard: (areaId: string) => api.get<KeycardStatus>(`/locations/${areaId}/keycard`),
+  /** Alle kamers in één verzoek: {area_id: bezet}. Ontbreekt = geen sensor. */
+  keycards: () => api.get<Record<string, boolean>>("/locations/keycards"),
 };
 
 export const recurringApi = {

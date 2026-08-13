@@ -17,8 +17,8 @@ import {
  *
  *   1. Moet dit nú?          urgentie, in kleur
  *   2. Is iemand ermee bezig? status
- *   3. Van wie is het?        eigenaar, met nadruk als er een naam staat
- *   4. Van welke afdeling?    alleen als het niet de jouwe is
+ *   3. Van wie is het?        een naam, of de afdeling als niemand het heeft
+ *   4. Van welke afdeling?    alleen als 3 een naam is en het niet jouw afdeling is
  *   5. Hoe ver is het?        subtaken
  *   6. Hoe lang ligt het al?  leeftijd
  *
@@ -44,9 +44,16 @@ export function werkMeta(
      * iedereen door elkaar en is het juist het antwoord op de eerste vraag.
      */
     verbergEigenNaam?: boolean;
+    /**
+     * Op Vandaag hoeft "3 dagen open" niet: die lijst is de dag van vandaag en
+     * staat al op volgorde, dus de leeftijd stuurt geen enkele keuze — hij
+     * maakte alleen elke regel een tekstregel hoger. In de ticketlijst is het
+     * wél het antwoord op "wat blijft hier liggen".
+     */
+    verbergLeeftijd?: boolean;
   },
 ): ReactNode[] {
-  const { mij, naamVan, eigenAfdeling, verbergEigenNaam = false } = opties;
+  const { mij, naamVan, eigenAfdeling, verbergEigenNaam = false, verbergLeeftijd = false } = opties;
 
   const prio = prioriteitWoord(ticket.priority);
   const bezit = eigendom(ticket, mij, naamVan);
@@ -62,14 +69,18 @@ export function werkMeta(
       <strong className="font-semibold text-brand">In behandeling</strong>
     ),
     eigenaarZichtbaar && (
-      // "Vrij" is de afwezigheid van een eigenaar en blijft daarom grijs; een
-      // naam is een antwoord en krijgt gewicht.
-      bezit.soort === "vrij"
-        ? bezit.label
+      // Een naam is een antwoord en krijgt gewicht. Heeft niemand het, dan
+      // staat hier de afdeling — als plaatje, want zo staat de afdeling overal
+      // in de app.
+      bezit.soort === "afdeling"
+        ? <AfdelingChip category={ticket.category} />
         : <strong className="font-semibold text-ink">{bezit.label}</strong>
     ),
-    afdelingTekst(ticket.category, eigenAfdeling) && <AfdelingChip category={ticket.category} />,
+    // Alleen nog als losse vermelding wanneer het vakje hierboven een naam
+    // toont: anders zou dezelfde afdeling twee keer op één regel staan.
+    bezit.soort !== "afdeling" &&
+      afdelingTekst(ticket.category, eigenAfdeling) && <AfdelingChip category={ticket.category} />,
     subtaakFractie(ticket),
-    leeftijdTekst(ticket.created_at),
+    !verbergLeeftijd && leeftijdTekst(ticket.created_at),
   ].filter(Boolean);
 }

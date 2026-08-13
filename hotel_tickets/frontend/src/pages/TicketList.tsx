@@ -59,6 +59,9 @@ export default function TicketList() {
 
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [locations, setLocations] = useState<Record<string, string>>({});
+  // Bezetting per kamer, in één verzoek voor de hele lijst. Zonder dit stond
+  // hier een zwart kamernummer terwijl Vandaag het rood of groen liet zien.
+  const [keycards, setKeycards] = useState<Record<string, boolean>>({});
   const [users, setUsers] = useState<Record<string, string>>({});
   const [mij, setMij] = useState<{ id: string; department: Category | null }>({ id: "", department: null });
   // Pas laden als we weten bij welke afdeling je hoort — anders zie je eerst
@@ -122,10 +125,13 @@ export default function TicketList() {
   // Los van elkaar: hapert de kamerlijst (die komt uit Home Assistant), dan
   // hoort de lijst nog steeds "Van mij" te tonen in plaats van een user-id.
   useEffect(() => {
-    Promise.allSettled([locationApi.list(), userApi.list(), userApi.me()]).then(([locs, usrs, me]) => {
+    Promise.allSettled([
+      locationApi.list(), userApi.list(), userApi.me(), locationApi.keycards(),
+    ]).then(([locs, usrs, me, kc]) => {
       if (locs.status === "fulfilled") {
         setLocations(Object.fromEntries(locs.value.data.map((l) => [l.id, l.name])));
       }
+      if (kc.status === "fulfilled") setKeycards(kc.value.data);
       if (usrs.status === "fulfilled") {
         setUsers(Object.fromEntries(usrs.value.data.map((u) => [u.ha_user_id, u.display_name])));
         setAlleUsers(usrs.value.data);
@@ -220,6 +226,12 @@ export default function TicketList() {
   function kamerVan(locationId: string | null | undefined): string | undefined {
     if (!locationId) return undefined;
     return locations[locationId] ?? locationId;
+  }
+
+  /** Geen sensor = niet in de lijst; dan blijft het kamernummer gewoon zwart. */
+  function bezetVan(locationId: string | null | undefined): boolean | undefined {
+    if (!locationId) return undefined;
+    return keycards[locationId];
   }
 
   /** Op Tickets staat het eigendomswoord er wél altijd: deze lijst mengt
@@ -420,6 +432,7 @@ export default function TicketList() {
                     geselecteerd={selectie.includes(t.id) || geopend === t.id}
                     priority={t.priority}
                     kamer={kamerVan(t.location_id)}
+                    occupied={bezetVan(t.location_id)}
                     title={t.title}
                     meta={meta(t)}
                     done={t.status === "closed"}
@@ -430,6 +443,7 @@ export default function TicketList() {
                     to={`/tickets/${t.id}`}
                     priority={t.priority}
                     kamer={kamerVan(t.location_id)}
+                    occupied={bezetVan(t.location_id)}
                     title={t.title}
                     meta={meta(t)}
                     done={t.status === "closed"}

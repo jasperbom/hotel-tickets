@@ -1,9 +1,13 @@
+import logging
+
 from fastapi import APIRouter, Depends
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from ..database import get_db
 from ..auth import RequireUser
-from ..services.ha_client import get_areas, get_sensor_state
+from ..services.ha_client import get_areas, get_keycard_states, get_sensor_state
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/locations", tags=["locations"])
 
@@ -13,6 +17,27 @@ async def list_locations(user: RequireUser, db: AsyncSession = Depends(get_db)):
     """Haal HA areas op als locaties voor tickets."""
     areas = await get_areas()
     return areas
+
+
+@router.get("/keycards")
+async def get_all_keycards(user: RequireUser) -> dict[str, bool]:
+    """
+    Bezetting van alle kamers in één verzoek: {area_id: bezet}.
+
+    Een lijst met dertig tickets vroeg anders dertig keer los een sensor op.
+    Kamers zonder (bruikbare) sensor ontbreken; de voorkant leest een
+    ontbrekende sleutel als "onbekend", en dat is iets anders dan "vrij".
+
+    Staat vóór /{area_id}/keycard: anders leest FastAPI "keycards" als area_id.
+
+    Geen Home Assistant, geen fout: dan zijn er domweg geen standen. Een lijst
+    met werk hoort niet om te vallen omdat de sensoren even niets zeggen.
+    """
+    try:
+        return await get_keycard_states()
+    except Exception:
+        logger.warning("Keycard-standen niet op te halen", exc_info=True)
+        return {}
 
 
 @router.get("/{area_id}/keycard")
