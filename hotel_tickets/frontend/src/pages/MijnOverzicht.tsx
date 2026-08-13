@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import api, {
-  ticketApi, locationApi, userApi, recurringApi,
+  ticketApi, locationApi, userApi, recurringApi, parseUTC,
   type Ticket, type Category, type Priority, type Role, type UpcomingRecurring,
 } from "../api/client";
 import { WorkRow, type ExtraKamer } from "../components/WorkRow";
@@ -8,7 +8,7 @@ import { AfdelingChip } from "../components/AfdelingChip";
 import { UndoBar } from "../components/UndoBar";
 import { useUitgesteldeActie } from "../undo";
 import {
-  AFDELING_LABELS, afdelingTekst, herhaalKort,
+  AFDELING_LABELS, afdelingTekst, herhaalKort, leeftijdTekst,
 } from "../werk";
 import { werkMeta } from "../components/werkMeta";
 
@@ -55,6 +55,9 @@ const SOORT_KEY = "hts.vandaag_soort";
 
 const TE_PAKKEN_ZICHTBAAR = 3;
 
+/** Een taak die zo lang blijft liggen gaat niet meer over vandaag. */
+const OUD_NA_DAGEN = 3;
+
 export default function Vandaag() {
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
@@ -75,8 +78,15 @@ export default function Vandaag() {
   );
   const tePakkenRef = useRef<HTMLElement>(null);
 
+  // Alleen wat nog van niemand is — dezelfde knop als vroeger, nu naast de
+  // wissel in plaats van als tweede getal.
+  const [alleenTePakken, setAlleenTePakken] = useState(false);
+  // Openstaande achterstand: dicht, tenzij iemand hem opentrekt.
+  const [toonOud, setToonOud] = useState(false);
+
   function kiesSoort(nieuw: "tickets" | "herhalend") {
     setSoort(nieuw);
+    setAlleenTePakken(false);
     localStorage.setItem(SOORT_KEY, nieuw);
   }
 
@@ -97,19 +107,11 @@ export default function Vandaag() {
       setUsers(Object.fromEntries(usrs.value.data.map((u) => [u.ha_user_id, u.display_name])));
     }
 
-    const tickets = [...(ov.data.urgent_tickets ?? []), ...ov.data.my_tickets, ...ov.data.available_tickets];
-    const taken = [...(ov.data.today_recurring ?? []), ...(ov.data.upcoming_recurring ?? [])];
-    const areaIds = [...new Set([
-      ...tickets.map((t) => t.location_id).filter(Boolean) as string[],
-      ...taken.map((t) => t.location_id).filter(Boolean) as string[],
-      ...taken.filter((t) => t.subtask_mode === "rooms").flatMap((t) => t.subtask_items ?? []),
-    ])];
-    const results = await Promise.allSettled(
-      areaIds.map((id) => locationApi.keycard(id).then((r) => ({ id, occupied: r.data.found ? r.data.occupied : null })))
-    );
-    const map: Record<string, boolean | null> = {};
-    results.forEach((r) => { if (r.status === "fulfilled") map[r.value.id] = r.value.occupied; });
-    setKeycards(map);
+    // Alle kamers in één verzoek: dit waren er net zoveel als er kamers op het
+    // scherm stonden, en op hotelwifi is dat het verschil tussen een scherm dat
+    // staat en een scherm dat druppelt.
+    const kc = await locationApi.keycards().catch(() => null);
+    if (kc) setKeycards(kc.data);
   }, [alleAfdelingen]);
 
   // Afvinken gaat optimistisch: de rij is meteen klaar en de API-aanroep
@@ -152,12 +154,27 @@ export default function Vandaag() {
       a.created_at.localeCompare(b.created_at));
   }, [overview]);
 
-  /** De herhaaltaken van vandaag, in dezelfde volgorde als de tickets. */
-  const taken = useMemo<UpcomingRecurring[]>(() => {
-    const lijst = [...(overview?.today_recurring ?? [])];
-    return lijst.sort((a, b) =>
+  /**
+   * De taken van vandaag, in dezelfde volgorde als de tickets — maar in twee
+   * stapels.
+   *
+   * Een herhaaltaak die al een week open staat blijft elke dag bovenaan
+   * meedoen, en dan gaat de lijst over die ene achterstand in plaats van over
+   * vandaag. Alles ouder dan drie dagen zakt daarom naar een dichtgeklapte map
+   * onderaan: het staat er nog, met een getal, maar het duwt het werk van
+   * vandaag niet meer weg.
+   */
+  const { taken, blijftLiggen } = useMemo(() => {
+    const opVolgorde = [...(overview?.today_recurring ?? [])].sort((a, b) =>
       PRIORITEIT_RANG[a.priority] - PRIORITEIT_RANG[b.priority] ||
       a.next_run.localeCompare(b.next_run));
+    // next_run is bij een achterstallige taak het moment dat hij open ging
+    // (zie services/vandaag.py), dus dat is precies "hoe lang staat dit al".
+    const grens = Date.now() - OUD_NA_DAGEN * 86_400_000;
+    return {
+      taken: opVolgorde.filter((t) => parseUTC(t.next_run).getTime() >= grens),
+      blijftLiggen: opVolgorde.filter((t) => parseUTC(t.next_run).getTime() < grens),
+    };
   }, [overview]);
 
   if (loading) {
@@ -229,11 +246,14 @@ export default function Vandaag() {
     return werkMeta(t, metaOpties);
   }
 
-  function metaTaak(taak: UpcomingRecurring) {
+  function metaTaak(taak: UpcomingRecurring, metLeeftijd = false) {
     const fractie = taak.subtask_total ? `${taak.subtask_done ?? 0}/${taak.subtask_total}` : null;
     return [
       afdelingTekst(taak.category, user.department) && <AfdelingChip category={taak.category} />,
       fractie,
+      // In de map "blijft liggen" is hoe lang het al ligt juist het verschil
+      // tussen deze taken; op de dagelijkse lijst zou het ruis zijn.
+      metLeeftijd && leeftijdTekst(taak.next_run),
       herhaalKort(taak.cron_expression, taak.interval_days),
     ].filter(Boolean);
   }
@@ -277,37 +297,72 @@ export default function Vandaag() {
         <SoortKnop
           actief={soort === "herhalend"}
           onClick={() => kiesSoort("herhalend")}
-          label="Herhalend"
-          aantal={taken.length}
+          label="Taken"
+          aantal={taken.length + blijftLiggen.length}
         />
+        {/* Filter, geen wissel: hij zit binnen Tickets en staat daarom los. */}
+        {soort === "tickets" && aantalTePakken > 0 && (
+          <SoortKnop
+            actief={alleenTePakken}
+            onClick={() => setAlleenTePakken(!alleenTePakken)}
+            label="Te pakken"
+            aantal={aantalTePakken}
+            losstaand
+          />
+        )}
       </div>
 
       {soort === "herhalend" && (
         <section>
-          {taken.length === 0 ? (
-            <p className="meta">Geen herhalende taken voor vandaag.</p>
+          {taken.length === 0 && blijftLiggen.length === 0 ? (
+            <p className="meta">Geen taken voor vandaag.</p>
           ) : (
             <div className="grid gap-1.5">
-              {taken.map((taak) => {
-                const key = `taak-${taak.id}`;
-                return (
-                  <TaakRij
-                    key={key}
-                    taak={taak}
-                    kamers={kamersVanTaak(taak)}
-                    meta={afgevinkt(key) ? ["Klaar"] : metaTaak(taak)}
-                    done={afgevinkt(key)}
-                    magAfronden={magHandelen(taak.category) && !afgevinkt(key)}
-                    onAfronden={() => rondTaakAf(taak)}
-                  />
-                );
-              })}
+              {taken.map((taak) => (
+                <TaakRij
+                  key={`taak-${taak.id}`}
+                  taak={taak}
+                  kamers={kamersVanTaak(taak)}
+                  meta={afgevinkt(`taak-${taak.id}`) ? ["Klaar"] : metaTaak(taak)}
+                  done={afgevinkt(`taak-${taak.id}`)}
+                  magAfronden={magHandelen(taak.category) && !afgevinkt(`taak-${taak.id}`)}
+                  onAfronden={() => rondTaakAf(taak)}
+                />
+              ))}
+              {taken.length === 0 && (
+                <p className="meta">Niets meer voor vandaag.</p>
+              )}
+
+              {blijftLiggen.length > 0 && (
+                <>
+                  <button
+                    onClick={() => setToonOud(!toonOud)}
+                    aria-expanded={toonOud}
+                    className="tap gap-2 mt-1.5 w-full rounded-[10px] border border-ink-12 bg-paper-raised px-4 text-meta font-semibold text-ink-70 hover:bg-ink-6 transition-colors"
+                  >
+                    <span>{toonOud ? "▾" : "▸"}</span>
+                    <span>Blijft liggen</span>
+                    <span className="tabular-nums text-ink-45">{blijftLiggen.length}</span>
+                  </button>
+                  {toonOud && blijftLiggen.map((taak) => (
+                    <TaakRij
+                      key={`taak-${taak.id}`}
+                      taak={taak}
+                      kamers={kamersVanTaak(taak)}
+                      meta={afgevinkt(`taak-${taak.id}`) ? ["Klaar"] : metaTaak(taak, true)}
+                      done={afgevinkt(`taak-${taak.id}`)}
+                      magAfronden={magHandelen(taak.category) && !afgevinkt(`taak-${taak.id}`)}
+                      onAfronden={() => rondTaakAf(taak)}
+                    />
+                  ))}
+                </>
+              )}
             </div>
           )}
         </section>
       )}
 
-      {soort === "tickets" && (
+      {soort === "tickets" && !alleenTePakken && (
         <section>
           <SectieKop>Nu</SectieKop>
           {nuTickets.length === 0 ? (
@@ -404,12 +459,14 @@ function SectieKop({ children }: { children: React.ReactNode }) {
  * je zoekt de lijst op zijn naam en leest daarna pas hoeveel er ligt.
  */
 function SoortKnop({
-  label, aantal, actief, onClick,
+  label, aantal, actief, onClick, losstaand = false,
 }: {
   label: string;
   aantal: number;
   actief: boolean;
   onClick: () => void;
+  /** Een filter binnen de gekozen kant, geen kant van de wissel zelf. */
+  losstaand?: boolean;
 }) {
   return (
     <button
@@ -418,6 +475,8 @@ function SoortKnop({
       // gap en niet een spatie: de knop is een flexbox, en die slikt een
       // losse spatie tussen twee elementen op.
       className={`tap gap-1.5 px-3.5 rounded-full text-meta transition-colors ${
+        losstaand ? "ml-auto" : ""
+      } ${
         actief
           ? "bg-ink text-paper font-semibold"
           : "bg-paper-raised border border-ink-12 text-ink-70 font-medium hover:bg-ink-6"
