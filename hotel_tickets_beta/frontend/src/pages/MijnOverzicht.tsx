@@ -15,14 +15,22 @@ import { werkMeta } from "../components/werkMeta";
 /**
  * Vandaag — het startscherm.
  *
- * Twee blokken, vaste volgorde, altijd aanwezig (ook leeg):
- *   NU        — wat aan jou toebehoort of urgent is, inclusief de
- *               herhaaltaken van vandaag; die staan gewoon tussen de rest.
- *   TE PAKKEN — wat er in jouw afdeling ligt zonder eigenaar.
+ * Bovenaan staat een wissel tussen twee soorten werk, met hoeveel er van elk
+ * ligt:
+ *   TICKETS    — NU (van jou of urgent) en TE PAKKEN (in jouw afdeling,
+ *                zonder eigenaar).
+ *   HERHALEND  — de terugkerende taken van vandaag.
  *
- * Meer blokken zijn er niet: een derde vraag heeft niemand in de eerste twee
- * seconden. Geen begroeting, geen datum, geen statistiektegels — die kostten
- * 342 px vóór de eerste regel werk.
+ * De twee stonden eerst door elkaar in één lijst NU. Dat leest prettig op een
+ * groot scherm en slecht op een telefoon: je scrolt langs de schoonmaakronde
+ * heen om te zien of er een storing ligt, en andersom. Gescheiden is elke
+ * lijst kort genoeg om in één blik te overzien, en het getal op de andere knop
+ * zegt of daar iets op je wacht.
+ *
+ * De keuze blijft staan tussen bezoeken: een housekeeper leeft in Herhalend,
+ * de technische dienst in Tickets. Meer blokken zijn er niet — geen
+ * begroeting, geen datum, geen statistiektegels, die kostten 342 px vóór de
+ * eerste regel werk.
  */
 
 interface Overview {
@@ -43,12 +51,9 @@ interface Overview {
 const PRIORITEIT_RANG: Record<Priority, number> = { urgent: 0, high: 1, medium: 2, low: 3 };
 
 const ALLE_AFDELINGEN_KEY = "hts.vandaag_alle_afdelingen";
+const SOORT_KEY = "hts.vandaag_soort";
 
 const TE_PAKKEN_ZICHTBAAR = 3;
-
-type NuItem =
-  | { soort: "ticket"; key: string; ticket: Ticket }
-  | { soort: "taak"; key: string; taak: UpcomingRecurring };
 
 export default function Vandaag() {
   const [overview, setOverview] = useState<Overview | null>(null);
@@ -63,9 +68,17 @@ export default function Vandaag() {
   const [alleAfdelingen, setAlleAfdelingen] = useState(
     () => localStorage.getItem(ALLE_AFDELINGEN_KEY) === "1",
   );
-  // De twee getallen bovenaan zetten een filter, ze navigeren niet.
-  const [focus, setFocus] = useState<"nu" | "pakken" | null>(null);
+  // Tickets of herhalende taken; de knoppen bovenaan wisselen, ze navigeren
+  // niet. Wie hier gisteren op Herhalend stond staat er morgen weer op.
+  const [soort, setSoort] = useState<"tickets" | "herhalend">(
+    () => (localStorage.getItem(SOORT_KEY) === "herhalend" ? "herhalend" : "tickets"),
+  );
   const tePakkenRef = useRef<HTMLElement>(null);
+
+  function kiesSoort(nieuw: "tickets" | "herhalend") {
+    setSoort(nieuw);
+    localStorage.setItem(SOORT_KEY, nieuw);
+  }
 
   const loadData = useCallback(async () => {
     // Het werk zelf is het enige dat moet lukken. Kamernamen en collega-namen
@@ -123,7 +136,8 @@ export default function Vandaag() {
     };
   }, [loadData]);
 
-  const nuItems = useMemo<NuItem[]>(() => {
+  /** Wat nú van jou is of urgent: dezelfde ticket twee keer telt één keer. */
+  const nuTickets = useMemo<Ticket[]>(() => {
     if (!overview) return [];
     const gezien = new Set<string>();
     const tickets: Ticket[] = [];
@@ -132,19 +146,18 @@ export default function Vandaag() {
       gezien.add(t.id);
       tickets.push(t);
     }
-    const items: NuItem[] = [
-      ...tickets.map((t) => ({ soort: "ticket" as const, key: t.id, ticket: t })),
-      ...(overview.today_recurring ?? []).map((t) => ({ soort: "taak" as const, key: `taak-${t.id}`, taak: t })),
-    ];
     // Urgent altijd bovenaan, daarna prioriteit, daarna het oudste eerst.
-    return items.sort((a, b) => {
-      const pa = a.soort === "ticket" ? a.ticket.priority : a.taak.priority;
-      const pb = b.soort === "ticket" ? b.ticket.priority : b.taak.priority;
-      if (PRIORITEIT_RANG[pa] !== PRIORITEIT_RANG[pb]) return PRIORITEIT_RANG[pa] - PRIORITEIT_RANG[pb];
-      const da = a.soort === "ticket" ? a.ticket.created_at : a.taak.next_run;
-      const db = b.soort === "ticket" ? b.ticket.created_at : b.taak.next_run;
-      return da.localeCompare(db);
-    });
+    return tickets.sort((a, b) =>
+      PRIORITEIT_RANG[a.priority] - PRIORITEIT_RANG[b.priority] ||
+      a.created_at.localeCompare(b.created_at));
+  }, [overview]);
+
+  /** De herhaaltaken van vandaag, in dezelfde volgorde als de tickets. */
+  const taken = useMemo<UpcomingRecurring[]>(() => {
+    const lijst = [...(overview?.today_recurring ?? [])];
+    return lijst.sort((a, b) =>
+      PRIORITEIT_RANG[a.priority] - PRIORITEIT_RANG[b.priority] ||
+      a.next_run.localeCompare(b.next_run));
   }, [overview]);
 
   if (loading) {
@@ -164,8 +177,13 @@ export default function Vandaag() {
   const tePakken = available_tickets.filter((t) => magHandelen(t.category));
   const tePakkenZichtbaar = allesTonen ? tePakken : tePakken.slice(0, TE_PAKKEN_ZICHTBAAR);
 
-  const aantalVoorJou = nuItems.length;
   const aantalTePakken = tePakken.length;
+  // Het getal op de knop is wat je in dat scherm te zien krijgt. Een urgente
+  // ticket zonder eigenaar staat in beide lijsten; die telt hier één keer.
+  const aantalTickets = new Set([
+    ...nuTickets.map((t) => t.id),
+    ...tePakken.map((t) => t.id),
+  ]).size;
 
   function kamerVan(locationId: string | null | undefined): string | undefined {
     if (!locationId) return undefined;
@@ -193,6 +211,9 @@ export default function Vandaag() {
     mij: user.ha_user_id,
     naamVan: (id: string) => users[id] ?? id,
     eigenAfdeling: user.department,
+    // Zie werkMeta: op Vandaag zegt "3 dagen open" niets wat de volgorde niet
+    // al zegt, en het kost op een telefoon een regel per ticket.
+    verbergLeeftijd: true,
   };
 
   const keycardVan = (t: Ticket) => (t.location_id ? keycards[t.location_id] : undefined);
@@ -245,69 +266,83 @@ export default function Vandaag() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Samenvatting: twee chips die filteren, niet navigeren */}
+      {/* De wissel: welk soort werk, en hoeveel ervan ligt er */}
       <div className="flex gap-2">
-        <FilterChip
-          actief={focus === "nu"}
-          onClick={() => setFocus(focus === "nu" ? null : "nu")}
-          label={`${aantalVoorJou} voor jou`}
+        <SoortKnop
+          actief={soort === "tickets"}
+          onClick={() => kiesSoort("tickets")}
+          label="Tickets"
+          aantal={aantalTickets}
         />
-        <FilterChip
-          actief={focus === "pakken"}
-          onClick={() => setFocus(focus === "pakken" ? null : "pakken")}
-          label={`${aantalTePakken} te pakken`}
+        <SoortKnop
+          actief={soort === "herhalend"}
+          onClick={() => kiesSoort("herhalend")}
+          label="Herhalend"
+          aantal={taken.length}
         />
       </div>
 
-      {focus !== "pakken" && (
+      {soort === "herhalend" && (
         <section>
-          <SectieKop>Nu</SectieKop>
-          {nuItems.length === 0 ? (
-            <LegeStaatNu
-              aantalTePakken={aantalTePakken}
-              afdeling={afdelingNaam}
-              onBekijk={() => {
-                setFocus(null);
-                tePakkenRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-              }}
-            />
+          {taken.length === 0 ? (
+            <p className="meta">Geen herhalende taken voor vandaag.</p>
           ) : (
-            <div className="grid gap-2">
-              {nuItems.map((item) =>
-                item.soort === "ticket" ? (
-                  <WorkRow
-                    key={item.key}
-                    to={`/tickets/${item.ticket.id}`}
-                    priority={item.ticket.priority}
-                    kamer={kamerVan(item.ticket.location_id)}
-                    occupied={keycardVan(item.ticket)}
-                    title={item.ticket.title}
-                    meta={afgevinkt(item.key) ? ["Klaar"] : metaNu(item.ticket)}
-                    done={afgevinkt(item.key)}
-                    actie={
-                      magHandelen(item.ticket.category) && !afgevinkt(item.key)
-                        ? { soort: "afronden", onAfronden: () => rondTicketAf(item.ticket), label: "Ticket afronden" }
-                        : { soort: "geen" }
-                    }
-                  />
-                ) : (
+            <div className="grid gap-1.5">
+              {taken.map((taak) => {
+                const key = `taak-${taak.id}`;
+                return (
                   <TaakRij
-                    key={item.key}
-                    taak={item.taak}
-                    kamers={kamersVanTaak(item.taak)}
-                    meta={afgevinkt(item.key) ? ["Klaar"] : metaTaak(item.taak)}
-                    done={afgevinkt(item.key)}
-                    magAfronden={magHandelen(item.taak.category) && !afgevinkt(item.key)}
-                    onAfronden={() => rondTaakAf(item.taak)}
+                    key={key}
+                    taak={taak}
+                    kamers={kamersVanTaak(taak)}
+                    meta={afgevinkt(key) ? ["Klaar"] : metaTaak(taak)}
+                    done={afgevinkt(key)}
+                    magAfronden={magHandelen(taak.category) && !afgevinkt(key)}
+                    onAfronden={() => rondTaakAf(taak)}
                   />
-                )
-              )}
+                );
+              })}
             </div>
           )}
         </section>
       )}
 
-      {focus !== "nu" && (
+      {soort === "tickets" && (
+        <section>
+          <SectieKop>Nu</SectieKop>
+          {nuTickets.length === 0 ? (
+            <LegeStaatNu
+              aantalTePakken={aantalTePakken}
+              afdeling={afdelingNaam}
+              onBekijk={() =>
+                tePakkenRef.current?.scrollIntoView({ behavior: "smooth", block: "start" })
+              }
+            />
+          ) : (
+            <div className="grid gap-1.5">
+              {nuTickets.map((t) => (
+                <WorkRow
+                  key={t.id}
+                  to={`/tickets/${t.id}`}
+                  priority={t.priority}
+                  kamer={kamerVan(t.location_id)}
+                  occupied={keycardVan(t)}
+                  title={t.title}
+                  meta={afgevinkt(t.id) ? ["Klaar"] : metaNu(t)}
+                  done={afgevinkt(t.id)}
+                  actie={
+                    magHandelen(t.category) && !afgevinkt(t.id)
+                      ? { soort: "afronden", onAfronden: () => rondTicketAf(t), label: "Ticket afronden" }
+                      : { soort: "geen" }
+                  }
+                />
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {soort === "tickets" && (
         <section ref={tePakkenRef}>
           <div className="flex items-baseline gap-3">
             <SectieKop>Te pakken · {afdelingNaam}</SectieKop>
@@ -327,7 +362,7 @@ export default function Vandaag() {
           {tePakken.length === 0 ? (
             <p className="meta">Niets zonder eigenaar in {afdelingNaam}.</p>
           ) : (
-            <div className="grid gap-2">
+            <div className="grid gap-1.5">
               {tePakkenZichtbaar.map((t) => (
                 <WorkRow
                   key={t.id}
@@ -364,18 +399,32 @@ function SectieKop({ children }: { children: React.ReactNode }) {
   );
 }
 
-function FilterChip({ label, actief, onClick }: { label: string; actief: boolean; onClick: () => void }) {
+/**
+ * Eén kant van de wissel. Het getal staat achter het woord en niet ervoor:
+ * je zoekt de lijst op zijn naam en leest daarna pas hoeveel er ligt.
+ */
+function SoortKnop({
+  label, aantal, actief, onClick,
+}: {
+  label: string;
+  aantal: number;
+  actief: boolean;
+  onClick: () => void;
+}) {
   return (
     <button
       onClick={onClick}
       aria-pressed={actief}
-      className={`tap px-3.5 rounded-full text-meta transition-colors ${
+      // gap en niet een spatie: de knop is een flexbox, en die slikt een
+      // losse spatie tussen twee elementen op.
+      className={`tap gap-1.5 px-3.5 rounded-full text-meta transition-colors ${
         actief
           ? "bg-ink text-paper font-semibold"
           : "bg-paper-raised border border-ink-12 text-ink-70 font-medium hover:bg-ink-6"
       }`}
     >
-      {label}
+      <span>{label}</span>
+      <span className={`tabular-nums ${actief ? "text-paper/70" : "text-ink-45"}`}>{aantal}</span>
     </button>
   );
 }

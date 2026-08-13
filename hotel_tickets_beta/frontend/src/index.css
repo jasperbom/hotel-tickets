@@ -207,9 +207,13 @@ body.undo-open {
   /* ── Werkrij ────────────────────────────────────────────────────────────
      Drie klassen, niet meer. De linkerrand betekent overal hetzelfde:
      prioriteit. Wie die ergens anders voor gebruikt, breekt de hele set. */
+  /* py-2.5 in plaats van py-3.5: op een telefoon scheelde de oude lucht twee
+     regels werk per scherm, en dat is precies wat een werklijst moet doen.
+     min-h-tap houdt de rij een aanraakdoel — een regel zonder metaregel zou
+     ander op 39 px uitkomen. */
   .row {
     @apply flex items-center gap-3.5 bg-paper-raised border border-ink-12
-           rounded-[10px] pl-4 pr-3 py-3.5;
+           rounded-[10px] pl-4 pr-3 py-2.5 min-h-tap;
   }
   .row--urgent {
     @apply border-l-4 border-l-urgent pl-3;
