@@ -4,7 +4,7 @@ import { format } from "date-fns";
 import { nl } from "date-fns/locale";
 import { ticketApi, userApi, locationApi, knowledgeApi, notificationApi, parseUTC, type Ticket, type Comment, type TicketEvent, type UserRole, type Priority, type Status, type KeycardStatus, type Role, type Category } from "../api/client";
 import { Camera, Check, ChevronLeft, Clock, MoreHorizontal } from "lucide-react";
-import { AFDELING_KORT, AFDELING_LABELS, bezigTekst, eigendom, kamerKleur, kamerToestand, leeftijdTekst, prioriteitWoord } from "../werk";
+import { AFDELING_KORT, AFDELING_LABELS, bezigTekst, eigendom, kamerKleur, kamerToestand, leeftijdTekst, prioriteitKleur, prioriteitWoord } from "../werk";
 import { MentionTextarea, renderWithMentions } from "../components/MentionTextarea";
 
 const PRIO_WOORD: Record<string, string> = {
@@ -459,11 +459,9 @@ export default function TicketDetail({
         <h2 className="mt-2 text-[1.3125rem] leading-snug text-ink">{ticket.title}</h2>
       )}
       <p className="meta mt-1.5">
-        {prioriteitWoord(ticket.priority) && (
-          <strong className={`font-semibold ${ticket.priority === "urgent" ? "text-urgent" : "text-high"}`}>
-            {prioriteitWoord(ticket.priority)}{" · "}
-          </strong>
-        )}
+        <strong className={`font-semibold ${prioriteitKleur(ticket.priority)}`}>
+          {prioriteitWoord(ticket.priority)}{" · "}
+        </strong>
         {metaregel.replace(new RegExp(`^${prioriteitWoord(ticket.priority)} · `), "")}
       </p>
 

@@ -151,39 +151,41 @@ body.undo-open {
   .touch-keyboard-pb.fab-clearance {
     padding-bottom: calc(max(var(--kb-inset, 40vh), var(--onderbalk) + 4.5rem) + 1rem);
   }
+}
 
-  /* Vaste-hoogte pagina's (bijv. de kennisbot-chat) zetten de body in `kb-fit`-
-     modus: de hele app-shell wordt op de zichtbare hoogte (--app-vh, gemeten via
-     de visualViewport) gepind en kan niet scrollen. Zo krimpt de hele pagina mee
-     wanneer het toetsenbord opent en blijft de bovenkant (navigatie) zichtbaar,
-     in plaats van dat de webview de inhoud omhoog duwt. */
-  body.kb-fit {
-    overflow: hidden;
-  }
-  body.kb-fit [data-app-root] {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    /* min-height: 100dvh staat als utility op dit element en wint van `height`.
-       Zonder deze regel bleef de shell dus de volle schermhoogte houden in
-       plaats van de zichtbare hoogte — precies het verschil waar de onderbalk
-       op verschoof. */
-    min-height: 0;
-    height: var(--app-vh, 100dvh);
-    overflow: hidden;
-  }
+/* Vaste-hoogte pagina's (de kennisbot-chat, Vandaag) zetten de body in `kb-fit`-
+   modus: de hele app-shell wordt op de zichtbare hoogte (--app-vh, op een
+   telefoon gemeten via de visualViewport) gepind en kan niet scrollen. Zo
+   krimpt de hele pagina mee wanneer het toetsenbord opent en blijft de
+   bovenkant (navigatie) zichtbaar, in plaats van dat de webview de inhoud
+   omhoog duwt. Dit stond in de touch-mediaquery hierboven; Vandaag heeft het
+   ook op desktop nodig, waar --app-vh niet gezet is en het gewoon 100dvh is. */
+body.kb-fit {
+  overflow: hidden;
+}
+body.kb-fit [data-app-root] {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  /* min-height: 100dvh staat als utility op dit element en wint van `height`.
+     Zonder deze regel bleef de shell dus de volle schermhoogte houden in
+     plaats van de zichtbare hoogte — precies het verschil waar de onderbalk
+     op verschoof. */
+  min-height: 0;
+  height: var(--app-vh, 100dvh);
+  overflow: hidden;
+}
 
-  /* De onderbalk hangt op zo'n pagina aan diezelfde gemeten hoogte. Met
-     `bottom: 0` rekent hij met de layout-viewport, en die is op iOS groter dan
-     wat je ziet zodra de pagina niet kan scrollen — de balk stond dan net
-     ergens anders dan de pagina eronder, en verschoof bij het wisselen van
-     scherm. Nu delen balk en pagina dezelfde onderrand. */
-  body.kb-fit [data-onderbalk] {
-    top: var(--app-vh, 100dvh);
-    bottom: auto;
-    transform: translateY(-100%);
-  }
+/* De onderbalk hangt op zo'n pagina aan diezelfde gemeten hoogte. Met
+   `bottom: 0` rekent hij met de layout-viewport, en die is op iOS groter dan
+   wat je ziet zodra de pagina niet kan scrollen — de balk stond dan net
+   ergens anders dan de pagina eronder, en verschoof bij het wisselen van
+   scherm. Nu delen balk en pagina dezelfde onderrand. */
+body.kb-fit [data-onderbalk] {
+  top: var(--app-vh, 100dvh);
+  bottom: auto;
+  transform: translateY(-100%);
 }
 
 @layer components {
@@ -216,15 +218,68 @@ body.undo-open {
            rounded-[10px] pl-4 pr-3 py-2.5 min-h-tap;
   }
   .row--urgent {
-    @apply border-l-4 border-l-urgent pl-3;
+    @apply border-l-4 border-l-urgent-rail pl-3;
   }
   .row--high {
-    @apply border-l-4 border-l-high pl-3;
+    @apply border-l-4 border-l-high-rail pl-3;
+  }
+  .row--normal {
+    @apply border-l-4 border-l-normal-rail pl-3;
+  }
+  .row--low {
+    @apply border-l-4 border-l-low-rail pl-3;
   }
   .tap {
     @apply min-w-tap min-h-tap inline-flex items-center justify-center;
   }
   .meta {
     @apply text-meta text-ink-45;
+  }
+
+  /* ── Pillen ─────────────────────────────────────────────────────────────
+     Twee soorten, en verder geen. De zwarte "aan"-stand stond op veertien
+     plekken met de hand herhaald; zwart-op-wit leest als een knop die iets
+     dóet, niet als een keuze die aanstaat.
+
+     .seg    schakelaar: een keuze uit twee of drie (Tickets|Taken, Te doen|
+             Klaar). Lichte baan, de gekozen helft ligt er als witte knop in.
+     .chip   filterpil: iets dat aan of uit kan (Alleen mijne, een prioriteit).
+             Aan = zachte merkkleur; een knop met aria-pressed krijgt een
+             vinkje ervoor, een navigatielink niet. */
+  .seg {
+    @apply inline-flex p-[3px] rounded-full bg-ink-6;
+  }
+  .seg > * {
+    @apply h-[38px] px-4 rounded-full inline-flex items-center gap-1.5
+           text-meta font-medium text-ink-70 whitespace-nowrap transition-colors;
+  }
+  .seg > .seg-aan {
+    @apply bg-paper-raised text-ink font-semibold;
+    box-shadow: 0 1px 2px rgba(28, 27, 25, 0.10), 0 1px 6px rgba(28, 27, 25, 0.08);
+  }
+  .chip {
+    @apply h-tap px-3.5 rounded-full inline-flex items-center gap-1.5 shrink-0
+           text-meta font-medium text-ink-70 bg-paper-raised border border-ink-12
+           whitespace-nowrap transition-colors hover:bg-ink-6;
+  }
+  .chip-aan {
+    @apply bg-brand-soft border-brand-edge text-brand font-semibold hover:bg-brand-soft;
+  }
+  .chip-aan[aria-pressed="true"]::before {
+    content: "✓";
+    font-size: 0.8125rem;
+  }
+
+  /* Een lijst in een vast vak: de onderste rand vervaagt zolang er meer onder
+     zit. Onderaan aangekomen (klasse `is-onderaan`, gezet door een
+     scroll-luisteraar) verdwijnt de vervaging, anders bleef de laatste rij
+     eeuwig half doorzichtig. */
+  .scroll-fade {
+    -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+            mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent);
+  }
+  .scroll-fade.is-onderaan {
+    -webkit-mask-image: none;
+            mask-image: none;
   }
 }

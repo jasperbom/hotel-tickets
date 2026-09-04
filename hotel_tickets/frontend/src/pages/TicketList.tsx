@@ -310,7 +310,7 @@ export default function TicketList() {
         </div>
 
         <div className="flex gap-2 flex-wrap">
-          <div className="flex rounded-full border border-ink-12 bg-paper-raised overflow-hidden">
+          <div className="seg">
             <SegmentKnop actief={!klaar} onClick={() => zetFilter({ klaar: null })}>
               Te doen{aantallen ? ` ${aantallen.open}` : ""}
             </SegmentKnop>
@@ -322,7 +322,7 @@ export default function TicketList() {
             Alleen mijne
           </Chip>
           <div className="relative">
-            <Chip actief={!!afdeling} onClick={() => setAfdelingOpen(!afdelingOpen)}>
+            <Chip actief={!!afdeling} menu onClick={() => setAfdelingOpen(!afdelingOpen)}>
               {afdeling ? AFDELING_LABELS[afdeling] : "Afdeling"} ∨
             </Chip>
             {afdelingOpen && (
@@ -488,25 +488,24 @@ function SegmentKnop({ actief, onClick, children }: { actief: boolean; onClick: 
     <button
       onClick={onClick}
       aria-pressed={actief}
-      className={`h-tap px-4 text-meta transition-colors ${
-        actief ? "bg-ink text-paper font-semibold" : "text-ink-70 font-medium hover:bg-ink-6"
-      }`}
+      className={actief ? "seg-aan" : ""}
     >
       {children}
     </button>
   );
 }
 
-function Chip({ actief, onClick, children }: { actief: boolean; onClick: () => void; children: React.ReactNode }) {
+/** `menu`: de pil opent een keuzelijst en is geen aan/uit-filter — dan
+ *  geen aria-pressed, en dus geen vinkje ervoor. */
+function Chip({
+  actief, menu = false, onClick, children,
+}: { actief: boolean; menu?: boolean; onClick: () => void; children: React.ReactNode }) {
   return (
     <button
       onClick={onClick}
-      aria-pressed={actief}
-      className={`tap px-3.5 rounded-full text-meta transition-colors ${
-        actief
-          ? "bg-ink text-paper font-semibold"
-          : "bg-paper-raised border border-ink-12 text-ink-70 font-medium hover:bg-ink-6"
-      }`}
+      aria-pressed={menu ? undefined : actief}
+      aria-haspopup={menu ? "menu" : undefined}
+      className={`chip ${actief ? "chip-aan" : ""}`}
     >
       {children}
     </button>

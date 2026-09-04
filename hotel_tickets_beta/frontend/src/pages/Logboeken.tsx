@@ -228,11 +228,7 @@ export default function Logboeken() {
               key={k.naam}
               onClick={() => setSoort(soort === k.naam ? null : k.naam)}
               aria-pressed={soort === k.naam}
-              className={`shrink-0 h-tap px-3.5 rounded-full text-meta transition-colors ${
-                soort === k.naam
-                  ? "bg-ink text-paper font-semibold"
-                  : "bg-paper-raised border border-ink-12 text-ink-70 font-medium hover:bg-ink-6"
-              }`}
+              className={`chip ${soort === k.naam ? "chip-aan" : ""}`}
             >
               {k.naam} <span className="tabular-nums opacity-60">{k.aantal}</span>
             </button>
@@ -270,22 +266,18 @@ export default function Logboeken() {
         </section>
       ) : (
       <>
-      <div className="flex rounded-full border border-ink-12 bg-paper-raised overflow-hidden w-fit">
+      <div className="seg">
         <button
           onClick={() => setAlles(false)}
           aria-pressed={!alles}
-          className={`h-tap px-4 text-meta transition-colors ${
-            !alles ? "bg-ink text-paper font-semibold" : "text-ink-70 font-medium hover:bg-ink-6"
-          }`}
+          className={!alles ? "seg-aan" : ""}
         >
           Aandacht nodig {aandacht.length}
         </button>
         <button
           onClick={() => setAlles(true)}
           aria-pressed={alles}
-          className={`h-tap px-4 text-meta transition-colors ${
-            alles ? "bg-ink text-paper font-semibold" : "text-ink-70 font-medium hover:bg-ink-6"
-          }`}
+          className={alles ? "seg-aan" : ""}
         >
           Alle mappen
         </button>

@@ -10,12 +10,28 @@ import { AFDELING_LABELS } from "../werk";
  * Melden — drie velden in de volgorde waarin iemand met een telefoon denkt:
  * waar, wat, plaatje. De kamer stond eerder onderaan, ná de subtaken.
  *
+ * De kamer begint leeg. Hij werd een tijd vooringevuld met de laatst gebruikte
+ * kamer, achter een dichtgeklapte kiezer — en wie snel iets zonder locatie
+ * meldde, kreeg ongemerkt de vorige kamer mee. Tickets stonden daardoor op de
+ * verkeerde plek. De laatste kamer staat er nog wel, maar als één tikbare
+ * suggestie boven de kiezer: je kiest hem bewust of je kiest hem niet.
+ *
  * Afdeling en prioriteit staan op één regel achter "Wijzig", met als standaard
  * je eigen afdeling. Toewijzen en subtaken zitten achter diezelfde regel: dat
  * zijn supervisor-velden, geen meld-velden.
  */
 
 const LAATSTE_KAMER = "hts.laatste_kamer";
+
+/** Wat een ander scherm kan meegeven: Kamers stuurt de kamer, de kennisbot
+ *  een titel, een logboek zijn object. */
+type Prefill = {
+  title?: string;
+  description?: string;
+  objectId?: string;
+  /** Vanaf de Kamers-pagina: een expliciete keuze, dus wél vooringevuld. */
+  locationId?: string;
+};
 
 const PRIORITEITEN: { value: Priority; label: string }[] = [
   { value: "low", label: "Laag" },
@@ -28,14 +44,15 @@ export default function Melden() {
   const navigate = useNavigate();
   const location = useLocation();
   // Optionele voorvulling, bijv. vanuit de Kennisbot ("Maak hier een ticket van")
-  const prefill = (location.state as { title?: string; description?: string; objectId?: string } | null) ?? null;
+  const prefill = (location.state as Prefill | null) ?? null;
+  const laatsteKamer = localStorage.getItem(LAATSTE_KAMER) || null;
 
   const [form, setForm] = useState({
     title: prefill?.title ?? "",
     description: prefill?.description ?? "",
     category: "technical" as Category,
     priority: "medium" as Priority,
-    location_id: (localStorage.getItem(LAATSTE_KAMER) || null) as string | null,
+    location_id: prefill?.locationId ?? null,
     assigned_to: null as string | null,
     // Storing gemeld vanaf een logboek: het ticket telt mee in dat boek.
     object_id: prefill?.objectId ?? null,
@@ -45,7 +62,8 @@ export default function Melden() {
   const [afdelingGekozen, setAfdelingGekozen] = useState(false);
   const [multiRoom, setMultiRoom] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
-  const [kamerOpen, setKamerOpen] = useState(!localStorage.getItem(LAATSTE_KAMER));
+  // Open, tenzij de kamer al gekozen is (vanaf Kamers).
+  const [kamerOpen, setKamerOpen] = useState(!prefill?.locationId);
   const [meerOpen, setMeerOpen] = useState(false);
   const [subtaskLabels, setSubtaskLabels] = useState<string[]>([]);
   const [newSubtask, setNewSubtask] = useState("");
@@ -137,7 +155,6 @@ export default function Melden() {
             </button>
           </div>
           <p className="meta mt-1">
-            {form.location_id && !kamerOpen ? "Laatst gebruikt · " : ""}
             <button
               type="button"
               onClick={() => { setMultiRoom(!multiRoom); setKamerOpen(true); }}
@@ -146,6 +163,16 @@ export default function Melden() {
               {multiRoom ? "één kamer kiezen" : "of kies meerdere kamers"}
             </button>
           </p>
+          {/* De vorige kamer als suggestie: één tik, maar nooit ongemerkt. */}
+          {laatsteKamer && !multiRoom && form.location_id !== laatsteKamer && (
+            <button
+              type="button"
+              onClick={() => { setForm({ ...form, location_id: laatsteKamer }); setKamerOpen(false); }}
+              className="chip mt-3"
+            >
+              Laatst: {kamerNamen[laatsteKamer] ?? laatsteKamer}
+            </button>
+          )}
           {kamerOpen && (
             <div className="mt-3">
               {multiRoom ? (
@@ -254,11 +281,8 @@ export default function Melden() {
                       key={p.value}
                       type="button"
                       onClick={() => setForm({ ...form, priority: p.value })}
-                      className={`h-tap px-3.5 rounded-full text-meta transition-colors ${
-                        form.priority === p.value
-                          ? "bg-ink text-paper font-semibold"
-                          : "bg-paper-raised border border-ink-12 text-ink-70 font-medium"
-                      }`}
+                      aria-pressed={form.priority === p.value}
+                      className={`chip ${form.priority === p.value ? "chip-aan" : ""}`}
                     >
                       {p.label}
                     </button>

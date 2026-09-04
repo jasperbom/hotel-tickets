@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 import type { Category, Ticket } from "../api/client";
 import { AfdelingChip } from "./AfdelingChip";
 import {
-  afdelingTekst, eigendom, leeftijdTekst, prioriteitWoord, subtaakFractie,
+  afdelingTekst, eigendom, leeftijdTekst, prioriteitKleur, prioriteitWoord, subtaakFractie,
 } from "../werk";
 
 /**
@@ -55,16 +55,14 @@ export function werkMeta(
 ): ReactNode[] {
   const { mij, naamVan, eigenAfdeling, verbergEigenNaam = false, verbergLeeftijd = false } = opties;
 
-  const prio = prioriteitWoord(ticket.priority);
   const bezit = eigendom(ticket, mij, naamVan);
   const eigenaarZichtbaar = !(verbergEigenNaam && bezit.soort === "mij");
 
   return [
-    prio && (
-      <strong className={`font-semibold ${ticket.priority === "urgent" ? "text-urgent" : "text-high"}`}>
-        {prio}
-      </strong>
-    ),
+    // Altijd een woord, in de kleur van het niveau — ook "Normaal" en "Laag".
+    <strong className={`font-semibold ${prioriteitKleur(ticket.priority)}`}>
+      {prioriteitWoord(ticket.priority)}
+    </strong>,
     ticket.status === "in_progress" && (
       <strong className="font-semibold text-brand">In behandeling</strong>
     ),

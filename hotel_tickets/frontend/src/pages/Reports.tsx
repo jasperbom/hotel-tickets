@@ -95,12 +95,10 @@ export default function Reports() {
           <input type="date" value={toDate} onChange={(e) => setToDate(e.target.value)}
             className="ml-2 h-tap rounded-[10px] border border-ink-12 px-2 text-meta bg-paper-raised" />
         </label>
-        <div className="flex rounded-full border border-ink-12 bg-paper-raised overflow-hidden">
+        <div className="seg">
           {(["day", "week", "month"] as const).map((g) => (
-            <button key={g} onClick={() => setGroupBy(g)}
-              className={`h-tap px-4 text-meta transition-colors ${
-                groupBy === g ? "bg-ink text-paper font-semibold" : "text-ink-70 font-medium hover:bg-ink-6"
-              }`}>
+            <button key={g} onClick={() => setGroupBy(g)} aria-pressed={groupBy === g}
+              className={groupBy === g ? "seg-aan" : ""}>
               {g === "day" ? "Dag" : g === "week" ? "Week" : "Maand"}
             </button>
           ))}
