@@ -47,21 +47,3 @@ export function ScrollVak({
     </div>
   );
 }
-
-/**
- * Pint de app-shell op het scherm zolang deze pagina open is, zodat de
- * pagina zelf niet scrolt en zijn vakken de ruimte verdelen (zie index.css,
- * `body.vast`). Anders dan de kennisbot (`kb-fit`) meet dit niets: geen
- * visualViewport en ook geen 100dvh — allebei vielen in de iOS-app kleiner
- * uit dan het scherm, met een grijze strook onder de onderbalk als gevolg.
- * De schil rekt gewoon van boven- tot onderrand.
- */
-export function useVasteHoogte() {
-  useEffect(() => {
-    document.body.classList.add("vast");
-    window.scrollTo(0, 0);
-    return () => {
-      document.body.classList.remove("vast");
-    };
-  }, []);
-}

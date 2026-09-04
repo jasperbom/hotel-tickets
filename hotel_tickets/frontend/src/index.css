@@ -160,13 +160,16 @@ body.undo-open {
   }
 }
 
-/* Vaste-hoogte pagina's (de kennisbot-chat, Vandaag) zetten de body in `kb-fit`-
-   modus: de hele app-shell wordt op de zichtbare hoogte (--app-vh, op een
-   telefoon gemeten via de visualViewport) gepind en kan niet scrollen. Zo
-   krimpt de hele pagina mee wanneer het toetsenbord opent en blijft de
-   bovenkant (navigatie) zichtbaar, in plaats van dat de webview de inhoud
-   omhoog duwt. Dit stond in de touch-mediaquery hierboven; Vandaag heeft het
-   ook op desktop nodig, waar --app-vh niet gezet is en het gewoon 100dvh is. */
+/* De kennisbot-chat zet de body in `kb-fit`-modus: de hele app-shell wordt op
+   de zichtbare hoogte (--app-vh, op een telefoon gemeten via de
+   visualViewport) gepind en kan niet scrollen. Zo krimpt de hele pagina mee
+   wanneer het toetsenbord opent en blijft de bovenkant (navigatie) zichtbaar,
+   in plaats van dat de webview de inhoud omhoog duwt.
+
+   Let op: een pagina die niet kan scrollen houdt op een iPhone een strook
+   onder de onderbalk over — de browser geeft die ruimte pas vrij bij een
+   pagina die scrolt. Voor de kennisbot is dat de prijs van het toetsenbord;
+   Vandaag probeerde het ook en is daarom weer een gewone pagina. */
 body.kb-fit {
   overflow: hidden;
 }
@@ -193,21 +196,6 @@ body.kb-fit [data-onderbalk] {
   top: var(--app-vh, 100dvh);
   bottom: auto;
   transform: translateY(-100%);
-}
-
-/* Vandaag: ook een vaste-hoogte pagina, maar zonder toetsenbord en dus zonder
-   meting. De eerste versie leende `kb-fit` met 100dvh als hoogte, en in de
-   iOS-app is 100dvh kleiner dan het scherm: er bleef een grijze strook onder
-   de onderbalk over. Daarom hier geen hoogte maar `inset: 0` — de schil rekt
-   van boven- tot onderrand, en de onderbalk houdt zijn gewone `bottom: 0`. */
-body.vast {
-  overflow: hidden;
-}
-body.vast [data-app-root] {
-  position: fixed;
-  inset: 0;
-  min-height: 0;
-  overflow: hidden;
 }
 
 @layer components {

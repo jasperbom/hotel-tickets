@@ -13,7 +13,7 @@ import api, {
 import { WorkRow, type ExtraKamer } from "../components/WorkRow";
 import { AfdelingChip } from "../components/AfdelingChip";
 import { UndoBar } from "../components/UndoBar";
-import { ScrollVak, useVasteHoogte } from "../components/ScrollVak";
+import { ScrollVak } from "../components/ScrollVak";
 import { useUitgesteldeActie } from "../undo";
 import {
   AFDELING_LABELS, PRIORITEIT_VOLGORDE, afdelingTekst, herhaalKort, leeftijdTekst,
@@ -30,13 +30,20 @@ import { werkMeta } from "../components/werkMeta";
  *                zonder eigenaar).
  *   TAKEN      — de terugkerende taken van vandaag.
  *
- * De pagina scrolt niet. NU en TE PAKKEN staan allebei altijd in beeld, elk
- * in een eigen vak dat zelf scrolt; de koppen blijven staan. Eerst stonden
- * ze onder elkaar op een scrollende pagina, en dan bestond TE PAKKEN op een
- * telefoon pas na doorscrollen — precies de lijst waarvan iemand moet weten
- * dat hij er is. De vakken verdelen de hoogte naar hoeveel erin staat: de
- * langste lijst levert het meeste in, en geen van beide wordt kleiner dan een
- * paar rijen.
+ * NU en TE PAKKEN staan allebei altijd in beeld, elk in een eigen vak dat
+ * zelf scrolt; de koppen blijven staan. Eerst stonden ze onder elkaar op een
+ * lange pagina, en dan bestond TE PAKKEN op een telefoon pas na doorscrollen
+ * — precies de lijst waarvan iemand moet weten dat hij er is. De vakken
+ * verdelen de hoogte naar hoeveel erin staat: de langste lijst levert het
+ * meeste in, en geen van beide wordt kleiner dan een paar rijen.
+ *
+ * De pagina zelf blijft een gewone, scrollende pagina zoals Tickets. Drie
+ * pogingen om de app-shell vast te pinnen (kb-fit met visualViewport, met
+ * 100dvh, met inset 0) lieten op een iPhone allemaal een strook onder de
+ * onderbalk over: de browser houdt die ruimte in zolang de pagina niet
+ * scrolt, en geeft hem pas vrij bij een pagina die dat wél kan. De vakken
+ * zijn daarom samen zo hoog als het scherm boven de onderbalk, en de pagina
+ * mag daaronder gewoon een stukje doorlopen, net als elke andere.
  *
  * NU is gegroepeerd per prioriteit, met een tussenkopje en aantal per groep.
  * Binnen een groep kun je je eigen tickets verslepen — de volgorde waarin je
@@ -76,8 +83,6 @@ const ONDER_MIN_PX = 15 * 16;
 const OUD_NA_DAGEN = 3;
 
 export default function Vandaag() {
-  useVasteHoogte();
-
   const [overview, setOverview] = useState<Overview | null>(null);
   const [loading, setLoading] = useState(true);
   const [locations, setLocations] = useState<Record<string, string>>({});
@@ -402,7 +407,7 @@ export default function Vandaag() {
   }
 
   return (
-    <div className="flex-1 min-h-0 flex flex-col gap-4 xl:max-w-5xl">
+    <div className="flex flex-col gap-4 xl:max-w-5xl h-[calc(100dvh-var(--kopbalk)-var(--onderbalk)-2.25rem)] md:h-[calc(100dvh-3rem)]">
       {/* De schakelaar: welk soort werk, en hoeveel ervan ligt er */}
       <div className="shrink-0 flex">
         <div className="seg" role="tablist">
