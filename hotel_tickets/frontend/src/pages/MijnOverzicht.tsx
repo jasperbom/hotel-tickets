@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type CSSProperties } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import {
   DndContext, PointerSensor, TouchSensor, closestCenter, useSensor, useSensors,
   type DragEndEvent,
@@ -64,6 +64,13 @@ const PRIORITEIT_RANG: Record<Priority, number> = { urgent: 0, high: 1, medium: 
 
 const ALLE_AFDELINGEN_KEY = "hts.vandaag_alle_afdelingen";
 const SOORT_KEY = "hts.vandaag_soort";
+/** Zelf gekozen hoogte van het vak NU op een telefoon, in px. */
+const NU_HOOGTE_KEY = "hts.vandaag_nu_hoogte";
+
+/** Ondergrens van een vak op een telefoon: kop plus een paar rijen. */
+const VAK_MIN_PX = 9 * 16;
+/** Het onderste vak heeft daarbovenop ruimte nodig voor de meldknop. */
+const ONDER_MIN_PX = 15 * 16;
 
 /** Een taak die zo lang blijft liggen gaat niet meer over vandaag. */
 const OUD_NA_DAGEN = 3;
@@ -89,6 +96,53 @@ export default function Vandaag() {
   );
   // Openstaande achterstand: dicht, tenzij iemand hem opentrekt.
   const [toonOud, setToonOud] = useState(false);
+  // De verdeling tussen NU en TE PAKKEN op een telefoon. Standaard verdelen
+  // de vakken zich naar inhoud; wie de sleepbalk ertussen verschuift kiest
+  // een vaste hoogte voor NU, en die blijft staan tussen bezoeken.
+  const [nuHoogte, setNuHoogte] = useState<number | null>(() => {
+    const v = Number(localStorage.getItem(NU_HOOGTE_KEY));
+    return v > 0 ? v : null;
+  });
+  const vakkenRef = useRef<HTMLDivElement>(null);
+  const nuRef = useRef<HTMLElement>(null);
+
+  /**
+   * Slepen aan de balk tussen de vakken. De nieuwe hoogte van NU is de hoogte
+   * bij het begin van de sleep plus de afstand die de vinger aflegt, begrensd
+   * zodat geen van beide vakken onder zijn minimum komt.
+   */
+  function begintSleep(e: React.PointerEvent<HTMLDivElement>) {
+    const vakken = vakkenRef.current;
+    const nu = nuRef.current;
+    if (!vakken || !nu) return;
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const startY = e.clientY;
+    const startHoogte = nu.getBoundingClientRect().height;
+    const totaal = vakken.getBoundingClientRect().height;
+    const balk = e.currentTarget.getBoundingClientRect().height;
+    const max = totaal - balk - ONDER_MIN_PX;
+    let laatste = startHoogte;
+    const beweeg = (ev: PointerEvent) => {
+      laatste = Math.round(Math.min(max, Math.max(VAK_MIN_PX, startHoogte + ev.clientY - startY)));
+      setNuHoogte(laatste);
+    };
+    const klaar = () => {
+      window.removeEventListener("pointermove", beweeg);
+      window.removeEventListener("pointerup", klaar);
+      window.removeEventListener("pointercancel", klaar);
+      localStorage.setItem(NU_HOOGTE_KEY, String(laatste));
+    };
+    window.addEventListener("pointermove", beweeg);
+    window.addEventListener("pointerup", klaar);
+    window.addEventListener("pointercancel", klaar);
+  }
+
+  /** Dubbeltik op de balk: terug naar de automatische verdeling. */
+  function herstelVerdeling() {
+    setNuHoogte(null);
+    localStorage.removeItem(NU_HOOGTE_KEY);
+  }
 
   function kiesSoort(nieuw: "tickets" | "herhalend") {
     setSoort(nieuw);
@@ -410,8 +464,8 @@ export default function Vandaag() {
       {soort === "tickets" && (
         // Twee vakken. Op een telefoon onder elkaar, op een breed scherm naast
         // elkaar: daar is breedte over en hoogte schaars.
-        <div className="flex-1 min-h-0 flex flex-col gap-4 md:flex-row md:gap-6">
-          <Vak kop="Nu" aantal={aantalNu} gewicht={1.25}>
+        <div ref={vakkenRef} className="flex-1 min-h-0 flex flex-col md:flex-row md:gap-6">
+          <Vak kop="Nu" aantal={aantalNu} gewicht={1.25} vasteHoogte={nuHoogte} sectieRef={nuRef}>
             {aantalNu === 0 ? (
               <LegeStaatNu aantalTePakken={tePakken.length} afdeling={afdelingNaam} />
             ) : (
@@ -450,6 +504,19 @@ export default function Vandaag() {
               </DndContext>
             )}
           </Vak>
+
+          {/* De sleepbalk: alleen op een telefoon, waar de vakken onder elkaar
+              staan en hoogte schaars is. Naast elkaar is er niets te verdelen. */}
+          <div
+            role="separator"
+            aria-orientation="horizontal"
+            aria-label="Verdeling tussen Nu en Te pakken; sleep om aan te passen, dubbeltik om te herstellen"
+            onPointerDown={begintSleep}
+            onDoubleClick={herstelVerdeling}
+            className="md:hidden shrink-0 h-6 my-1 flex items-center justify-center cursor-row-resize touch-none select-none"
+          >
+            <span className="h-1.5 w-12 rounded-full bg-ink-25" aria-hidden="true" />
+          </div>
 
           <Vak
             kop="Te pakken"
@@ -502,31 +569,45 @@ export default function Vandaag() {
  *
  * `gewicht` is de flex-basis-verhouding waarmee de vakken de hoogte verdelen
  * zodra ze samen niet passen; wat wél past krijgt gewoon zijn eigen hoogte.
- * Een vak wordt nooit kleiner dan een paar rijen. `onder` reserveert onderin
- * ruimte voor de zwevende meldknop, zodat de laatste rij eronderuit kan
- * scrollen.
+ * Met `vasteHoogte` (de sleepbalk) staat de hoogte op een telefoon vast.
+ * Een vak wordt nooit kleiner dan een paar rijen; `onder` reserveert
+ * daarbovenop ruimte voor de zwevende meldknop, zodat de laatste rij
+ * eronderuit kan scrollen — die ruimte telt niet mee als "zichtbare rijen",
+ * daar ging de eerste versie de mist in: er bleef één rij over.
  */
 function Vak({
-  kop, aantal, rechts, onder = false, gewicht = 1, children,
+  kop, aantal, rechts, onder = false, gewicht = 1, vasteHoogte = null, sectieRef, children,
 }: {
   kop: string;
   aantal: number;
   rechts?: React.ReactNode;
   onder?: boolean;
   gewicht?: number;
+  vasteHoogte?: number | null;
+  sectieRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
 }) {
+  const minPx = onder ? ONDER_MIN_PX : VAK_MIN_PX;
   return (
     <section
-      className="min-h-0 flex flex-col [flex:var(--gewicht)_1_auto] md:[flex:1_1_0%]"
-      style={{ "--gewicht": gewicht } as CSSProperties}
+      ref={sectieRef}
+      // 0 1 en niet 0 0: een op een groter scherm gekozen hoogte mag op een
+      // kleiner scherm krimpen tot het onderste vak zijn minimum heeft.
+      className={`flex flex-col md:[flex:1_1_0%] ${
+        vasteHoogte ? "max-md:[flex:0_1_var(--vast)]" : "max-md:[flex:var(--gewicht)_1_auto]"
+      }`}
+      style={{
+        "--gewicht": gewicht,
+        "--vast": vasteHoogte ? `${vasteHoogte}px` : undefined,
+        minHeight: `${minPx}px`,
+      } as CSSProperties}
     >
       <h2 className="shrink-0 mb-2.5 pb-2 border-b border-ink-12 flex items-baseline gap-2.5 text-[1.3125rem] font-bold leading-tight text-ink">
         <span>{kop}</span>
         <span className="text-row font-semibold text-ink-45 tabular-nums">{aantal}</span>
         {rechts && <span className="ml-auto">{rechts}</span>}
       </h2>
-      <ScrollVak className={`flex-1 min-h-[11rem] pb-2 ${onder ? "pb-[4.75rem] md:pb-2" : ""}`}>
+      <ScrollVak className={`flex-1 pb-2 ${onder ? "pb-[4.75rem] md:pb-2" : ""}`}>
         {children}
       </ScrollVak>
     </section>

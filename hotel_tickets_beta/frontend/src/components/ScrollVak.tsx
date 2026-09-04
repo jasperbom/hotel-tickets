@@ -49,38 +49,20 @@ export function ScrollVak({
 }
 
 /**
- * Pint de app-shell op de zichtbare hoogte zolang deze pagina open is, zodat
- * de pagina zelf niet scrolt en zijn vakken de ruimte verdelen. Dezelfde
- * body-klasse als de kennisbot gebruikt (zie index.css, `kb-fit`); op een
- * telefoon volgt de hoogte de visualViewport, zodat het toetsenbord de
- * indeling niet omhoog duwt.
+ * Pint de app-shell op de schermhoogte zolang deze pagina open is, zodat de
+ * pagina zelf niet scrolt en zijn vakken de ruimte verdelen. Dezelfde
+ * body-klasse als de kennisbot gebruikt (zie index.css, `kb-fit`), maar
+ * zónder de meting via de visualViewport: die dient daar om het toetsenbord
+ * op te vangen, en in de iOS-app viel ze kleiner uit dan het scherm, waardoor
+ * de onderbalk een stuk boven de onderrand hing. Vandaag heeft geen
+ * invoerveld, dus 100dvh is hier gewoon het scherm.
  */
 export function useVasteHoogte() {
   useEffect(() => {
-    const root = document.documentElement;
     document.body.classList.add("kb-fit");
-    const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
-    const vv = isTouch ? window.visualViewport : null;
-    let raf = 0;
-    const update = () => {
-      cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        const h = vv ? vv.height : window.innerHeight;
-        root.style.setProperty("--app-vh", `${Math.round(h)}px`);
-        window.scrollTo(0, 0);
-      });
-    };
-    if (isTouch) {
-      update();
-      vv?.addEventListener("resize", update);
-      vv?.addEventListener("scroll", update);
-    }
+    window.scrollTo(0, 0);
     return () => {
       document.body.classList.remove("kb-fit");
-      root.style.removeProperty("--app-vh");
-      vv?.removeEventListener("resize", update);
-      vv?.removeEventListener("scroll", update);
-      cancelAnimationFrame(raf);
     };
   }, []);
 }

@@ -281,12 +281,15 @@ export default function TicketList() {
     : alleenMijne ? "jouw tickets" : "alle afdelingen";
 
   return (
-    <div className="space-y-4 xl:max-w-none max-w-3xl">
+    <div className="flex flex-col gap-4 xl:max-w-none max-w-3xl">
       {/* Op mobiel staat de titel al in de topbalk */}
       <h1 className="hidden md:block text-2xl font-bold text-ink">Tickets</h1>
 
-      {/* Zoekveld + filters: altijd zichtbaar, alles 44 px */}
-      <div className="sticky top-11 md:top-0 z-30 -mx-4 px-4 py-3 bg-paper/95 backdrop-blur border-b border-ink-12 space-y-2">
+      {/* Zoekveld + filters: altijd zichtbaar, alles 44 px. Op een telefoon
+          zit de balk strak onder de kopbalk (de bovenmarge van de pagina
+          wordt hier weggehaald) en blijft hij daar hangen bij het scrollen;
+          --kopbalk rekent de veilige zone van een iPhone mee. */}
+      <div className="sticky top-[var(--kopbalk)] max-md:-mt-6 z-30 -mx-4 px-4 py-3 bg-paper/95 backdrop-blur border-b border-ink-12 space-y-2">
         <div className="relative">
           <input
             ref={zoekRef}
