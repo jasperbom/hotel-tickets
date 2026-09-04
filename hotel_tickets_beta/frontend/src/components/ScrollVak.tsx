@@ -49,20 +49,19 @@ export function ScrollVak({
 }
 
 /**
- * Pint de app-shell op de schermhoogte zolang deze pagina open is, zodat de
- * pagina zelf niet scrolt en zijn vakken de ruimte verdelen. Dezelfde
- * body-klasse als de kennisbot gebruikt (zie index.css, `kb-fit`), maar
- * zónder de meting via de visualViewport: die dient daar om het toetsenbord
- * op te vangen, en in de iOS-app viel ze kleiner uit dan het scherm, waardoor
- * de onderbalk een stuk boven de onderrand hing. Vandaag heeft geen
- * invoerveld, dus 100dvh is hier gewoon het scherm.
+ * Pint de app-shell op het scherm zolang deze pagina open is, zodat de
+ * pagina zelf niet scrolt en zijn vakken de ruimte verdelen (zie index.css,
+ * `body.vast`). Anders dan de kennisbot (`kb-fit`) meet dit niets: geen
+ * visualViewport en ook geen 100dvh — allebei vielen in de iOS-app kleiner
+ * uit dan het scherm, met een grijze strook onder de onderbalk als gevolg.
+ * De schil rekt gewoon van boven- tot onderrand.
  */
 export function useVasteHoogte() {
   useEffect(() => {
-    document.body.classList.add("kb-fit");
+    document.body.classList.add("vast");
     window.scrollTo(0, 0);
     return () => {
-      document.body.classList.remove("kb-fit");
+      document.body.classList.remove("vast");
     };
   }, []);
 }

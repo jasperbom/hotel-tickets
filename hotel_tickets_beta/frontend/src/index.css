@@ -195,6 +195,21 @@ body.kb-fit [data-onderbalk] {
   transform: translateY(-100%);
 }
 
+/* Vandaag: ook een vaste-hoogte pagina, maar zonder toetsenbord en dus zonder
+   meting. De eerste versie leende `kb-fit` met 100dvh als hoogte, en in de
+   iOS-app is 100dvh kleiner dan het scherm: er bleef een grijze strook onder
+   de onderbalk over. Daarom hier geen hoogte maar `inset: 0` — de schil rekt
+   van boven- tot onderrand, en de onderbalk houdt zijn gewone `bottom: 0`. */
+body.vast {
+  overflow: hidden;
+}
+body.vast [data-app-root] {
+  position: fixed;
+  inset: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
 @layer components {
   /* Actieknoppen zijn zwart-op-wit: groen is de kleur van "het is klaar",
      niet van "maak het klaar". De merkkleur blijft voor de meldknop. */
