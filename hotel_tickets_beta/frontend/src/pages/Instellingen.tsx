@@ -652,9 +652,8 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                                       ? (editForm.extra_departments ?? []).filter((x) => x !== d)
                                       : [...(editForm.extra_departments ?? []), d],
                                   })}
-                                  className={`h-9 px-3 rounded-full text-meta transition-colors ${
-                                    aan ? "bg-ink text-paper font-semibold" : "border border-ink-12 text-ink-70"
-                                  }`}
+                                  aria-pressed={aan}
+                                  className={`chip ${aan ? "chip-aan" : ""}`}
                                 >
                                   {DEPT_FULL_LABELS[d]}
                                 </button>
@@ -679,9 +678,8 @@ function MedewerkersBeheer({ isAdmin }: { isAdmin: boolean }) {
                                     ? (editForm.modules ?? []).filter((x) => x !== m.id)
                                     : [...(editForm.modules ?? []), m.id],
                                 })}
-                                className={`h-9 px-3 rounded-full text-meta transition-colors ${
-                                  aan ? "bg-ink text-paper font-semibold" : "border border-ink-12 text-ink-70"
-                                }`}
+                                aria-pressed={aan}
+                                className={`chip ${aan ? "chip-aan" : ""}`}
                               >
                                 {m.label}
                               </button>
@@ -2132,11 +2130,8 @@ function LogboekObjectenPanel() {
                         key={optie.label}
                         type="button"
                         onClick={() => wijzig({ dagen: optie.dagen })}
-                        className={`h-tap px-3.5 inline-flex items-center rounded-full text-meta font-medium transition-colors ${
-                          m.dagen === optie.dagen
-                            ? "bg-ink text-paper font-semibold"
-                            : "bg-paper-raised border border-ink-12 text-ink-70 hover:bg-ink-6"
-                        }`}
+                        aria-pressed={m.dagen === optie.dagen}
+                        className={`chip ${m.dagen === optie.dagen ? "chip-aan" : ""}`}
                       >
                         {optie.label}
                       </button>

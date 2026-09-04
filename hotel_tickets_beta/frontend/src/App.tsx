@@ -621,12 +621,17 @@ export default function App() {
 
           {/* Inhoud — max 1100 px, rijen links uitgelijnd */}
           <main
-            className={`flex-1 px-4 py-6 w-full max-w-[1100px] ${
-              // De kennisbot vult de hoogte in plaats van te scrollen; dan moet
-              // deze laag een flexkolom zijn, anders heeft "vul de rest" geen
-              // betekenis.
-              location.pathname === "/kennis" ? "flex flex-col min-h-0" : "touch-keyboard-pb"
-            } ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`}
+            className={`flex-1 px-4 pt-6 w-full max-w-[1100px] ${
+              // De kennisbot en Vandaag vullen de hoogte in plaats van te
+              // scrollen; dan moet deze laag een flexkolom zijn, anders heeft
+              // "vul de rest" geen betekenis. Vandaag regelt de ruimte voor de
+              // meldknop zelf, in zijn onderste vak.
+              location.pathname === "/"
+                ? "flex flex-col min-h-0 pb-3 md:pb-6"
+                : location.pathname === "/kennis"
+                  ? `flex flex-col min-h-0 ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`
+                  : `touch-keyboard-pb ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`
+            }`}
           >
             {/* Modules die nog hun eigen schermen hebben houden op mobiel een
                 eigen regel; de onderbalk hieronder is van de hoofdnavigatie. */}
@@ -638,11 +643,7 @@ export default function App() {
                     to={item.to}
                     end={item.end}
                     className={({ isActive }) =>
-                      `shrink-0 h-tap px-3.5 inline-flex items-center rounded-full text-meta transition-colors ${
-                        isActive
-                          ? "bg-ink text-paper font-semibold"
-                          : "bg-paper-raised border border-ink-12 text-ink-70 font-medium"
-                      }`
+                      `chip ${isActive ? "chip-aan" : ""}`
                     }
                   >
                     {item.label}

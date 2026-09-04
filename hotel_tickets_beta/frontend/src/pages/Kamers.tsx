@@ -126,22 +126,18 @@ export default function Kamers() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      <div className="flex rounded-full border border-ink-12 bg-paper-raised overflow-hidden w-fit">
+      <div className="seg">
         <button
           onClick={() => setAlleKamers(false)}
           aria-pressed={!alleKamers}
-          className={`h-tap px-4 text-meta transition-colors ${
-            !alleKamers ? "bg-ink text-paper font-semibold" : "text-ink-70 font-medium hover:bg-ink-6"
-          }`}
+          className={!alleKamers ? "seg-aan" : ""}
         >
           Vrij én werk {naarBinnen.length}
         </button>
         <button
           onClick={() => setAlleKamers(true)}
           aria-pressed={alleKamers}
-          className={`h-tap px-4 text-meta transition-colors ${
-            alleKamers ? "bg-ink text-paper font-semibold" : "text-ink-70 font-medium hover:bg-ink-6"
-          }`}
+          className={alleKamers ? "seg-aan" : ""}
         >
           Alle kamers
         </button>
@@ -197,7 +193,11 @@ export default function Kamers() {
           <SectieKop>Zonder openstaand werk</SectieKop>
           <div className="grid gap-2">
             {rest.map((k) => (
-              <KamerRij key={k.id} kamer={k} onOpen={() => navigate(`/tickets/new`)} />
+              <KamerRij
+                key={k.id}
+                kamer={k}
+                onOpen={() => navigate("/tickets/new", { state: { locationId: k.id } })}
+              />
             ))}
           </div>
         </section>

@@ -29,10 +29,23 @@ export default {
           6: "#EFEBE3",
         },
         paper: { DEFAULT: "#FBFAF7", raised: "#FFFFFF" },
-        urgent: { DEFAULT: "#C0392F", soft: "#FAEAE7" }, // uitsluitend prioriteit urgent
-        high: { DEFAULT: "#8F5410", soft: "#FCF3E4" },   // uitsluitend prioriteit hoog
+        // Prioriteit: vier niveaus, vier kleuren. DEFAULT is de tekstkleur
+        // (leesbaar op wit); `rail` is de fellere tint van de linkerrand van
+        // een werkrij. Normaal en laag waren "stilte" — geen woord, geen
+        // rand — en dat lazen medewerkers als "geen informatie".
+        urgent: { DEFAULT: "#C0392F", rail: "#C0392F", soft: "#FAEAE7" },
+        high:   { DEFAULT: "#B5520A", rail: "#D9670F", soft: "#FCEBDD" }, // oranje
+        normal: { DEFAULT: "#8A6D00", rail: "#E6B800", soft: "#FBF3CC" }, // geel
+        low:    { DEFAULT: "#4E8A22", rail: "#8BC34A", soft: "#EDF6E3" }, // lichtgroen
         done: { DEFAULT: "#2F6B46", soft: "#E8F1EB" },   // uitsluitend 'klaar'
-        brand: "var(--brand, #2563eb)",                  // uitsluitend interactie
+        // Interactie. `soft`/`edge` zijn de lichte tinten van dezelfde
+        // instelbare knopkleur (branding.ts rekent --blue-* uit), zodat een
+        // filterpil die aanstaat meekleurt met de huisstijl.
+        brand: {
+          DEFAULT: "var(--brand, #2563eb)",
+          soft: "var(--blue-100, #dbeafe)",
+          edge: "var(--blue-300, #93c5fd)",
+        },
         // Afdelingskleur: identiteit, geen urgentie. Een medewerker herkent
         // "van wie is dit werk" aan de kleur van het plaatje voordat hij het
         // woord leest. Alleen als zacht plaatje met donkere tekst gebruiken —

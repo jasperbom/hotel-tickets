@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { boardApi, type Board, type BoardKolom, type BoardTaak, type BoardTicket, type Category } from "../api/client";
+import { boardApi, type Board, type BoardKolom, type BoardTaak, type BoardTicket, type Category, type Priority } from "../api/client";
 import { AFDELING_KORT, isNieuw, kamerKleur, leeftijdBoard } from "../werk";
 
 /**
@@ -535,7 +535,8 @@ const TAAK_KOLOMMEN = [0.5,      1.5];
 function Regel({
   rand, kamer, bezet, titel, meta, kolommen, voorvoegsel,
 }: {
-  rand: "urgent" | "high" | null;
+  /** Prioriteit; de linkerrand kleurt mee zoals in de app (rood, oranje, geel, lichtgroen). */
+  rand: Priority | null;
   kamer?: string | null;
   /** Keycard van die kamer: true = bezet, false = vrij, null = geen sensor. */
   bezet?: boolean | null;
@@ -546,8 +547,10 @@ function Regel({
   voorvoegsel?: string | null;
 }) {
   const randKlasse =
-    rand === "urgent" ? "border-l-[0.25em] border-l-urgent pl-[0.6em]"
-    : rand === "high" ? "border-l-[0.25em] border-l-high pl-[0.6em]"
+    rand === "urgent" ? "border-l-[0.25em] border-l-urgent-rail pl-[0.6em]"
+    : rand === "high" ? "border-l-[0.25em] border-l-high-rail pl-[0.6em]"
+    : rand === "medium" ? "border-l-[0.25em] border-l-normal-rail pl-[0.6em]"
+    : rand === "low" ? "border-l-[0.25em] border-l-low-rail pl-[0.6em]"
     : "pl-[0.85em]";
 
   return (
@@ -601,7 +604,7 @@ function TicketRegel({ ticket, afdeling }: { ticket: BoardTicket; afdeling: Cate
 
   return (
     <Regel
-      rand={ticket.priority === "urgent" ? "urgent" : ticket.priority === "high" ? "high" : null}
+      rand={ticket.priority}
       kamer={ticket.kamer}
       bezet={ticket.kamer_bezet}
       titel={ticket.title}
@@ -611,6 +614,7 @@ function TicketRegel({ ticket, afdeling }: { ticket: BoardTicket; afdeling: Cate
         // en dat verschil bepaalt of iemand nu loopt of straks.
         ticket.priority === "urgent" ? { tekst: "Spoed", klasse: "font-semibold text-urgent" }
         : ticket.priority === "high" ? { tekst: "Hoog", klasse: "font-semibold text-high" }
+        : ticket.priority === "low" ? { tekst: "Laag", klasse: "text-low" }
         : null,
         // Op een bord telt "van wie is dit" zwaarder dan op je eigen telefoon:
         // niemand leest hier "van mij", iedereen leest een naam. Een naam krijgt
@@ -646,7 +650,7 @@ function TaakRegel({ taak }: { taak: BoardTaak }) {
 
   return (
     <Regel
-      rand={taak.priority === "urgent" ? "urgent" : taak.priority === "high" ? "high" : null}
+      rand={taak.priority}
       voorvoegsel={taak.emoji}
       kamer={taak.kamer}
       bezet={taak.kamer_bezet}

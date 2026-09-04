@@ -2,13 +2,13 @@ import type { ReactNode } from "react";
 import { Link } from "react-router-dom";
 import { Check } from "lucide-react";
 import type { Priority } from "../api/client";
-import { kamerKleur, kamerToestand } from "../werk";
+import { kamerKleur, kamerToestand, prioriteitRand } from "../werk";
 
 /**
  * Eén rij voor al het werk — op Vandaag, in Tickets, en straks in de modules
  * die hun rijen overnemen. Anatomie:
  *
- *   [rand 4px als urgent/hoog] [kamer 17px vet, rood=bezet] [titel 17px]
+ *   [rand 4px in prioriteitskleur] [kamer 17px vet, rood=bezet] [titel 17px]
  *                              [metaregel 14px grijs]              [actie]
  *
  * Maximaal vier elementen, vijf met actie. Het vijfde verdringt het vierde —
@@ -28,7 +28,7 @@ export interface WorkRowProps {
    *  plaats van een nieuwe pagina. De rij wordt dan een knop. */
   onOpen?: (e: React.MouseEvent) => void;
   geselecteerd?: boolean;
-  /** Bepaalt uitsluitend de linkerrand: rood = urgent, amber = hoog, verder niets. */
+  /** Bepaalt uitsluitend de linkerrand: rood, oranje, geel of lichtgroen. */
   priority: Priority;
   kamer?: string | null;
   /** Keycard: true = bezet (rood), false = vrij (groen), null = geen sensor. */
@@ -64,8 +64,7 @@ export function WorkRow({
   actie = { soort: "geen" },
   extraKamers,
 }: WorkRowProps) {
-  const randKlasse =
-    priority === "urgent" ? "row--urgent" : priority === "high" ? "row--high" : "";
+  const randKlasse = prioriteitRand(priority);
 
   const metaDelen = (meta ?? []).filter(Boolean);
 

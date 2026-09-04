@@ -1,10 +1,10 @@
 import type { Status, Priority, Category } from "../api/client";
-import { AFDELING_KORT } from "../werk";
+import { AFDELING_KORT, prioriteitWoord } from "../werk";
 
 /**
  * De laatste badges in de app — nog in gebruik op de herhaaltaak-detailpagina.
- * Ze volgen nu het kleursysteem: kleur draagt alleen prioriteit (urgent, hoog)
- * en "klaar". Al het andere is grijze tekst.
+ * Ze volgen het kleursysteem: kleur draagt prioriteit (vier niveaus) en
+ * "klaar". Al het andere is grijze tekst.
  */
 
 const STATUS_LABELS: Record<Status, string> = {
@@ -13,13 +13,6 @@ const STATUS_LABELS: Record<Status, string> = {
   // toewijzing deed, en dat wil niemand weten.
   in_progress: "Te doen",
   closed: "Klaar",
-};
-
-const PRIORITY_LABELS: Record<Priority, string> = {
-  low: "Laag",
-  medium: "Normaal",
-  high: "Hoog",
-  urgent: "Urgent",
 };
 
 export function StatusBadge({ status }: { status: Status }) {
@@ -31,15 +24,19 @@ export function StatusBadge({ status }: { status: Status }) {
   );
 }
 
+const PRIORITY_BADGE: Record<Priority, string> = {
+  urgent: "bg-urgent-soft text-urgent",
+  high: "bg-high-soft text-high",
+  medium: "bg-normal-soft text-normal",
+  low: "bg-low-soft text-low",
+};
+
 export function PriorityBadge({ priority }: { priority: Priority }) {
-  if (priority === "urgent") {
-    return <span className="badge bg-urgent-soft text-urgent font-semibold">Urgent</span>;
-  }
-  if (priority === "high") {
-    return <span className="badge bg-high-soft text-high font-semibold">Hoog</span>;
-  }
-  // Normaal en laag krijgen geen kleur: stilte is óók informatie.
-  return <span className="badge bg-ink-6 text-ink-70">{PRIORITY_LABELS[priority]}</span>;
+  return (
+    <span className={`badge font-semibold ${PRIORITY_BADGE[priority]}`}>
+      {prioriteitWoord(priority)}
+    </span>
+  );
 }
 
 export function CategoryBadge({ category }: { category: Category }) {

@@ -73,12 +73,44 @@ export function bezigTekst(status: Ticket["status"]): string | null {
   return status === "in_progress" ? "In behandeling" : null;
 }
 
-/** Alleen urgent en hoog krijgen een woord; normaal en laag zijn stilte. */
-export function prioriteitWoord(priority: Priority): string | null {
-  if (priority === "urgent") return "Urgent";
-  if (priority === "high") return "Hoog";
-  return null;
+/**
+ * Elk niveau krijgt een woord. Normaal en laag waren stilte — "stilte is óók
+ * informatie" — maar wie een rij zonder woord zag, las "geen prioriteit
+ * ingevuld" in plaats van "gewone prioriteit". Vier woorden, vier kleuren.
+ */
+export const PRIORITEIT_WOORD: Record<Priority, string> = {
+  urgent: "Urgent",
+  high: "Hoog",
+  medium: "Normaal",
+  low: "Laag",
+};
+
+export function prioriteitWoord(priority: Priority): string {
+  return PRIORITEIT_WOORD[priority];
 }
+
+/** Tekstkleur van het prioriteitswoord: rood, oranje, geel, lichtgroen. */
+export function prioriteitKleur(priority: Priority): string {
+  return {
+    urgent: "text-urgent",
+    high: "text-high",
+    medium: "text-normal",
+    low: "text-low",
+  }[priority];
+}
+
+/** De linkerrand van een werkrij, in dezelfde vier kleuren. */
+export function prioriteitRand(priority: Priority): string {
+  return {
+    urgent: "row--urgent",
+    high: "row--high",
+    medium: "row--normal",
+    low: "row--low",
+  }[priority];
+}
+
+/** Volgorde waarin de niveaus overal staan: spoed eerst. */
+export const PRIORITEIT_VOLGORDE: Priority[] = ["urgent", "high", "medium", "low"];
 
 /**
  * Leeftijd in de metaregel.
