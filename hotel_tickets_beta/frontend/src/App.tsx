@@ -622,14 +622,16 @@ export default function App() {
           {/* Inhoud — max 1100 px, rijen links uitgelijnd */}
           <main
             className={`flex-1 px-4 pt-6 w-full max-w-[1100px] ${
-              // De kennisbot en Vandaag vullen de hoogte in plaats van te
-              // scrollen; dan moet deze laag een flexkolom zijn, anders heeft
-              // "vul de rest" geen betekenis. Vandaag regelt de ruimte voor de
-              // meldknop zelf, in zijn onderste vak.
-              location.pathname === "/"
-                ? "flex flex-col min-h-0 pb-3 md:pb-6"
-                : location.pathname === "/kennis"
-                  ? `flex flex-col min-h-0 ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`
+              // De kennisbot vult de hoogte in plaats van te scrollen; dan moet
+              // deze laag een flexkolom zijn, anders heeft "vul de rest" geen
+              // betekenis. Vandaag rekent zijn eigen hoogte uit en blijft een
+              // gewone pagina, met net genoeg onderrand om te kúnnen scrollen:
+              // de meldknop-ruimte zit al in zijn onderste vak, en zonder
+              // invoerveld is er geen toetsenbordruimte nodig.
+              location.pathname === "/kennis"
+                ? `flex flex-col min-h-0 ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`
+                : location.pathname === "/"
+                  ? "pb-[calc(var(--onderbalk)+2.5rem)] md:pb-6"
                   : `touch-keyboard-pb ${toonMelden ? "fab-clearance" : "pagina-einde"} md:pb-6`
             }`}
           >
