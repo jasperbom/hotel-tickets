@@ -29,12 +29,19 @@
        elkaar, dan eindigde de pagina op sommige schermen precies onder de balk
        — en verdween daar de opslaan-knop. */
     --onderbalk: calc(3.5rem + env(safe-area-inset-bottom, 0px));
+    /* Hoogte van de mobiele kopbalk, inclusief de veilige zone bovenin (de
+       notch). Een balk die "sticky" onder de kopbalk moet blijven hangen
+       rekent hiermee; een vaste 44 px schoof op een iPhone half onder de
+       kopbalk door. */
+    --kopbalk: calc(2.75rem + env(safe-area-inset-top, 0px));
   }
 
-  /* Vanaf tablet is er geen onderbalk; dan is er ook niets te reserveren. */
+  /* Vanaf tablet is er geen onder- of kopbalk; dan is er ook niets te
+     reserveren. */
   @media (min-width: 768px) {
     :root {
       --onderbalk: 0px;
+      --kopbalk: 0px;
     }
   }
 
