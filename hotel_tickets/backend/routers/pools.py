@@ -117,6 +117,9 @@ class PoolStatus(BaseModel):
     measurements_today: int
     compliant: bool  # >= 2 metingen vandaag
     latest: Optional[PoolLogOut] = None
+    # Datum van de allereerste meting (YYYY-MM-DD); dagen daarvóór tellen in
+    # Inzicht niet als "niet gemeten" — toen werd er simpelweg nog niet gemeten.
+    first_measurement: Optional[str] = None
     # Laatste vervanging per chemicalie (chloor/zuur/vlokmiddel), op basis van
     # NFC-tankscans én handmatige logboek-invoer in het chemicaliën-veld
     chemicalien_vervangen: dict[str, Optional[ChemicalReplacement]] = {}
@@ -210,6 +213,13 @@ async def pool_status(db: AsyncSession = Depends(get_db)):
         )
         latest_row = latest_q.scalar_one_or_none()
 
+        first_q = await db.execute(
+            select(func.min(PoolLog.datum)).where(
+                and_(PoolLog.pool_id == pid, _has_measurement_filter())
+            )
+        )
+        first_measurement = first_q.scalar()
+
         chemicalien: dict[str, ChemicalReplacement | None] = {}
         for chem_key, pattern in CHEMICAL_PATTERNS.items():
             chem_q = await db.execute(
@@ -231,6 +241,7 @@ async def pool_status(db: AsyncSession = Depends(get_db)):
             measurements_today=count,
             compliant=count >= 2,
             latest=_row_to_out(latest_row) if latest_row else None,
+            first_measurement=first_measurement,
             chemicalien_vervangen=chemicalien,
         ))
     return result

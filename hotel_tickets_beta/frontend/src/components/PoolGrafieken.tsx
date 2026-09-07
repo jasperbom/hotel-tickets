@@ -437,7 +437,17 @@ const DAG_KLEUR = {
   geen: "#C0392F", // urgent
 };
 
-function Dagstrip({ rows, pools }: { rows: DagRow[]; pools: PoolId[] }) {
+function Dagstrip({
+  rows,
+  pools,
+  actief,
+}: {
+  rows: DagRow[];
+  pools: PoolId[];
+  /** Werd er op deze dag al gemeten in dit bad? Daarvóór is een dag niet "gemist". */
+  actief: (p: PoolId, datum: string) => boolean;
+}) {
+  const heeftVoorStart = rows.some((r) => pools.some((p) => !actief(p, r.datum)));
   return (
     <Kaart titel="Metingen per dag" sub="de BAL vraagt twee metingen per dag">
       <div className="space-y-2 py-1">
@@ -451,6 +461,17 @@ function Dagstrip({ rows, pools }: { rows: DagRow[]; pools: PoolId[] }) {
             )}
             <ul className="flex flex-wrap gap-[3px]">
               {rows.map((r) => {
+                if (!actief(p, r.datum)) {
+                  const tekst = `${formatDateNL(r.datum)}: nog geen metingen in dit bad`;
+                  return (
+                    <li
+                      key={r.datum}
+                      className="w-3 h-3 rounded-[3px] bg-ink-6"
+                      title={tekst}
+                      aria-label={tekst}
+                    />
+                  );
+                }
                 const n = r[`${p}_metingen`];
                 const kleur = n >= 2 ? DAG_KLEUR.volledig : n === 1 ? DAG_KLEUR.een : DAG_KLEUR.geen;
                 const tekst = `${formatDateNL(r.datum)}: ${n} ${n === 1 ? "meting" : "metingen"}`;
@@ -469,6 +490,12 @@ function Dagstrip({ rows, pools }: { rows: DagRow[]; pools: PoolId[] }) {
         ))}
       </div>
       <ul className="flex flex-wrap gap-x-4 gap-y-1 mt-2 text-xs text-ink-70">
+        {heeftVoorStart && (
+          <li className="inline-flex items-center gap-1.5">
+            <span className="inline-block w-3 h-3 rounded-[3px] bg-ink-6" />
+            vóór de eerste meting
+          </li>
+        )}
         <li className="inline-flex items-center gap-1.5">
           <span className="inline-block w-3 h-3 rounded-[3px]" style={{ background: DAG_KLEUR.volledig, opacity: 0.85 }} />
           2 of meer
@@ -493,6 +520,7 @@ export function PoolGrafieken({
   pool,
   datumVan,
   datumTot,
+  eersteMeting,
   laden,
 }: {
   logs: PoolLog[];
@@ -501,6 +529,12 @@ export function PoolGrafieken({
   /** Effectieve periode (ISO); leeg = alles wat er is */
   datumVan: string;
   datumTot: string;
+  /**
+   * Per bad de datum van de allereerste meting ooit. Dagen daarvóór tellen
+   * niet als gemist: toen werd er nog niet gemeten. Ontbreekt het (status
+   * nog niet geladen), dan geldt de eerste meting binnen de selectie.
+   */
+  eersteMeting?: Partial<Record<PoolId, string | null>>;
   laden?: boolean;
 }) {
   const pools: PoolId[] = pool ? [pool] : ALL_POOLS;
@@ -524,9 +558,27 @@ export function PoolGrafieken({
     }
     const lineRows = [...perTijd.values()];
 
-    // Dagrijen over de hele periode, zodat een dag zonder meting ook opvalt.
+    // Startdatum per bad: de allereerste meting ooit (uit de status), anders
+    // de eerste meting binnen de selectie. Een bad zonder metingen doet niet mee.
+    const start: Partial<Record<PoolId, string>> = {};
+    for (const p of pools) {
+      const uitStatus = eersteMeting?.[p];
+      const inSelectie = gesorteerd.find((l) => l.pool_id === p)?.datum;
+      const s = uitStatus ?? inSelectie;
+      if (s) start[p] = s;
+    }
+    const actief = (p: PoolId, datum: string) => {
+      const s = start[p];
+      return Boolean(s && datum >= s);
+    };
+
+    // Dagrijen over de periode, zodat een dag zonder meting ook opvalt — maar
+    // niet eerder dan de eerste meting: "dit jaar" moet niet beginnen met
+    // maanden rood van vóórdat er een logboek was.
     const vandaag = isoDate(new Date());
-    const van = datumVan || gesorteerd[0]?.datum || vandaag;
+    const vroegsteStart = Object.values(start).filter(Boolean).sort()[0];
+    const ondergrens = datumVan || vroegsteStart || vandaag;
+    const van = vroegsteStart && vroegsteStart > ondergrens ? vroegsteStart : ondergrens;
     const tot = datumTot || vandaag;
     const dagen = van <= tot ? dagenTussen(van, tot) : [];
     const perDag = new Map<string, DagRow>(dagen.map((d) => [d, nieuweDagRow(d)]));
@@ -542,8 +594,12 @@ export function PoolGrafieken({
     }
     const dagRows = [...perDag.values()].sort((a, b) => a.datum.localeCompare(b.datum));
 
-    // Kerncijfers
-    const volledig = dagRows.filter((r) => pools.every((p) => r[`${p}_metingen`] >= 2)).length;
+    // Kerncijfers. Een dag telt mee zodra minstens één bad al gemeten werd;
+    // volledig is hij als elk bad dat toen al meedeed twee metingen heeft.
+    const meetdagen = dagRows.filter((r) => pools.some((p) => actief(p, r.datum)));
+    const volledig = meetdagen.filter((r) =>
+      pools.every((p) => !actief(p, r.datum) || r[`${p}_metingen`] >= 2),
+    ).length;
     const tel = (key: RangeKey, veld: keyof PoolLog) => {
       let totaal = 0;
       let binnen = 0;
@@ -561,8 +617,11 @@ export function PoolGrafieken({
     const verbruik = metingen.reduce((s, l) => s + (l.verbruik ?? 0), 0);
     const bezoekers = metingen.reduce((s, l) => s + (l.bezoekers ?? 0), 0);
 
-    return { metingen, lineRows, dagRows, volledig, ph, vbc, gbc, verbruik, bezoekers };
-  }, [logs, pool, datumVan, datumTot]);
+    return {
+      metingen, lineRows, dagRows, actief, meetdagen: meetdagen.length,
+      volledig, ph, vbc, gbc, verbruik, bezoekers,
+    };
+  }, [logs, pool, datumVan, datumTot, eersteMeting]);
 
   if (data.metingen.length === 0) {
     return <p className="meta">Geen metingen in deze periode om grafieken van te maken.</p>;
@@ -595,7 +654,7 @@ export function PoolGrafieken({
       ]
     : perPool("vbc_in", "vbc_in");
 
-  const dagenTotaal = data.dagRows.length;
+  const dagenTotaal = data.meetdagen;
 
   return (
     <div className={`space-y-4 transition-opacity ${laden ? "opacity-60" : ""}`}>
@@ -613,7 +672,7 @@ export function PoolGrafieken({
         <Tegel waarde={fmt(data.bezoekers, 0)} label="Bezoekers totaal" />
       </div>
 
-      <Dagstrip rows={data.dagRows} pools={pools} />
+      <Dagstrip rows={data.dagRows} pools={pools} actief={data.actief} />
 
       <div className="grid md:grid-cols-2 2xl:grid-cols-3 gap-4">
         <Lijngrafiek titel="pH" rows={data.lineRows} series={phSeries} rangeKey="ph" />
