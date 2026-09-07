@@ -16,7 +16,7 @@ import { formatDateNL, type PoolId, type PoolLog } from "../api/client";
 import { POOL_RANGES, STATUS_COLORS, getValueStatus, type RangeKey } from "./PoolValueVisualization";
 
 /**
- * Inzicht-sectie boven het zwembadlogboek: kerncijfers, een dagstrip met het
+ * Grafieken van de pagina Inzicht (zwembaden): kerncijfers, een dagstrip met het
  * aantal metingen per dag (de BAL vraagt er twee) en trendgrafieken per
  * meetwaarde tegen het streefbereik. Alles wordt berekend uit dezelfde
  * logregels als de tabel eronder, zodat filters en cijfers altijd kloppen.
@@ -488,7 +488,7 @@ function Dagstrip({ rows, pools }: { rows: DagRow[]; pools: PoolId[] }) {
 
 // ── Sectie ─────────────────────────────────────────────────────────────────
 
-export function PoolInzicht({
+export function PoolGrafieken({
   logs,
   pool,
   datumVan,
