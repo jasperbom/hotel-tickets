@@ -194,9 +194,12 @@ function fmt(v: number | null | undefined, digits = 2): string {
 // ── Bouwstenen ─────────────────────────────────────────────────────────────
 
 function Tegel({ waarde, label, alarm }: { waarde: number | string; label: string; alarm?: boolean }) {
+  // Een lang getal (103/300, 1.152,3) krijgt een maatje kleiner in plaats van
+  // een afgekapt "103/…".
+  const lang = String(waarde).length > 6;
   return (
     <div className="rounded-[10px] border border-ink-12 bg-paper-raised px-4 py-3.5 min-w-0">
-      <p className={`text-[1.75rem] font-bold leading-none truncate ${alarm ? "text-urgent" : "text-ink"}`}>
+      <p className={`${lang ? "text-[1.35rem]" : "text-[1.75rem]"} font-bold leading-none truncate ${alarm ? "text-urgent" : "text-ink"}`}>
         {waarde}
       </p>
       <p className="meta mt-1.5">{label}</p>
