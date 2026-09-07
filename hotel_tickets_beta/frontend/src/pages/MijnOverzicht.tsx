@@ -108,25 +108,26 @@ export default function Vandaag() {
     const v = Number(localStorage.getItem(NU_HOOGTE_KEY));
     return v > 0 ? v : null;
   });
-  const vakkenRef = useRef<HTMLDivElement>(null);
   const nuRef = useRef<HTMLElement>(null);
+  const tePakkenRef = useRef<HTMLElement>(null);
 
   /**
    * Slepen aan de balk tussen de vakken. De nieuwe hoogte van NU is de hoogte
    * bij het begin van de sleep plus de afstand die de vinger aflegt, begrensd
-   * zodat geen van beide vakken onder zijn minimum komt.
+   * zodat geen van beide vakken onder zijn minimum komt. De bovengrens komt
+   * uit wat TE PAKKEN nu écht hoog is: zoveel kan dat vak inleveren tot het
+   * op zijn minimum zit. Rekenen met de totale hoogte min de balk zat er
+   * steeds de marge van de balk naast.
    */
   function begintSleep(e: React.PointerEvent<HTMLDivElement>) {
-    const vakken = vakkenRef.current;
     const nu = nuRef.current;
-    if (!vakken || !nu) return;
+    const tePakken = tePakkenRef.current;
+    if (!nu || !tePakken) return;
     e.preventDefault();
     e.currentTarget.setPointerCapture(e.pointerId);
     const startY = e.clientY;
     const startHoogte = nu.getBoundingClientRect().height;
-    const totaal = vakken.getBoundingClientRect().height;
-    const balk = e.currentTarget.getBoundingClientRect().height;
-    const max = totaal - balk - ONDER_MIN_PX;
+    const max = startHoogte + tePakken.getBoundingClientRect().height - ONDER_MIN_PX;
     let laatste = startHoogte;
     const beweeg = (ev: PointerEvent) => {
       laatste = Math.round(Math.min(max, Math.max(VAK_MIN_PX, startHoogte + ev.clientY - startY)));
@@ -469,7 +470,7 @@ export default function Vandaag() {
       {soort === "tickets" && (
         // Twee vakken. Op een telefoon onder elkaar, op een breed scherm naast
         // elkaar: daar is breedte over en hoogte schaars.
-        <div ref={vakkenRef} className="flex-1 min-h-0 flex flex-col md:flex-row md:gap-6">
+        <div className="flex-1 min-h-0 flex flex-col md:flex-row md:gap-6">
           <Vak kop="Nu" aantal={aantalNu} gewicht={1.25} vasteHoogte={nuHoogte} sectieRef={nuRef}>
             {aantalNu === 0 ? (
               <LegeStaatNu aantalTePakken={tePakken.length} afdeling={afdelingNaam} />
@@ -527,6 +528,8 @@ export default function Vandaag() {
             kop="Te pakken"
             aantal={tePakken.length}
             onder
+            rest={nuHoogte !== null}
+            sectieRef={tePakkenRef}
             rechts={
               magSchakelen && (
                 <button
@@ -574,14 +577,24 @@ export default function Vandaag() {
  *
  * `gewicht` is de flex-basis-verhouding waarmee de vakken de hoogte verdelen
  * zodra ze samen niet passen; wat wél past krijgt gewoon zijn eigen hoogte.
- * Met `vasteHoogte` (de sleepbalk) staat de hoogte op een telefoon vast.
+ * Met `vasteHoogte` (de sleepbalk) staat de hoogte op een telefoon vast, en
+ * het andere vak krijgt met `rest` wat er overblijft.
+ *
+ * Dat `rest` is er niet voor niets: zonder vaste hoogte is de flex-basis
+ * `auto`, en dat is de hoogte van de hele lijst, ook het deel dat je alleen
+ * na scrollen ziet. Bij ruimtegebrek krimpt flexbox naar rato van die basis,
+ * dus een lang TE PAKKEN drukte NU terug naar zijn minimum — hoe ver je de
+ * balk ook sleepte, het vak volgde de vinger maar half en zakte daarna weer
+ * in. Met basis 0 telt de lijst niet mee: TE PAKKEN vult wat NU overlaat en
+ * pas als dat onder zijn minimum komt levert NU in.
+ *
  * Een vak wordt nooit kleiner dan een paar rijen; `onder` reserveert
  * daarbovenop ruimte voor de zwevende meldknop, zodat de laatste rij
  * eronderuit kan scrollen — die ruimte telt niet mee als "zichtbare rijen",
  * daar ging de eerste versie de mist in: er bleef één rij over.
  */
 function Vak({
-  kop, aantal, rechts, onder = false, gewicht = 1, vasteHoogte = null, sectieRef, children,
+  kop, aantal, rechts, onder = false, gewicht = 1, vasteHoogte = null, rest = false, sectieRef, children,
 }: {
   kop: string;
   aantal: number;
@@ -589,6 +602,7 @@ function Vak({
   onder?: boolean;
   gewicht?: number;
   vasteHoogte?: number | null;
+  rest?: boolean;
   sectieRef?: React.Ref<HTMLElement>;
   children: React.ReactNode;
 }) {
@@ -599,7 +613,11 @@ function Vak({
       // 0 1 en niet 0 0: een op een groter scherm gekozen hoogte mag op een
       // kleiner scherm krimpen tot het onderste vak zijn minimum heeft.
       className={`flex flex-col md:[flex:1_1_0%] ${
-        vasteHoogte ? "max-md:[flex:0_1_var(--vast)]" : "max-md:[flex:var(--gewicht)_1_auto]"
+        vasteHoogte
+          ? "max-md:[flex:0_1_var(--vast)]"
+          : rest
+            ? "max-md:[flex:1_1_0%]"
+            : "max-md:[flex:var(--gewicht)_1_auto]"
       }`}
       style={{
         "--gewicht": gewicht,
