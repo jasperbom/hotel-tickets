@@ -4,6 +4,7 @@ Zwembaden logboek — CRUD + BAL-compliance status.
 import csv
 import io
 import logging
+import re
 import zipfile
 from datetime import date
 from typing import Optional
@@ -188,6 +189,50 @@ def _has_measurement_filter():
     )
 
 
+def _has_water_quality_filter():
+    """SQL-filter: een échte waterkwaliteitsmeting (pH, chloor, temperatuur,
+    doorzicht). Een regel met alleen een watermeterstand, verbruik of
+    bezoekersaantal — bijvoorbeeld uit een import — telt hier niet mee; die
+    bepaalt dus niet wanneer het logboek 'begonnen' is."""
+    return or_(
+        PoolLog.water_temp.isnot(None),
+        PoolLog.doorzicht.isnot(None),
+        PoolLog.ph.isnot(None),
+        PoolLog.vbc_in.isnot(None),
+        PoolLog.vbc_uit.isnot(None),
+        PoolLog.tbc.isnot(None),
+        PoolLog.gbc.isnot(None),
+        PoolLog.ph_automaat.isnot(None),
+        PoolLog.vbc_automaat.isnot(None),
+    )
+
+
+_DATE_DMY = re.compile(r"^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$")
+_DATE_YMD = re.compile(r"^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$")
+
+
+def _normalize_date(value: str) -> str:
+    """Zet '7-1-2026', '07/01/2026' of '2026-1-7' om naar '2026-01-07'.
+    Onbekende vormen blijven zoals ze zijn."""
+    v = value.strip()
+    m = _DATE_YMD.match(v)
+    if m:
+        y, mo, d = m.groups()
+        return f"{y}-{int(mo):02d}-{int(d):02d}"
+    m = _DATE_DMY.match(v)
+    if m:
+        d, mo, y = m.groups()
+        return f"{y}-{int(mo):02d}-{int(d):02d}"
+    return v
+
+
+def _normalize_time(value: str) -> str:
+    """'8:00' → '08:00'; onbekende vormen blijven zoals ze zijn."""
+    v = value.strip()
+    m = re.match(r"^(\d{1,2}):(\d{2})", v)
+    return f"{int(m.group(1)):02d}:{m.group(2)}" if m else v
+
+
 @router.get("/status", response_model=list[PoolStatus])
 async def pool_status(db: AsyncSession = Depends(get_db)):
     """BAL-compliance status per bad: zijn er vandaag >= 2 metingen?"""
@@ -213,9 +258,15 @@ async def pool_status(db: AsyncSession = Depends(get_db)):
         )
         latest_row = latest_q.scalar_one_or_none()
 
+        # Alleen ISO-datums meetellen: een afwijkend geformatteerde datum uit
+        # een oude import zou anders lexicografisch 'het vroegst' zijn.
         first_q = await db.execute(
             select(func.min(PoolLog.datum)).where(
-                and_(PoolLog.pool_id == pid, _has_measurement_filter())
+                and_(
+                    PoolLog.pool_id == pid,
+                    _has_water_quality_filter(),
+                    PoolLog.datum.like("____-__-__"),
+                )
             )
         )
         first_measurement = first_q.scalar()
@@ -432,8 +483,8 @@ async def import_csv(file: UploadFile = File(...), pool_id: str = Query(...), db
     filter_rows: list[tuple[str, str]] = []  # (datum, filterspoeling_val)
 
     for row in reader:
-        datum = (row.get("Datum") or "").strip()
-        tijd = (row.get("Tijd") or "").strip()
+        datum = _normalize_date(row.get("Datum") or "")
+        tijd = _normalize_time(row.get("Tijd") or "")
         if not datum or datum == "-":
             continue
 

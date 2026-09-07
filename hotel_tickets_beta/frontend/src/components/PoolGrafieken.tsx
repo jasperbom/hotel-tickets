@@ -51,6 +51,18 @@ export function isMeting(l: PoolLog): boolean {
   return MEASUREMENT_KEYS.some((k) => l[k] !== null && l[k] !== undefined && l[k] !== "");
 }
 
+// Een échte waterkwaliteitsmeting. Alleen zo'n regel bepaalt wanneer het
+// logboek "begonnen" is; een losse watermeterstand of bezoekersaantal uit een
+// import doet dat niet (zelfde regel als first_measurement in de backend).
+const WATER_KEYS: (keyof PoolLog)[] = [
+  "water_temp", "doorzicht", "ph", "vbc_in", "vbc_uit", "tbc", "gbc", "ph_automaat", "vbc_automaat",
+];
+const ISO_DATUM = /^\d{4}-\d{2}-\d{2}$/;
+
+function isWaterMeting(l: PoolLog): boolean {
+  return ISO_DATUM.test(l.datum) && WATER_KEYS.some((k) => l[k] !== null && l[k] !== undefined && l[k] !== "");
+}
+
 function toMs(datum: string, tijd: string): number {
   return new Date(`${datum}T${tijd || "00:00"}:00`).getTime();
 }
@@ -73,6 +85,23 @@ function dagenTussen(van: string, tot: string): string[] {
     d.setDate(d.getDate() + 1);
   }
   return out;
+}
+
+/**
+ * Asstreepjes voor de x-as, dezelfde voor elke grafiek: hooguit een stuk of
+ * zeven, op ronde stappen (per dag, week, twee weken, ...) en bij een lange
+ * periode op de eerste van de maand.
+ */
+function dagTicks(dagen: string[]): string[] {
+  const n = dagen.length;
+  if (n <= 7) return dagen;
+  if (n > 120) {
+    const maandstarts = dagen.filter((d) => d.endsWith("-01"));
+    const stap = Math.max(1, Math.ceil(maandstarts.length / 7));
+    return maandstarts.filter((_, i) => i % stap === 0);
+  }
+  const stap = [1, 2, 3, 5, 7, 14, 30].find((s) => Math.ceil(n / s) <= 7) ?? 30;
+  return dagen.filter((_, i) => i % stap === 0);
 }
 
 type LineRow = { t: number; datum: string; tijd: string } & Partial<Record<PoolId, PoolLog>>;
@@ -247,10 +276,14 @@ function Kaart({ titel, sub, children }: { titel: string; sub?: string; children
 
 // ── Lijngrafiek ────────────────────────────────────────────────────────────
 
+/** Gedeelde x-as: de zichtbare periode en de streepjes erop, gelijk voor elke grafiek. */
+type XAs = { van: string; tot: string; ticks: string[] };
+
 function Lijngrafiek({
   titel,
   rows,
   series,
+  xas,
   rangeKey,
   eenheid,
   decimalen = 2,
@@ -258,6 +291,7 @@ function Lijngrafiek({
   titel: string;
   rows: LineRow[];
   series: SeriesDef[];
+  xas: XAs;
   rangeKey?: RangeKey;
   eenheid?: string;
   decimalen?: number;
@@ -305,13 +339,15 @@ function Lijngrafiek({
             <XAxis
               type="number"
               dataKey="t"
-              domain={["dataMin", "dataMax"]}
+              domain={[toMs(xas.van, "00:00"), toMs(xas.tot, "23:59")]}
+              allowDataOverflow
+              ticks={xas.ticks.map((d) => toMs(d, "00:00"))}
+              interval={0}
               scale="time"
               tickFormatter={(t: number) => ddmm(isoDate(new Date(t)))}
               tick={{ fontSize: 11, fill: INK_45 }}
               tickLine={false}
               axisLine={{ stroke: INK_12 }}
-              minTickGap={40}
             />
             <YAxis
               domain={as.domain}
@@ -397,12 +433,14 @@ function Dagstaven({
   rows,
   veld,
   pools,
+  xas,
   sub,
 }: {
   titel: string;
   rows: DagRow[];
   veld: "bezoekers" | "verbruik";
   pools: PoolId[];
+  xas: XAs;
   sub?: string;
 }) {
   const series: SeriesDef[] = pools.map((p) => ({
@@ -420,12 +458,13 @@ function Dagstaven({
           <BarChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }} barGap={2} barCategoryGap="25%">
             <CartesianGrid stroke={INK_6} vertical={false} />
             <XAxis
-              dataKey="label"
+              dataKey="datum"
+              ticks={xas.ticks}
+              interval={0}
+              tickFormatter={ddmm}
               tick={{ fontSize: 11, fill: INK_45 }}
               tickLine={false}
               axisLine={{ stroke: INK_12 }}
-              minTickGap={40}
-              interval="preserveStartEnd"
             />
             <YAxis
               tick={{ fontSize: 11, fill: INK_45 }}
@@ -665,31 +704,21 @@ export function PoolGrafieken({
   const pools: PoolId[] = pool ? [pool] : ALL_POOLS;
 
   const data = useMemo(() => {
-    const metingen = logs.filter((l) => isMeting(l) && pools.includes(l.pool_id));
+    // Een regel met een afwijkend geformatteerde datum (oude import) kan niet
+    // op een tijdas en telt niet mee.
+    const metingen = logs.filter((l) => isMeting(l) && ISO_DATUM.test(l.datum) && pools.includes(l.pool_id));
     const gesorteerd = [...metingen].sort(
       (a, b) => toMs(a.datum, a.tijd) - toMs(b.datum, b.tijd),
     );
 
-    // Lijnrijen: één rij per tijdstip, per bad de log eronder.
-    const perTijd = new Map<number, LineRow>();
-    for (const l of gesorteerd) {
-      const t = toMs(l.datum, l.tijd);
-      let row = perTijd.get(t);
-      if (!row) {
-        row = { t, datum: l.datum, tijd: l.tijd };
-        perTijd.set(t, row);
-      }
-      row[l.pool_id] = l;
-    }
-    const lineRows = [...perTijd.values()];
-
-    // Startdatum per bad: de allereerste meting ooit (uit de status), anders
-    // de eerste meting binnen de selectie. Een bad zonder metingen doet niet mee.
+    // Startdatum per bad: de allereerste waterkwaliteitsmeting ooit (uit de
+    // status), anders de eerste binnen de selectie. Een bad zonder metingen
+    // doet niet mee.
     const start: Partial<Record<PoolId, string>> = {};
     for (const p of pools) {
       const uitStatus = eersteMeting?.[p];
-      const inSelectie = gesorteerd.find((l) => l.pool_id === p)?.datum;
-      const s = uitStatus ?? inSelectie;
+      const inSelectie = gesorteerd.find((l) => l.pool_id === p && isWaterMeting(l))?.datum;
+      const s = (uitStatus && ISO_DATUM.test(uitStatus) ? uitStatus : null) ?? inSelectie;
       if (s) start[p] = s;
     }
     const actief = (p: PoolId, datum: string) => {
@@ -706,8 +735,30 @@ export function PoolGrafieken({
     const van = vroegsteStart && vroegsteStart > ondergrens ? vroegsteStart : ondergrens;
     const tot = datumTot || vandaag;
     const dagen = van <= tot ? dagenTussen(van, tot) : [];
+    // Eén x-as voor alle grafieken: de periode zelf, niet "van eerste tot
+    // laatste meting" — anders lopen de lijnen en de staven niet gelijk.
+    const xas: XAs = { van, tot, ticks: dagTicks(dagen) };
+
+    // Vanaf hier telt alleen wat binnen de periode valt: een losse oude regel
+    // (bijv. een watermeterstand uit een import van vóór de eerste echte
+    // meting) mag geen as oprekken en geen kerncijfer beïnvloeden.
+    const inPeriode = gesorteerd.filter((l) => l.datum >= van && l.datum <= tot);
+
+    // Lijnrijen: één rij per tijdstip, per bad de log eronder.
+    const perTijd = new Map<number, LineRow>();
+    for (const l of inPeriode) {
+      const t = toMs(l.datum, l.tijd);
+      let row = perTijd.get(t);
+      if (!row) {
+        row = { t, datum: l.datum, tijd: l.tijd };
+        perTijd.set(t, row);
+      }
+      row[l.pool_id] = l;
+    }
+    const lineRows = [...perTijd.values()];
+
     const perDag = new Map<string, DagRow>(dagen.map((d) => [d, nieuweDagRow(d)]));
-    for (const l of gesorteerd) {
+    for (const l of inPeriode) {
       let row = perDag.get(l.datum);
       if (!row) {
         row = nieuweDagRow(l.datum);
@@ -727,7 +778,7 @@ export function PoolGrafieken({
       const ws = weekStart(d);
       if (!perWeek.has(ws)) perWeek.set(ws, nieuweWeekRow(ws));
     }
-    for (const l of gesorteerd) {
+    for (const l of inPeriode) {
       const ws = weekStart(l.datum);
       let row = perWeek.get(ws);
       if (!row) {
@@ -754,7 +805,7 @@ export function PoolGrafieken({
     const tel = (key: RangeKey, veld: keyof PoolLog) => {
       let totaal = 0;
       let binnen = 0;
-      for (const l of metingen) {
+      for (const l of inPeriode) {
         const v = l[veld];
         if (typeof v !== "number") continue;
         totaal += 1;
@@ -765,12 +816,12 @@ export function PoolGrafieken({
     const ph = tel("ph", "ph");
     const vbc = tel("vbc_in", "vbc_in");
     const gbc = tel("gbc", "gbc");
-    const verbruik = metingen.reduce((s, l) => s + (l.verbruik ?? 0), 0);
-    const bezoekers = metingen.reduce((s, l) => s + (l.bezoekers ?? 0), 0);
+    const verbruik = inPeriode.reduce((s, l) => s + (l.verbruik ?? 0), 0);
+    const bezoekers = inPeriode.reduce((s, l) => s + (l.bezoekers ?? 0), 0);
     const suppletie = bezoekers > 0 ? (verbruik * LITER_PER_VERBRUIK) / bezoekers : null;
 
     return {
-      metingen, lineRows, dagRows, weekRows, actief, meetdagen: meetdagen.length,
+      metingen: inPeriode, lineRows, dagRows, weekRows, xas, actief, meetdagen: meetdagen.length,
       volledig, ph, vbc, gbc, verbruik, bezoekers, suppletie,
     };
   }, [logs, pool, datumVan, datumTot, eersteMeting]);
@@ -832,16 +883,16 @@ export function PoolGrafieken({
       <Dagstrip rows={data.dagRows} pools={pools} actief={data.actief} />
 
       <div className="grid md:grid-cols-2 2xl:grid-cols-3 gap-4">
-        <Lijngrafiek titel="pH" rows={data.lineRows} series={phSeries} rangeKey="ph" />
-        <Lijngrafiek titel={enkel ? "Vrij beschikbaar chloor" : "VBC in"} rows={data.lineRows} series={vbcSeries} rangeKey="vbc_in" />
+        <Lijngrafiek titel="pH" rows={data.lineRows} xas={data.xas} series={phSeries} rangeKey="ph" />
+        <Lijngrafiek titel={enkel ? "Vrij beschikbaar chloor" : "VBC in"} rows={data.lineRows} xas={data.xas} series={vbcSeries} rangeKey="vbc_in" />
         {!enkel && (
-          <Lijngrafiek titel="VBC uit" rows={data.lineRows} series={perPool("vbc_uit", "vbc_uit")} rangeKey="vbc_uit" />
+          <Lijngrafiek titel="VBC uit" rows={data.lineRows} xas={data.xas} series={perPool("vbc_uit", "vbc_uit")} rangeKey="vbc_uit" />
         )}
-        <Lijngrafiek titel="Gebonden chloor" rows={data.lineRows} series={perPool("gbc", "gbc")} rangeKey="gbc" />
-        <Lijngrafiek titel="Watertemperatuur" rows={data.lineRows} series={perPool("water_temp")} eenheid="°C" decimalen={1} />
-        <Lijngrafiek titel="Flow" rows={data.lineRows} series={perPool("flow")} decimalen={2} />
-        <Dagstaven titel="Bezoekers per dag" rows={data.dagRows} veld="bezoekers" pools={pools} />
-        <Dagstaven titel="Verbruik per dag" rows={data.dagRows} veld="verbruik" pools={pools} sub="m³" />
+        <Lijngrafiek titel="Gebonden chloor" rows={data.lineRows} xas={data.xas} series={perPool("gbc", "gbc")} rangeKey="gbc" />
+        <Lijngrafiek titel="Watertemperatuur" rows={data.lineRows} xas={data.xas} series={perPool("water_temp")} eenheid="°C" decimalen={1} />
+        <Lijngrafiek titel="Flow" rows={data.lineRows} xas={data.xas} series={perPool("flow")} decimalen={2} />
+        <Dagstaven titel="Bezoekers per dag" rows={data.dagRows} xas={data.xas} veld="bezoekers" pools={pools} />
+        <Dagstaven titel="Verbruik per dag" rows={data.dagRows} xas={data.xas} veld="verbruik" pools={pools} sub="m³" />
         <Suppletiestaven rows={data.weekRows} pools={pools} />
       </div>
     </div>
