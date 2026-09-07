@@ -91,6 +91,48 @@ function nieuweDagRow(datum: string): DagRow {
   };
 }
 
+// ── Suppletie ──────────────────────────────────────────────────────────────
+// Vers water per bezoeker. De watermeter staat in m³; het logboek bewaart
+// het verschil als "verbruik", dus verbruik × 1000 = liters vers water. De
+// vaste eis van 30 liter per bezoeker per dag komt uit het oude Bhvbz; het
+// Bal (hoofdstuk 15) stelt geen vast aantal liters meer maar gebruikt
+// chloride als indicator voor verversing. 30 liter blijft de gangbare
+// richtwaarde en past in het beheersplan — daarom staat hij hier als lijn.
+export const SUPPLETIE_NORM_LITER = 30;
+const LITER_PER_VERBRUIK = 1000;
+
+/** Maandag (ISO-datum) van de week waarin `datum` valt. */
+function weekStart(datum: string): string {
+  const d = new Date(`${datum}T12:00:00`);
+  const dag = (d.getDay() + 6) % 7; // ma = 0
+  d.setDate(d.getDate() - dag);
+  return isoDate(d);
+}
+
+/** ISO-weeknummer voor het label. */
+function weekNummer(datum: string): number {
+  const d = new Date(`${datum}T12:00:00Z`);
+  const dag = d.getUTCDay() || 7;
+  d.setUTCDate(d.getUTCDate() + 4 - dag);
+  const jaarStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+  return Math.ceil(((d.getTime() - jaarStart.getTime()) / 86400000 + 1) / 7);
+}
+
+type WeekRow = {
+  start: string;
+  label: string;
+} & Record<`${PoolId}_liter` | `${PoolId}_bezoekers` | `${PoolId}_spoelingen`, number> &
+  Record<`${PoolId}_lpb`, number | null>;
+
+function nieuweWeekRow(start: string): WeekRow {
+  return {
+    start,
+    label: `wk ${weekNummer(start)}`,
+    wellness_liter: 0, wellness_bezoekers: 0, wellness_spoelingen: 0, wellness_lpb: null,
+    zwembad_liter: 0, zwembad_bezoekers: 0, zwembad_spoelingen: 0, zwembad_lpb: null,
+  };
+}
+
 /**
  * Ronde asstappen: 1 / 2 / 2,5 / 5 × 10^k, zodat de y-as 7,0 · 7,2 · 7,4 zegt
  * en niet 6,95 · 7,3 · 7,65. Het bereik wordt naar buiten afgerond op de stap.
@@ -429,6 +471,89 @@ function Dagstaven({
   );
 }
 
+// ── Suppletie per bezoeker per week ────────────────────────────────────────
+
+function Suppletiestaven({ rows, pools }: { rows: WeekRow[]; pools: PoolId[] }) {
+  const series: SeriesDef[] = pools.map((p) => ({
+    key: `${p}_lpb`,
+    naam: POOL_LABELS[p],
+    kleur: POOL_COLORS[p],
+  }));
+  const heeftData = rows.some((r) => series.some((s) => typeof (r as any)[s.key] === "number"));
+  const max = Math.max(
+    SUPPLETIE_NORM_LITER * 1.5,
+    ...rows.flatMap((r) => series.map((s) => ((r as any)[s.key] as number | null) ?? 0)),
+  );
+  const as = netteAs(0, max);
+  return (
+    <Kaart titel="Suppletie per bezoeker" sub={`per week · richtwaarde ${SUPPLETIE_NORM_LITER} l`}>
+      {!heeftData ? (
+        <p className="meta py-8 text-center">Geen verbruik en bezoekers in deze periode.</p>
+      ) : (
+        <ResponsiveContainer width="100%" height={200}>
+          <BarChart data={rows} margin={{ top: 8, right: 12, left: 0, bottom: 0 }} barGap={2} barCategoryGap="25%">
+            <CartesianGrid stroke={INK_6} vertical={false} />
+            <XAxis
+              dataKey="label"
+              tick={{ fontSize: 11, fill: INK_45 }}
+              tickLine={false}
+              axisLine={{ stroke: INK_12 }}
+              minTickGap={24}
+              interval="preserveStartEnd"
+            />
+            <YAxis
+              domain={as.domain}
+              ticks={as.ticks}
+              tick={{ fontSize: 11, fill: INK_45 }}
+              tickLine={false}
+              axisLine={false}
+              width={40}
+              tickFormatter={(v: number) => fmt(v, as.decimalen)}
+            />
+            <Tooltip
+              cursor={{ fill: INK_6 }}
+              content={({ active, payload }) => {
+                if (!active || !payload?.length) return null;
+                const row = payload[0].payload as WeekRow;
+                const regels = pools.map((p) => {
+                  const lpb = row[`${p}_lpb`];
+                  const spoel = row[`${p}_spoelingen`];
+                  const detail = `${fmt(row[`${p}_liter`], 0)} l / ${fmt(row[`${p}_bezoekers`], 0)} bezoekers` +
+                    (spoel > 0 ? ` · ${spoel}× gespoeld` : "");
+                  return {
+                    naam: `${POOL_LABELS[p]} — ${detail}`,
+                    waarde: lpb === null ? "—" : `${fmt(lpb, 0)} l`,
+                    kleur: POOL_COLORS[p],
+                  };
+                });
+                return <TooltipKader titel={`${row.label} · vanaf ${formatDateNL(row.start)}`} regels={regels} />;
+              }}
+            />
+            <ReferenceLine
+              y={SUPPLETIE_NORM_LITER}
+              stroke={BEWAKING_STROKE}
+              strokeDasharray="4 3"
+              ifOverflow="extendDomain"
+            />
+            {series.map((s) => (
+              <Bar
+                key={s.key}
+                dataKey={s.key}
+                name={s.naam}
+                fill={s.kleur}
+                maxBarSize={24}
+                radius={[4, 4, 0, 0]}
+                isAnimationActive={false}
+              />
+            ))}
+          </BarChart>
+        </ResponsiveContainer>
+      )}
+      <LegendaRij series={series} vorm="balk" />
+    </Kaart>
+  );
+}
+
 // ── Dagstrip: metingen per dag ─────────────────────────────────────────────
 
 const DAG_KLEUR = {
@@ -594,6 +719,32 @@ export function PoolGrafieken({
     }
     const dagRows = [...perDag.values()].sort((a, b) => a.datum.localeCompare(b.datum));
 
+    // Weekrijen voor de suppletie: per week liters vers water gedeeld door
+    // bezoekers. Per dag is te grillig — de filterspoeling valt op één dag
+    // en de zwemmers komen de hele week — per week middelt dat uit.
+    const perWeek = new Map<string, WeekRow>();
+    for (const d of dagen) {
+      const ws = weekStart(d);
+      if (!perWeek.has(ws)) perWeek.set(ws, nieuweWeekRow(ws));
+    }
+    for (const l of gesorteerd) {
+      const ws = weekStart(l.datum);
+      let row = perWeek.get(ws);
+      if (!row) {
+        row = nieuweWeekRow(ws);
+        perWeek.set(ws, row);
+      }
+      row[`${l.pool_id}_liter`] += (l.verbruik ?? 0) * LITER_PER_VERBRUIK;
+      row[`${l.pool_id}_bezoekers`] += l.bezoekers ?? 0;
+      if (l.filterspoeling) row[`${l.pool_id}_spoelingen`] += 1;
+    }
+    const weekRows = [...perWeek.values()].sort((a, b) => a.start.localeCompare(b.start));
+    for (const r of weekRows) {
+      for (const p of pools) {
+        r[`${p}_lpb`] = r[`${p}_bezoekers`] > 0 ? r[`${p}_liter`] / r[`${p}_bezoekers`] : null;
+      }
+    }
+
     // Kerncijfers. Een dag telt mee zodra minstens één bad al gemeten werd;
     // volledig is hij als elk bad dat toen al meedeed twee metingen heeft.
     const meetdagen = dagRows.filter((r) => pools.some((p) => actief(p, r.datum)));
@@ -616,10 +767,11 @@ export function PoolGrafieken({
     const gbc = tel("gbc", "gbc");
     const verbruik = metingen.reduce((s, l) => s + (l.verbruik ?? 0), 0);
     const bezoekers = metingen.reduce((s, l) => s + (l.bezoekers ?? 0), 0);
+    const suppletie = bezoekers > 0 ? (verbruik * LITER_PER_VERBRUIK) / bezoekers : null;
 
     return {
-      metingen, lineRows, dagRows, actief, meetdagen: meetdagen.length,
-      volledig, ph, vbc, gbc, verbruik, bezoekers,
+      metingen, lineRows, dagRows, weekRows, actief, meetdagen: meetdagen.length,
+      volledig, ph, vbc, gbc, verbruik, bezoekers, suppletie,
     };
   }, [logs, pool, datumVan, datumTot, eersteMeting]);
 
@@ -658,7 +810,7 @@ export function PoolGrafieken({
 
   return (
     <div className={`space-y-4 transition-opacity ${laden ? "opacity-60" : ""}`}>
-      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-7 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 2xl:grid-cols-8 gap-3">
         <Tegel waarde={data.metingen.length} label="Metingen" />
         <Tegel
           waarde={`${data.volledig}/${dagenTotaal}`}
@@ -668,8 +820,13 @@ export function PoolGrafieken({
         <Tegel waarde={pct(data.ph.binnen, data.ph.totaal)} label="pH binnen streef" alarm={data.ph.totaal > 0 && data.ph.binnen < data.ph.totaal} />
         <Tegel waarde={pct(data.vbc.binnen, data.vbc.totaal)} label="VBC in binnen streef" alarm={data.vbc.totaal > 0 && data.vbc.binnen < data.vbc.totaal} />
         <Tegel waarde={pct(data.gbc.binnen, data.gbc.totaal)} label="Geb. chloor binnen streef" alarm={data.gbc.totaal > 0 && data.gbc.binnen < data.gbc.totaal} />
-        <Tegel waarde={fmt(data.verbruik, 1)} label="Verbruik totaal" />
+        <Tegel waarde={fmt(data.verbruik, 1)} label="Verbruik totaal (m³)" />
         <Tegel waarde={fmt(data.bezoekers, 0)} label="Bezoekers totaal" />
+        <Tegel
+          waarde={data.suppletie === null ? "—" : `${fmt(data.suppletie, 0)} l`}
+          label="Suppletie per bezoeker"
+          alarm={data.suppletie !== null && data.suppletie < SUPPLETIE_NORM_LITER}
+        />
       </div>
 
       <Dagstrip rows={data.dagRows} pools={pools} actief={data.actief} />
@@ -684,7 +841,8 @@ export function PoolGrafieken({
         <Lijngrafiek titel="Watertemperatuur" rows={data.lineRows} series={perPool("water_temp")} eenheid="°C" decimalen={1} />
         <Lijngrafiek titel="Flow" rows={data.lineRows} series={perPool("flow")} decimalen={2} />
         <Dagstaven titel="Bezoekers per dag" rows={data.dagRows} veld="bezoekers" pools={pools} />
-        <Dagstaven titel="Verbruik per dag" rows={data.dagRows} veld="verbruik" pools={pools} />
+        <Dagstaven titel="Verbruik per dag" rows={data.dagRows} veld="verbruik" pools={pools} sub="m³" />
+        <Suppletiestaven rows={data.weekRows} pools={pools} />
       </div>
     </div>
   );
