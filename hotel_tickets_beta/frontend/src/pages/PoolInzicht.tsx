@@ -119,6 +119,25 @@ function berekenBereik(periode: PeriodeId, terug: number, vandaag: string): Bere
   return { van, tot, tekst: bereikTekst(van, tot), schuifbaar: true };
 }
 
+/**
+ * Alle logregels van een selectie, in pagina's van 500 (het maximum van de
+ * API). Eén verzoek gaf hooguit de nieuwste 500 regels — bij twee baden met
+ * twee metingen per dag is dat maar vier maanden, en alles daarvóór kleurde
+ * dan ten onrechte rood als "niet gemeten".
+ */
+const PAGINA = 500;
+const MAX_PAGINAS = 40; // 20.000 regels; ruim tien jaar dagelijks meten
+
+async function laadAlleLogs(params: Record<string, string>): Promise<PoolLog[]> {
+  const alles: PoolLog[] = [];
+  for (let i = 0; i < MAX_PAGINAS; i++) {
+    const r = await poolApi.list({ ...params, limit: String(PAGINA), offset: String(i * PAGINA) });
+    alles.push(...r.data);
+    if (r.data.length < PAGINA) break;
+  }
+  return alles;
+}
+
 export default function PoolInzicht() {
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -163,16 +182,15 @@ export default function PoolInzicht() {
   }
 
   useEffect(() => {
-    const params: Record<string, string> = { limit: "500", only_measurements: "true" };
+    const params: Record<string, string> = { only_measurements: "true" };
     if (pool) params.pool_id = pool;
     if (bereik.van) params.datum_van = bereik.van;
     if (bereik.tot) params.datum_tot = bereik.tot;
     let actueel = true;
     setFetching(true);
-    poolApi
-      .list(params)
-      .then((r) => {
-        if (actueel) setLogs(r.data);
+    laadAlleLogs(params)
+      .then((alles) => {
+        if (actueel) setLogs(alles);
       })
       .finally(() => {
         if (!actueel) return;
