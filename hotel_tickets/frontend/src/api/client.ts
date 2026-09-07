@@ -771,6 +771,8 @@ export interface PoolStatus {
   measurements_today: number;
   compliant: boolean;
   latest: PoolLog | null;
+  /** Datum van de allereerste meting (YYYY-MM-DD); null als er nog nooit gemeten is */
+  first_measurement?: string | null;
   chemicalien_vervangen?: Record<string, ChemicalReplacement | null>;
 }
 

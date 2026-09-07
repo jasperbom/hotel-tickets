@@ -43,6 +43,20 @@ export default function PoolInzicht() {
   const [logs, setLogs] = useState<PoolLog[]>([]);
   const [loading, setLoading] = useState(true);
   const [fetching, setFetching] = useState(false);
+  // Per bad de datum van de allereerste meting: daarvóór werd er nog niet
+  // gemeten, dus die dagen tellen niet als "gemist".
+  const [eersteMeting, setEersteMeting] = useState<Partial<Record<PoolId, string | null>>>({});
+
+  useEffect(() => {
+    poolApi
+      .status()
+      .then((r) => {
+        const map: Partial<Record<PoolId, string | null>> = {};
+        for (const p of r.data) map[p.pool_id as PoolId] = p.first_measurement ?? null;
+        setEersteMeting(map);
+      })
+      .catch(() => {});
+  }, []);
 
   const pool = (searchParams.get("pool") || "") as PoolId | "";
   const datumVan = searchParams.get("datum_van") || "";
@@ -160,6 +174,7 @@ export default function PoolInzicht() {
           pool={pool}
           datumVan={bereik.van}
           datumTot={bereik.tot}
+          eersteMeting={eersteMeting}
           laden={fetching}
         />
       )}
