@@ -77,7 +77,7 @@ export function valueClass(
   return variant === "table" ? "bg-red-100 text-red-700 font-bold" : "text-red-600 font-bold";
 }
 
-const STATUS_COLORS: Record<ValueStatus, string> = {
+export const STATUS_COLORS: Record<ValueStatus, string> = {
   leeg: "#9ca3af",
   ok: "#15803d",
   buiten_advies: "#ca8a04",

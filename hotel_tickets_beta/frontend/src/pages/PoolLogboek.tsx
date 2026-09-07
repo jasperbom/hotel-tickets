@@ -55,6 +55,19 @@ export default function PoolLogboek() {
         <h1 className="text-2xl font-bold">Logboek</h1>
         <div className="flex gap-2">
           <button
+            onClick={() => {
+              // Dezelfde selectie meenemen naar de grafieken.
+              const p = new URLSearchParams();
+              if (pool) p.set("pool", pool);
+              if (datumVan) p.set("datum_van", datumVan);
+              if (datumTot) p.set("datum_tot", datumTot);
+              navigate(`/pools/inzicht${p.toString() ? `?${p}` : ""}`);
+            }}
+            className="bg-paper-raised border border-ink-12 text-ink-70 px-4 py-2 rounded-lg text-sm hover:bg-ink-6"
+          >
+            Inzicht
+          </button>
+          <button
             onClick={handleExport}
             disabled={exporting}
             className="bg-paper-raised border border-ink-12 text-ink-70 px-4 py-2 rounded-lg text-sm hover:bg-ink-6 disabled:opacity-50"

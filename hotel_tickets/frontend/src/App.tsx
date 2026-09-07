@@ -13,6 +13,7 @@ import RecurringTaskDetail from "./pages/RecurringTaskDetail";
 import Reports from "./pages/Reports";
 import PoolOverzicht from "./pages/PoolOverzicht";
 import PoolLogboek from "./pages/PoolLogboek";
+import PoolInzicht from "./pages/PoolInzicht";
 import PoolNieuweMeting from "./pages/PoolNieuweMeting";
 import PoolLogDetail from "./pages/PoolLogDetail";
 import BikesDashboard from "./pages/BikesDashboard";
@@ -115,6 +116,7 @@ const MODULES: ModuleConfig[] = [
     schermen: [
       { to: "/pools", label: "Overzicht", end: true },
       { to: "/pools/logboek", label: "Logboek" },
+      { to: "/pools/inzicht", label: "Inzicht" },
       { to: "/pools/nieuw", label: "Nieuwe meting" },
     ],
   },
@@ -619,9 +621,15 @@ export default function App() {
             )}
           </header>
 
-          {/* Inhoud — max 1100 px, rijen links uitgelijnd */}
+          {/* Inhoud — max 1100 px, rijen links uitgelijnd. Het zwembadlogboek
+              (een tabel van twintig kolommen) en de grafieken van Inzicht
+              mogen de volle breedte van het scherm gebruiken. */}
           <main
-            className={`flex-1 px-4 pt-6 w-full max-w-[1100px] ${
+            className={`flex-1 px-4 pt-6 w-full ${
+              location.pathname === "/pools/logboek" || location.pathname === "/pools/inzicht"
+                ? "max-w-none"
+                : "max-w-[1100px]"
+            } ${
               // De kennisbot vult de hoogte in plaats van te scrollen; dan moet
               // deze laag een flexkolom zijn, anders heeft "vul de rest" geen
               // betekenis. Vandaag rekent zijn eigen hoogte uit en blijft een
@@ -681,6 +689,7 @@ export default function App() {
               {/* Zwembaden module */}
               <Route path="/pools" element={<PoolOverzicht />} />
               <Route path="/pools/logboek" element={<PoolLogboek />} />
+              <Route path="/pools/inzicht" element={<PoolInzicht />} />
               <Route path="/pools/nieuw" element={<PoolNieuweMeting />} />
               <Route path="/pools/log/:id" element={<PoolLogDetail />} />
               {/* Fietsen module */}
