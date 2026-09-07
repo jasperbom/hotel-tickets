@@ -619,9 +619,13 @@ export default function App() {
             )}
           </header>
 
-          {/* Inhoud — max 1100 px, rijen links uitgelijnd */}
+          {/* Inhoud — max 1100 px, rijen links uitgelijnd. Het zwembadlogboek
+              is een tabel van twintig kolommen met grafieken erboven en mag
+              de volle breedte van het scherm gebruiken. */}
           <main
-            className={`flex-1 px-4 pt-6 w-full max-w-[1100px] ${
+            className={`flex-1 px-4 pt-6 w-full ${
+              location.pathname === "/pools/logboek" ? "max-w-none" : "max-w-[1100px]"
+            } ${
               // De kennisbot vult de hoogte in plaats van te scrollen; dan moet
               // deze laag een flexkolom zijn, anders heeft "vul de rest" geen
               // betekenis. Vandaag rekent zijn eigen hoogte uit en blijft een
