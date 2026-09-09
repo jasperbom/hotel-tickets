@@ -17,6 +17,7 @@ from ..auth import RequireUser, CurrentUser
 from ..services.notifications import notify_ticket_assigned, notify_urgent_ticket, notify_new_department_ticket, notify_mention
 from ..services.ha_entities import sync_ticket_sensors
 from ..services.ha_client import get_areas
+from ..services.gelijkenis import vind_gelijkende, AFGEROND_VENSTER
 from ..scheduler import mark_template_completed
 from .settings import get_ticket_base_url
 from .logbook import schrijf_registratie_bij_afronden
@@ -397,6 +398,38 @@ async def ticket_counts(
         key = status_value.value if hasattr(status_value, "value") else status_value
         counts[key] = count
     return counts
+
+
+@router.get("/similar", response_model=list[TicketOut])
+async def similar_tickets(
+    user: RequireUser,
+    db: AsyncSession = Depends(get_db),
+    title: str = Query(""),
+    description: str | None = Query(None),
+    location_id: str | None = Query(None),
+):
+    """Tickets die lijken op wat er nu gemeld wordt — open, in behandeling,
+    of kortgeleden afgerond. De melder krijgt ze te zien terwijl hij typt,
+    zodat een dubbele melding niet ontstaat. Zie services/gelijkenis.py voor
+    het waarom en het hoe."""
+    if not title.strip():
+        return []
+    grens = datetime.now(timezone.utc) - AFGEROND_VENSTER
+    result = await db.execute(
+        select(Ticket)
+        .where(
+            or_(
+                Ticket.status.in_([Status.open, Status.in_progress]),
+                and_(Ticket.status == Status.closed, Ticket.closed_at >= grens),
+            )
+        )
+        .order_by(Ticket.created_at.desc())
+        .limit(1000)
+    )
+    kandidaten = vind_gelijkende(
+        title, location_id or None, result.scalars().all(), beschrijving=description,
+    )
+    return [TicketOut.model_validate(k.ticket) for k in kandidaten]
 
 
 @router.post("/", response_model=TicketOut, status_code=status.HTTP_201_CREATED)

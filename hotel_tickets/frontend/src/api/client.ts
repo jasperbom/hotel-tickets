@@ -404,6 +404,11 @@ export const ticketApi = {
   list: (params?: Record<string, string>) => api.get<Ticket[]>("/tickets/", { params }),
   counts: (params?: Record<string, string>) => api.get<Record<Status, number>>("/tickets/counts", { params }),
   create: (data: Partial<Ticket> & { subtask_labels?: string[] }) => api.post<Ticket>("/tickets/", data),
+  /** Bestaande tickets die lijken op wat er getypt wordt — tegen dubbele meldingen. */
+  similar: (params: { title: string; description?: string; location_id?: string | null }) =>
+    api.get<Ticket[]>("/tickets/similar", {
+      params: { title: params.title, description: params.description || undefined, location_id: params.location_id || undefined },
+    }),
   get: (id: string) => api.get<Ticket>(`/tickets/${id}`),
   update: (id: string, data: Partial<Ticket>) => api.patch<Ticket>(`/tickets/${id}`, data),
   claim: (id: string) => api.post<Ticket>(`/tickets/${id}/claim`),

@@ -56,6 +56,7 @@ hotel-tickets/
 │   │       ├── ha_client.py     # HA Supervisor API client
 │   │       ├── notifications.py # Push / persistent / e-mail
 │   │       ├── vandaag.py       # Herhaaltaken van vandaag (Vandaag + wandscherm)
+│   │       ├── gelijkenis.py    # "Lijkt dit op een bestaand ticket?" (tegen dubbele meldingen)
 │   │       └── ha_entities.py   # Sensor state updates in HA
 │   └── frontend/                # React + TypeScript + Vite + Tailwind
 │       └── src/
