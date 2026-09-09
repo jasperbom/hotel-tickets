@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { Camera, ChevronDown, ChevronUp, X } from "lucide-react";
-import { locationApi, ticketApi, userApi, type Category, type Priority, type UserRole } from "../api/client";
+import { locationApi, ticketApi, userApi, parseUTC, type Category, type Priority, type Ticket, type UserRole } from "../api/client";
 import AreaSelector from "../components/AreaSelector";
 import MultiAreaSelector from "../components/MultiAreaSelector";
-import { AFDELING_LABELS } from "../werk";
+import WorkRow from "../components/WorkRow";
+import { AFDELING_LABELS, bezigTekst, eigendom, leeftijdBoard } from "../werk";
 
 /**
  * Melden — drie velden in de volgorde waarin iemand met een telefoon denkt:
@@ -19,9 +20,28 @@ import { AFDELING_LABELS } from "../werk";
  * Afdeling en prioriteit staan op één regel achter "Wijzig", met als standaard
  * je eigen afdeling. Toewijzen en subtaken zitten achter diezelfde regel: dat
  * zijn supervisor-velden, geen meld-velden.
+ *
+ * Terwijl je typt kijkt de app of dit er al ligt. Dubbele tickets ontstonden
+ * doordat niemand eerst zoekt — dat kost meer tijd dan melden. Dus zoekt de
+ * app zelf (`GET /api/tickets/similar`) en zet de kandidaten onder het
+ * titelveld. Het blokkeert niets: je tikt er één aan als het dezelfde klus
+ * is, of je meldt toch. Alleen de knop zegt dan "Toch melden", zodat je het
+ * niet ongemerkt doet.
  */
 
 const LAATSTE_KAMER = "hts.laatste_kamer";
+
+/** Hoe lang de app wacht na de laatste toetsaanslag voordat ze gaat zoeken. */
+const ZOEK_WACHT_MS = 400;
+
+/** "Afgerond gisteren" — wanneer een gelijkend ticket al klaar is. */
+function afgerondTekst(closedAt: string | null): string {
+  if (!closedAt) return "Afgerond";
+  const dagen = Math.floor((Date.now() - parseUTC(closedAt).getTime()) / 86_400_000);
+  if (dagen < 1) return "Vandaag afgerond";
+  if (dagen === 1) return "Gisteren afgerond";
+  return `${dagen} dagen geleden afgerond`;
+}
 
 /** Wat een ander scherm kan meegeven: Kamers stuurt de kamer, de kennisbot
  *  een titel, een logboek zijn object. */
@@ -58,7 +78,11 @@ export default function Melden() {
     object_id: prefill?.objectId ?? null,
   });
   const [users, setUsers] = useState<UserRole[]>([]);
+  const [mij, setMij] = useState("");
   const [kamerNamen, setKamerNamen] = useState<Record<string, string>>({});
+  // Bestaande tickets die op deze melding lijken.
+  const [gelijkend, setGelijkend] = useState<Ticket[]>([]);
+  const zoekVolgnummer = useRef(0);
   const [afdelingGekozen, setAfdelingGekozen] = useState(false);
   const [multiRoom, setMultiRoom] = useState(false);
   const [selectedRooms, setSelectedRooms] = useState<string[]>([]);
@@ -79,12 +103,35 @@ export default function Melden() {
       .catch(() => {});
     userApi.me()
       .then((r) => {
+        setMij(r.data.ha_user_id);
         const eigen = r.data.department;
         if (eigen && !afdelingGekozen) setForm((f) => ({ ...f, category: eigen }));
       })
       .catch(() => {});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Ligt dit er al? Zoeken na een korte pauze in het typen, en alleen het
+  // antwoord op de láátste vraag tonen — een traag antwoord op een oude
+  // titel mag een nieuwer antwoord niet overschrijven.
+  const zoekTitel = form.title.trim();
+  const zoekOmschrijving = form.description.trim();
+  const zoekKamer = multiRoom ? null : form.location_id;
+  useEffect(() => {
+    const volgnummer = ++zoekVolgnummer.current;
+    if (zoekTitel.length < 3) {
+      setGelijkend([]);
+      return;
+    }
+    const timer = setTimeout(() => {
+      ticketApi.similar({ title: zoekTitel, description: zoekOmschrijving, location_id: zoekKamer })
+        .then((r) => { if (volgnummer === zoekVolgnummer.current) setGelijkend(r.data); })
+        .catch(() => {});
+    }, ZOEK_WACHT_MS);
+    return () => clearTimeout(timer);
+  }, [zoekTitel, zoekOmschrijving, zoekKamer]);
+
+  const naamVan = (id: string) => users.find((u) => u.ha_user_id === id)?.display_name ?? id;
 
   function addSubtask() {
     if (!newSubtask.trim()) return;
@@ -129,7 +176,13 @@ export default function Melden() {
       : "Geen kamer";
 
   const aantal = multiRoom ? selectedRooms.length : 0;
-  const knopLabel = saving ? "Bezig…" : aantal > 1 ? `${aantal} meldingen maken` : "Melden";
+  const knopLabel = saving
+    ? "Bezig…"
+    : aantal > 1
+      ? `${aantal} meldingen maken`
+      : gelijkend.length > 0
+        ? "Toch melden"
+        : "Melden";
 
   return (
     <div className="max-w-lg pb-32">
@@ -204,6 +257,40 @@ export default function Melden() {
             className="mt-2 w-full rounded-[10px] border border-ink-12 px-3 py-2 text-body bg-paper-raised resize-none
                        focus:outline-none focus:ring-2 focus:ring-brand"
           />
+
+          {/* Ligt dit er al? Kandidaten als gewone werkrijen: één tik opent
+              het ticket, en dan is de dubbele melding niet gemaakt. */}
+          {gelijkend.length > 0 && (
+            <div
+              role="status"
+              aria-live="polite"
+              className="mt-3 rounded-[10px] border border-brand-edge bg-brand-soft p-3"
+            >
+              <p className="text-meta font-semibold text-brand">
+                {gelijkend.length === 1 ? "Dit lijkt op een bestaand ticket" : "Dit lijkt op bestaande tickets"}
+              </p>
+              <p className="meta mt-0.5">Is het dezelfde klus? Open dat ticket in plaats van opnieuw te melden.</p>
+              <div className="mt-2.5 space-y-2">
+                {gelijkend.map((t) => (
+                  <WorkRow
+                    key={t.id}
+                    to={`/tickets/${t.id}`}
+                    priority={t.priority}
+                    kamer={t.location_id ? (kamerNamen[t.location_id] ?? t.location_id) : null}
+                    title={t.title}
+                    done={t.status === "closed"}
+                    meta={[
+                      t.status === "closed"
+                        ? afgerondTekst(t.closed_at)
+                        : bezigTekst(t.status) && <strong className="font-semibold text-brand">{bezigTekst(t.status)}</strong>,
+                      t.status !== "closed" && <strong className="font-semibold text-ink">{eigendom(t, mij, naamVan).label}</strong>,
+                      t.status !== "closed" && leeftijdBoard(t.created_at),
+                    ]}
+                  />
+                ))}
+              </div>
+            </div>
+          )}
         </section>
 
         {/* 3 — Foto */}
